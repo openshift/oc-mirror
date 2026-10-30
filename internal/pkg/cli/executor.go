@@ -3,6 +3,8 @@ package cli
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"fmt"
 	"io"
@@ -29,6 +31,9 @@ import (
 	"github.com/distribution/distribution/v3/configuration"
 	"github.com/distribution/distribution/v3/registry"
 	_ "github.com/distribution/distribution/v3/registry/storage/driver/filesystem"
+	"github.com/google/go-containerregistry/pkg/authn"
+	"github.com/google/go-containerregistry/pkg/name"
+	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -36,6 +41,7 @@ import (
 	"go.podman.io/image/v5/docker"
 	"go.podman.io/image/v5/docker/reference"
 	imgconfig "go.podman.io/image/v5/pkg/docker/config"
+	"go.podman.io/image/v5/types"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/additional"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
@@ -468,7 +474,147 @@ func (o *ExecutorSchema) checkRegistryAccess(ctx context.Context, registry strin
 	}
 
 	o.Log.Info("Verified we can authenticate against registry %q", registry)
+
+	if err := o.checkRegistryPushAccess(ctx, authConfig, registry, sctx); err != nil {
+		return err
+	}
 	return nil
+}
+
+// pushAccessProbeRepo is a dummy single-path repository used only for
+// go-containerregistry CheckPushPermission. It is not created or mirrored.
+// A shallow probe distinguishes missing push auth from later unauthorized
+// errors on deep nested destination repositories.
+const pushAccessProbeRepo = "oc-mirror"
+
+func pushAccessProbe(dest string) string {
+	dest = strings.TrimSuffix(dest, "/")
+	host, rest, found := strings.Cut(dest, "/")
+	if !found || rest == "" {
+		return host + "/" + pushAccessProbeRepo
+	}
+	ns, _, _ := strings.Cut(rest, "/")
+	if ns == "" {
+		return host + "/" + pushAccessProbeRepo
+	}
+	return host + "/" + ns + "/" + pushAccessProbeRepo
+}
+
+// checkRegistryPushAccess confirms destination push rights with a HEAD-based
+// probe on a shallow repository. If this succeeds, later unauthorized blob
+// uploads on deep repository paths are nested-path limits, not missing push auth.
+func (o *ExecutorSchema) checkRegistryPushAccess(ctx context.Context, authConfig types.DockerAuthConfig, dest string, sctx *types.SystemContext) error {
+	probe := pushAccessProbe(dest)
+
+	var nameOpts []name.Option
+	insecure := o.Opts.DestImage != nil && !o.Opts.DestImage.TlsVerify
+	if insecure {
+		nameOpts = append(nameOpts, name.Insecure)
+	}
+	rt, err := registryProbeTransport(sctx, insecure)
+	if err != nil {
+		return err
+	}
+
+	imgRef, err := name.ParseReference(probe, nameOpts...)
+	if err != nil {
+		return fmt.Errorf("parse push-check reference %q: %w", probe, err)
+	}
+
+	kc := pushAccessKeychain{cfg: authn.AuthConfig{
+		Username:      authConfig.Username,
+		Password:      authConfig.Password,
+		IdentityToken: authConfig.IdentityToken,
+	}}
+	if err := checkPushPermission(ctx, imgRef, kc, rt); err != nil {
+		return fmt.Errorf("failed to verify push access to %q: %w", probe, err)
+	}
+
+	o.Log.Info("Verified we can push to registry %q", dest)
+	return nil
+}
+
+func checkPushPermission(ctx context.Context, imgRef name.Reference, kc authn.Keychain, rt http.RoundTripper) error {
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- remote.CheckPushPermission(imgRef, kc, rt)
+	}()
+	select {
+	case <-ctx.Done():
+		return fmt.Errorf("push permission check canceled: %w", ctx.Err())
+	case err := <-errCh:
+		return err
+	}
+}
+
+func registryProbeTransport(sctx *types.SystemContext, insecure bool) (http.RoundTripper, error) {
+	base, ok := remote.DefaultTransport.(*http.Transport)
+	if !ok {
+		base = http.DefaultTransport.(*http.Transport)
+	}
+	t := base.Clone()
+	if t.TLSClientConfig == nil {
+		t.TLSClientConfig = &tls.Config{MinVersion: tls.VersionTLS12}
+	} else {
+		t.TLSClientConfig = t.TLSClientConfig.Clone()
+	}
+	if insecure {
+		t.TLSClientConfig.InsecureSkipVerify = true
+	}
+	if sctx != nil && sctx.DockerCertPath != "" {
+		if err := applyDockerCertDir(t.TLSClientConfig, sctx.DockerCertPath); err != nil {
+			return nil, err
+		}
+	}
+	return t, nil
+}
+
+func applyDockerCertDir(tlsCfg *tls.Config, certDir string) error {
+	entries, err := os.ReadDir(certDir)
+	if err != nil {
+		return fmt.Errorf("read dest cert dir %s: %w", certDir, err)
+	}
+	pool := x509.NewCertPool()
+	loadedCA := false
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		p := filepath.Join(certDir, name)
+		switch {
+		case strings.HasSuffix(name, ".crt"):
+			pemBytes, err := os.ReadFile(p)
+			if err != nil {
+				return fmt.Errorf("read dest CA %s: %w", p, err)
+			}
+			if pool.AppendCertsFromPEM(pemBytes) {
+				loadedCA = true
+			}
+		case strings.HasSuffix(name, ".cert"):
+			cert, err := tls.LoadX509KeyPair(p, strings.TrimSuffix(p, ".cert")+".key")
+			if err != nil {
+				return fmt.Errorf("load dest client certificate %s: %w", name, err)
+			}
+			tlsCfg.Certificates = append(tlsCfg.Certificates, cert)
+		}
+	}
+	if loadedCA {
+		tlsCfg.RootCAs = pool
+	}
+	return nil
+}
+
+type pushAccessKeychain struct {
+	cfg authn.AuthConfig
+}
+
+//nolint:ireturn // authn.Keychain.Resolve must return authn.Authenticator
+func (k pushAccessKeychain) Resolve(_ authn.Resource) (authn.Authenticator, error) {
+	if k.cfg.Username == "" && k.cfg.Password == "" && k.cfg.IdentityToken == "" && k.cfg.RegistryToken == "" {
+		return authn.Anonymous, nil
+	}
+	return authn.FromConfig(k.cfg), nil
 }
 
 // See containers/common/pkg/auth.parseCredentialsKey
