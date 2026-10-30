@@ -808,8 +808,14 @@ func (o *ClusterResourcesGenerator) GenerateSignatureConfigMap(allRelatedImages 
 		}
 	}
 
+	// walk the images sorted by source, so that the ids in the configmap keys do not depend on the collection order
+	sortedImages := slices.Clone(allRelatedImages)
+	slices.SortStableFunc(sortedImages, func(a, b v2alpha1.CopyImageSchema) int {
+		return strings.Compare(a.Source, b.Source)
+	})
+
 	id := 1
-	for _, copyImage := range allRelatedImages {
+	for _, copyImage := range sortedImages {
 		if copyImage.Type == v2alpha1.TypeOCPRelease {
 			o.Log.Debug("[GenerateSignatureConfigMap] release image source %v", copyImage)
 			imgSpec, err := image.ParseRef(copyImage.Source)

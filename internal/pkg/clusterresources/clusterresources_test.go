@@ -1818,3 +1818,35 @@ func TestGenerateImageMirrors_MirrorsSorted(t *testing.T) {
 	assert.Len(t, got, 1)
 	assert.Equal(t, expected, got[0].mirrors["quay.io/openshift-release-dev/ocp-v4.0-art-dev"])
 }
+
+// The ids in the configmap keys must not depend on the order in which release images were collected,
+// so that regenerated files are diff-friendly across runs.
+func TestGenerateSignatureConfigMap_StableKeys(t *testing.T) {
+	workingDir := filepath.Join(t.TempDir(), "working-dir")
+	assert.NoError(t, folder.CreateFolders(
+		filepath.Join(workingDir, clusterResourcesDir),
+		filepath.Join(workingDir, signatureDir),
+	))
+	const digestA = "37433b71c073c6cbfc8173ec7ab2d99032c8e6d6fe29de06e062d85e33e34531"
+	const digestB = "12345678c073c6cbfc8173ec7ab2d99032c8e6d6fe29de06e062d85e12345678"
+	for tag, digest := range map[string]string{"4.16.0-x86_64": digestA, "4.16.2-x86_64": digestB} {
+		assert.NoError(t, copy.Copy(filepath.Join(consts.TestFolder, digestA),
+			filepath.Join(workingDir, signatureDir, tag+"-sha256-"+digest)))
+	}
+	cr := &ClusterResourcesGenerator{Log: clog.New("trace"), WorkingDir: workingDir}
+
+	// collection order is the reverse of the sorted order
+	imageList := []v2alpha1.CopyImageSchema{
+		{Source: "docker://quay.io/openshift-release-dev/ocp-v4.0-art-dev:4.16.2-x86_64", Type: v2alpha1.TypeOCPRelease},
+		{Source: "docker://quay.io/openshift-release-dev/ocp-v4.0-art-dev:4.16.0-x86_64", Type: v2alpha1.TypeOCPRelease},
+	}
+	assert.NoError(t, cr.GenerateSignatureConfigMap(imageList))
+
+	got, err := parser.ParseYamlFile[cm.ConfigMap](filepath.Join(workingDir, clusterResourcesDir, "signature-configmap.yaml"))
+	assert.NoError(t, err)
+	keys := make([]string, 0, len(got.BinaryData))
+	for k := range got.BinaryData {
+		keys = append(keys, k)
+	}
+	assert.ElementsMatch(t, []string{"sha256-" + digestA + "-1", "sha256-" + digestB + "-2"}, keys)
+}
