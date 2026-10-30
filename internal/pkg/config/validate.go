@@ -17,8 +17,8 @@ type (
 )
 
 var (
-	validationChecks       = []validationFunc{validateOperatorOptions, validateReleaseChannels, validateBlockedImages, validateReleasePlatformFields}
-	validationDeleteChecks = []validationDeleteFunc{validateOperatorOptionsDelete, validateReleaseChannelsDelete}
+	validationChecks       = []validationFunc{validateOperatorOptions, validateReleaseChannels, validateBlockedImages, validateReleasePlatformFields, validateReleaseRepos}
+	validationDeleteChecks = []validationDeleteFunc{validateOperatorOptionsDelete, validateReleaseChannelsDelete, validateReleaseReposDelete}
 )
 
 // Validate will check an ImagesetConfiguration for input errors.
@@ -155,6 +155,28 @@ func validateReleasePlatformFields(cfg *v2alpha1.ImageSetConfiguration) []error 
 	return nil
 }
 
+func validateReleaseRepos(cfg *v2alpha1.ImageSetConfiguration) []error {
+	return releaseRepoErrors(cfg.Mirror.Platform)
+}
+
+// releaseRepoErrors checks that the platform.releaseImageRepo and
+// platform.releaseComponentRepo overrides are valid repository paths.
+func releaseRepoErrors(platform v2alpha1.Platform) []error {
+	var errs []error
+	for _, repo := range []struct{ field, value string }{
+		{"releaseImageRepo", platform.ReleaseImageRepo},
+		{"releaseComponentRepo", platform.ReleaseComponentRepo},
+	} {
+		if repo.value != "" && !v2alpha1.IsValidPathComponent(repo.value) {
+			errs = append(errs, fmt.Errorf(
+				"platform.%s %q: invalid repository path, expected lowercase path components separated by / and no tag or digest",
+				repo.field, repo.value,
+			))
+		}
+	}
+	return errs
+}
+
 func validateReleaseChannels(cfg *v2alpha1.ImageSetConfiguration) []error {
 	channels := sets.New[string]()
 	for _, channel := range cfg.Mirror.Platform.Channels {
@@ -209,6 +231,10 @@ func validateOperatorOptionsDelete(cfg *v2alpha1.DeleteImageSetConfiguration) er
 		catalogs.Insert(ctlgName)
 	}
 	return nil
+}
+
+func validateReleaseReposDelete(cfg *v2alpha1.DeleteImageSetConfiguration) error {
+	return utilerrors.NewAggregate(releaseRepoErrors(cfg.Delete.Platform))
 }
 
 func validateReleaseChannelsDelete(cfg *v2alpha1.DeleteImageSetConfiguration) error {

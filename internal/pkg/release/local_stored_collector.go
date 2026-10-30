@@ -1,6 +1,7 @@
 package release
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"io"
@@ -368,7 +369,15 @@ func (o *LocalStorageCollector) prepareGraphImage(ctx context.Context) (v2alpha1
 	return graphCopySlice[0], nil
 }
 
+// releaseRepoPaths returns the destination repository paths for release images
+// and release component images: the platform-level overrides, or the defaults.
+func (o LocalStorageCollector) releaseRepoPaths() (imageRepo, componentRepo string) {
+	return cmp.Or(o.Config.Mirror.Platform.ReleaseImageRepo, releaseImagePathComponents),
+		cmp.Or(o.Config.Mirror.Platform.ReleaseComponentRepo, releaseComponentPathComponents)
+}
+
 func (o LocalStorageCollector) prepareM2DCopyBatch(images []v2alpha1.RelatedImage, releaseTag string) ([]v2alpha1.CopyImageSchema, error) {
+	imageRepo, componentRepo := o.releaseRepoPaths()
 	result := make([]v2alpha1.CopyImageSchema, 0, len(images))
 	for _, img := range images {
 		var src string
@@ -380,7 +389,7 @@ func (o LocalStorageCollector) prepareM2DCopyBatch(images []v2alpha1.RelatedImag
 		}
 		src = imgSpec.ReferenceWithTransport
 
-		pathComponents := preparePathComponents(imgSpec, img.Type, img.Name)
+		pathComponents := preparePathComponents(imgSpec, img.Type, img.Name, imageRepo, componentRepo)
 		tag := prepareTag(imgSpec, img.Type, releaseTag, img.Name)
 
 		dest = consts.DockerProtocol + strings.Join([]string{o.destinationRegistry(), pathComponents + ":" + tag}, "/")
@@ -398,6 +407,7 @@ func (o LocalStorageCollector) prepareM2DCopyBatch(images []v2alpha1.RelatedImag
 }
 
 func (o LocalStorageCollector) prepareD2MCopyBatch(images []v2alpha1.RelatedImage, releaseTag string) ([]v2alpha1.CopyImageSchema, error) {
+	imageRepo, componentRepo := o.releaseRepoPaths()
 	result := make([]v2alpha1.CopyImageSchema, 0, len(images))
 	for _, img := range images {
 		var src string
@@ -408,7 +418,7 @@ func (o LocalStorageCollector) prepareD2MCopyBatch(images []v2alpha1.RelatedImag
 			return nil, err
 		}
 
-		pathComponents := preparePathComponents(imgSpec, img.Type, img.Name)
+		pathComponents := preparePathComponents(imgSpec, img.Type, img.Name, imageRepo, componentRepo)
 		tag := prepareTag(imgSpec, img.Type, releaseTag, img.Name)
 
 		src = consts.DockerProtocol + strings.Join([]string{o.LocalStorageFQDN, pathComponents + ":" + tag}, "/")
@@ -748,15 +758,15 @@ func compareByOriginSourceDest(a, b v2alpha1.CopyImageSchema) int {
 	return strings.Compare(a.Destination, b.Destination)
 }
 
-func preparePathComponents(imgSpec image.ImageSpec, imgType v2alpha1.ImageType, imgName string) string {
+func preparePathComponents(imgSpec image.ImageSpec, imgType v2alpha1.ImageType, imgName, releaseImageRepo, releaseComponentRepo string) string {
 	pathComponents := ""
 	switch {
 	case imgType == v2alpha1.TypeOCPRelease:
-		pathComponents = releaseImagePathComponents
+		pathComponents = releaseImageRepo
 	case imgType == v2alpha1.TypeCincinnatiGraph:
 		pathComponents = imgSpec.PathComponent
 	case imgType == v2alpha1.TypeOCPReleaseContent && imgName != "":
-		pathComponents = releaseComponentPathComponents
+		pathComponents = releaseComponentRepo
 	case imgSpec.IsImageByDigestOnly():
 		pathComponents = imgSpec.PathComponent
 	}

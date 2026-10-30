@@ -643,6 +643,87 @@ func TestDeleteRegistryImagesForceCacheDeleteReferences(t *testing.T) {
 	}
 }
 
+func TestDeleteRegistryImagesWithReleaseRepoOverrides(t *testing.T) {
+	log := clog.New("trace")
+
+	global := &mirror.GlobalOptions{
+		SecurePolicy:      false,
+		Quiet:             false,
+		WorkingDir:        t.TempDir(),
+		DeleteDestination: "docker://localhost:5000/myregistry",
+	}
+
+	_, sharedOpts := mirror.SharedImageFlags()
+	_, deprecatedTLSVerifyOpt := mirror.DeprecatedTLSVerifyFlags()
+	_, srcOpts := mirror.ImageSrcFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "src-", "screds")
+	_, destOpts := mirror.ImageDestFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "dest-", "dcreds")
+	_, retryOpts := mirror.RetryFlags()
+
+	opts := mirror.CopyOptions{
+		Global:              global,
+		DeprecatedTLSVerify: deprecatedTLSVerifyOpt,
+		SrcImage:            srcOpts,
+		DestImage:           destOpts,
+		RetryOpts:           retryOpts,
+		Destination:         "docker://myregistry",
+		Mode:                mirror.MirrorToDisk,
+		LocalStorageFQDN:    "localhost:8888",
+	}
+
+	// the delete run does not load the imageset config, so release paths must
+	// be accepted without knowing the releaseImageRepo/releaseComponentRepo overrides
+	di := New(log, opts, &mockBatch{}, &mockBlobs{}, v2alpha1.ImageSetConfiguration{}, &mockManifest{}, "/tmp", &mockSignatureHandler{})
+
+	tests := []struct {
+		name      string
+		imageType v2alpha1.ImageType
+		imageRef  string
+		wantErr   bool
+	}{
+		{
+			name:      "release image at default path",
+			imageType: v2alpha1.TypeOCPRelease,
+			imageRef:  "docker://localhost:5000/myregistry/openshift/release-images:4.19.0-x86_64",
+		},
+		{
+			name:      "release image at override path",
+			imageType: v2alpha1.TypeOCPRelease,
+			imageRef:  "docker://localhost:5000/myregistry/openshift-release-dev/ocp-release:4.19.0-x86_64",
+		},
+		{
+			name:      "release image outside delete destination fails",
+			imageType: v2alpha1.TypeOCPRelease,
+			imageRef:  "docker://localhost:5000/other/openshift/release-images:4.19.0-x86_64",
+			wantErr:   true,
+		},
+		{
+			name:      "release content at override path",
+			imageType: v2alpha1.TypeOCPReleaseContent,
+			imageRef:  "docker://localhost:5000/myregistry/openshift-release-dev/ocp-v4.0-art-dev:4.19.0-x86_64-agent-installer-api-server",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			deleteImageList := v2alpha1.DeleteImageList{
+				Items: []v2alpha1.DeleteItem{
+					{
+						ImageName:      "quay.io/openshift-release-dev/ocp-release:4.19.0-x86_64",
+						ImageReference: tt.imageRef,
+						Type:           tt.imageType,
+					},
+				},
+			}
+			err := di.DeleteRegistryImages(deleteImageList)
+			if tt.wantErr {
+				assert.ErrorContains(t, err, "expected prefix localhost:5000/myregistry/")
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
 // mockBatch
 type mockBatch struct {
 	Fail bool
