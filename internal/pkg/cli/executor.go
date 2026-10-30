@@ -1425,7 +1425,10 @@ func mergePlatformFilters(dst, src map[string][]v2alpha1.InstancePlatformFilter)
 func removeDuplicatedImages(allRelatedImages []v2alpha1.CopyImageSchema, mode string) []v2alpha1.CopyImageSchema {
 	// OCPBUGS-43731 - remove duplicates, keeping the first occurrence.
 	// A seen-set is used (instead of slices.CompactFunc) because duplicates
-	// coming from different catalogs or collectors are not necessarily adjacent.
+	// within a collector's output (e.g. the same image coming from different
+	// catalogs) are not necessarily adjacent. This runs once per collector, so
+	// duplicates across collectors (e.g. additional image vs operator related
+	// image) are not removed here.
 	type key struct{ source, destination, origin string }
 	seen := make(map[key]struct{}, len(allRelatedImages))
 	return slices.DeleteFunc(slices.Clone(allRelatedImages), func(img v2alpha1.CopyImageSchema) bool {
