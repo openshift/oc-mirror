@@ -194,9 +194,9 @@ func (o *ChannelConcurrentBatch) Worker(ctx context.Context, collectorSchema v2a
 
 	go runOverallProgress(overallProgress, cancelCtx, progressCh)
 
-	completed := 0
-	for completed < len(collectorSchema.AllImages) {
-		res := <-results
+	received := 0
+	for res := range results {
+		received++
 		err := res.err
 		if err == nil {
 			logImageSuccess(o.Log, &res.img, &opts)
@@ -214,12 +214,15 @@ func (o *ChannelConcurrentBatch) Worker(ctx context.Context, collectorSchema v2a
 			}
 		}
 
-		completed++
 		progressCh <- 1
 	}
 	close(progressCh)
 
 	p.Wait()
+
+	if received < total && ctx.Err() != nil {
+		return copiedImages, fmt.Errorf("mirroring interrupted: %w", ctx.Err())
+	}
 
 	logResults(o.Log, opts.Function, &copiedImages, &collectorSchema)
 
