@@ -1081,7 +1081,7 @@ func TestExecutorCheckRegistryAccess(t *testing.T) {
 	testFolder := t.TempDir()
 	regCfg, err := setupRegForTest(testFolder)
 	assert.NoError(t, err, "failed to parse local registry config")
-	// setupRegForTest picks the first free port from 5000 (e.g. macOS AirPlay Receiver holds 5000)
+	// setupRegForTest lets the OS pick a free port
 	validRegistry := "localhost" + regCfg.HTTP.Addr
 	reg, err := registry.NewRegistry(context.Background(), regCfg)
 	assert.NoError(t, err, "failed to create local registry service")
@@ -1347,16 +1347,15 @@ health:
   storagedriver:
     enabled: false
 `
-	port := 5000
-	for {
-		addr := fmt.Sprintf("localhost:%d", port)
-		conn, err := net.Dial("tcp", addr)
-		if err == nil {
-			conn.Close()
-			port++
-		} else {
-			break
-		}
+	// let the OS pick a free port, to avoid clashing with other listeners (e.g. macOS AirPlay Receiver on 5000)
+	// or with registries started by tests of other packages running in parallel
+	listener, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		return &configuration.Configuration{}, fmt.Errorf("unable to find a free port: %v", err)
+	}
+	port := listener.Addr().(*net.TCPAddr).Port
+	if err := listener.Close(); err != nil {
+		return &configuration.Configuration{}, fmt.Errorf("unable to release port %d: %v", port, err)
 	}
 	configYamlV01 = fmt.Sprintf(configYamlV01, testFolder, port)
 	config, err := configuration.Parse(bytes.NewReader([]byte(configYamlV01)))
