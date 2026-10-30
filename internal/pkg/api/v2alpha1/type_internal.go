@@ -195,6 +195,18 @@ type CollectorSchema struct {
 	// PlatformFilters maps image origin to its platform filter list.
 	// Populated by collectors; consumed by the batch worker to set InstancePlatforms per image.
 	PlatformFilters map[string][]InstancePlatformFilter
+	// SkippedImages lists images intentionally not mirrored. Set by the worker.
+	SkippedImages []SkippedImage
+}
+
+// SkippedImage records an image intentionally not mirrored, persisted so a
+// later disk-to-mirror run makes the same decision.
+type SkippedImage struct {
+	Origin string `json:"origin"`
+	// Type is what the image turned out to be, which is why it was skippable.
+	Type      ImageType `json:"type,omitempty"`
+	Reason    string    `json:"reason"`
+	Platforms []string  `json:"platforms,omitempty"`
 }
 
 type CopyImageSchemaMap struct {
