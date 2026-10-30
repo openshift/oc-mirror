@@ -2,6 +2,8 @@ package archive
 
 import (
 	"context"
+	"fmt"
+	"net"
 	"net/http/httptest"
 	"net/url"
 	"path/filepath"
@@ -11,6 +13,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/registry"
 	digest "github.com/opencontainers/go-digest"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.podman.io/image/v5/manifest"
 	"k8s.io/apimachinery/pkg/util/sets"
 
@@ -311,6 +314,12 @@ func TestImageBlobGatherer_ImgRefError(t *testing.T) {
 
 func TestImageBlobGatherer_SrcContextError(t *testing.T) {
 	ctx := context.Background()
+	// reserve a free port, then release it so that nothing listens on it
+	listener, err := net.Listen("tcp", "localhost:0")
+	require.NoError(t, err)
+	port := listener.Addr().(*net.TCPAddr).Port
+	assert.NoError(t, listener.Close())
+	host := fmt.Sprintf("localhost:%d", port)
 	global := &mirror.GlobalOptions{
 		SecurePolicy: false,
 		Force:        true,
@@ -337,8 +346,9 @@ func TestImageBlobGatherer_SrcContextError(t *testing.T) {
 	}
 
 	gatherer := NewImageBlobGatherer(&opts, clog.New("trace"))
-	_, err := gatherer.GatherBlobs(ctx, consts.DockerProtocol+"localhost/test:latest", nil)
-	assert.Contains(t, err.Error(), "pinging container registry localhost: Get \"http://localhost/v2/\": dial tcp [::1]:80: connect: connection refused")
+	_, err = gatherer.GatherBlobs(ctx, consts.DockerProtocol+host+"/test:latest", nil)
+	assert.ErrorContains(t, err, "pinging container registry "+host)
+	assert.ErrorContains(t, err, "connection refused")
 }
 
 func TestImageBlobGatherer_ImageSourceError(t *testing.T) {

@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -1078,10 +1079,11 @@ func TestExcludeImages(t *testing.T) {
 }
 
 func TestExecutorCheckRegistryAccess(t *testing.T) {
-	const validRegistry = "localhost:5000"
 	testFolder := t.TempDir()
 	regCfg, err := setupRegForTest(testFolder)
 	assert.NoError(t, err, "failed to parse local registry config")
+	// setupRegForTest lets the OS pick a free port
+	validRegistry := "localhost" + regCfg.HTTP.Addr
 	reg, err := registry.NewRegistry(context.Background(), regCfg)
 	assert.NoError(t, err, "failed to create local registry service")
 	global := &mirror.GlobalOptions{
@@ -1346,16 +1348,15 @@ health:
   storagedriver:
     enabled: false
 `
-	port := 5000
-	for {
-		addr := fmt.Sprintf("localhost:%d", port)
-		conn, err := net.Dial("tcp", addr)
-		if err == nil {
-			conn.Close()
-			port++
-		} else {
-			break
-		}
+	// let the OS pick a free port, to avoid clashing with other listeners (e.g. macOS AirPlay Receiver on 5000)
+	// or with registries started by tests of other packages running in parallel
+	listener, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		return &configuration.Configuration{}, fmt.Errorf("unable to find a free port: %v", err)
+	}
+	port := listener.Addr().(*net.TCPAddr).Port
+	if err := listener.Close(); err != nil {
+		return &configuration.Configuration{}, fmt.Errorf("unable to release port %d: %v", port, err)
 	}
 	configYamlV01 = fmt.Sprintf(configYamlV01, testFolder, port)
 	config, err := configuration.Parse(bytes.NewReader([]byte(configYamlV01)))
@@ -1434,6 +1435,38 @@ func TestMergePlatformFilters(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			mergePlatformFilters(tt.dst, tt.src)
 			assert.Equal(t, tt.expected, tt.dst)
+		})
+	}
+}
+
+func TestRemoveDuplicatedImages(t *testing.T) {
+	img := func(src, dest string) v2alpha1.CopyImageSchema {
+		return v2alpha1.CopyImageSchema{Source: src, Destination: dest, Origin: src}
+	}
+	a := img("docker://r/a@sha256:1", "docker://d/a:1")
+	b := img("docker://r/b@sha256:2", "docker://d/b:2")
+	// same destination as a, different source
+	a2 := img("docker://r/a2@sha256:3", "docker://d/a:1")
+
+	tests := []struct {
+		name string
+		mode string
+		in   []v2alpha1.CopyImageSchema
+		// images returned by earlier collectors
+		collected []v2alpha1.CopyImageSchema
+		want      []v2alpha1.CopyImageSchema
+	}{
+		{"adjacent duplicates removed", "mirrorToDisk", []v2alpha1.CopyImageSchema{a, a, b}, nil, []v2alpha1.CopyImageSchema{a, b}},
+		{"non-adjacent duplicates removed, first occurrence kept", "mirrorToDisk", []v2alpha1.CopyImageSchema{a, b, a}, nil, []v2alpha1.CopyImageSchema{a, b}},
+		{"same destination, different source kept when mirroring", "mirrorToDisk", []v2alpha1.CopyImageSchema{a, b, a2}, nil, []v2alpha1.CopyImageSchema{a, b, a2}},
+		{"image already returned by an earlier collector is dropped", "mirrorToDisk", []v2alpha1.CopyImageSchema{b, a}, []v2alpha1.CopyImageSchema{a}, []v2alpha1.CopyImageSchema{b}},
+		{"same destination collapsed when deleting", string(mirror.DeleteMode), []v2alpha1.CopyImageSchema{a, b, a2}, nil, []v2alpha1.CopyImageSchema{a, b}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			in := slices.Clone(tt.in)
+			assert.Equal(t, tt.want, removeDuplicatedImages(in, tt.mode, tt.collected))
+			assert.Equal(t, tt.in, in, "input must not be mutated")
 		})
 	}
 }
