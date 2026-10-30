@@ -144,3 +144,75 @@ func TestOCPBUGS53455_RebuiltCatalogPreserveDigests(t *testing.T) {
 		})
 	}
 }
+
+func TestOCPBUGS128841_InFlightCopyObservesParentCancellation(t *testing.T) {
+	for _, mode := range []string{mirror.MirrorToDisk, mirror.MirrorToMirror, mirror.DiskToMirror} {
+		t.Run(mode, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			started := make(chan context.Context, 1)
+			release := make(chan struct{})
+			mirrorMock := new(MirrorMock)
+			mirrorMock.On("Run", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+				Run(func(args mock.Arguments) {
+					runCtx := args.Get(0).(context.Context)
+					started <- runCtx
+					select {
+					case <-runCtx.Done():
+					case <-release:
+					}
+				}).Return(context.Canceled)
+
+			worker := &ChannelConcurrentBatch{
+				Log:              clog.New("trace"),
+				LogsDir:          t.TempDir(),
+				Mirror:           mirrorMock,
+				MaxGoroutines:    1,
+				SynchedTimeStamp: time.Now().Format("20060102_150405"),
+			}
+			opts := mirror.CopyOptions{
+				Global:   &mirror.GlobalOptions{SecurePolicy: false},
+				Mode:     mode,
+				Function: "copy",
+			}
+			collectorSchema := v2alpha1.CollectorSchema{
+				AllImages: []v2alpha1.CopyImageSchema{{
+					Source:      "docker://registry.example/repro:latest",
+					Origin:      "docker://registry.example/repro:latest",
+					Destination: "docker://mirror.example/repro:latest",
+					Type:        v2alpha1.TypeOCPRelease,
+				}},
+			}
+
+			workerDone := make(chan error, 1)
+			go func() {
+				_, err := worker.Worker(ctx, collectorSchema, opts)
+				workerDone <- err
+			}()
+
+			var runCtx context.Context
+			select {
+			case runCtx = <-started:
+			case <-time.After(time.Second):
+				t.Fatal("mirror copy did not start")
+			}
+
+			cancel()
+			select {
+			case <-runCtx.Done():
+				assert.Equal(t, context.Canceled, runCtx.Err())
+			case <-time.After(200 * time.Millisecond):
+				assert.Fail(t, "in-flight mirror copy did not observe parent cancellation")
+			}
+
+			close(release)
+			select {
+			case <-workerDone:
+			case <-time.After(time.Second):
+				t.Fatal("worker did not finish after releasing the mock copy")
+			}
+			mirrorMock.AssertExpectations(t)
+		})
+	}
+}
