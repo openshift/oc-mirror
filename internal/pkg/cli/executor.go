@@ -1423,13 +1423,21 @@ func mergePlatformFilters(dst, src map[string][]v2alpha1.InstancePlatformFilter)
 }
 
 func removeDuplicatedImages(allRelatedImages []v2alpha1.CopyImageSchema, mode string) []v2alpha1.CopyImageSchema {
-	// OCPBUGS-43731 - remove duplicates
-	return slices.CompactFunc(allRelatedImages, func(a, b v2alpha1.CopyImageSchema) bool {
+	// OCPBUGS-43731 - remove duplicates, keeping the first occurrence.
+	// A seen-set is used (instead of slices.CompactFunc) because duplicates
+	// coming from different catalogs or collectors are not necessarily adjacent.
+	type key struct{ source, destination, origin string }
+	seen := make(map[key]struct{}, len(allRelatedImages))
+	return slices.DeleteFunc(slices.Clone(allRelatedImages), func(img v2alpha1.CopyImageSchema) bool {
+		k := key{source: img.Source, destination: img.Destination, origin: img.Origin}
 		if mode == string(mirror.DeleteMode) {
-			return a.Destination == b.Destination
-		} else {
-			return a.Source == b.Source && a.Destination == b.Destination && a.Origin == b.Origin
+			k = key{destination: img.Destination}
 		}
+		if _, found := seen[k]; found {
+			return true
+		}
+		seen[k] = struct{}{}
+		return false
 	})
 }
 

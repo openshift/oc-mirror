@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -1434,6 +1435,35 @@ func TestMergePlatformFilters(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			mergePlatformFilters(tt.dst, tt.src)
 			assert.Equal(t, tt.expected, tt.dst)
+		})
+	}
+}
+
+func TestRemoveDuplicatedImages(t *testing.T) {
+	img := func(src, dest string) v2alpha1.CopyImageSchema {
+		return v2alpha1.CopyImageSchema{Source: src, Destination: dest, Origin: src}
+	}
+	a := img("docker://r/a@sha256:1", "docker://d/a:1")
+	b := img("docker://r/b@sha256:2", "docker://d/b:2")
+	// same destination as a, different source
+	a2 := img("docker://r/a2@sha256:3", "docker://d/a:1")
+
+	tests := []struct {
+		name string
+		mode string
+		in   []v2alpha1.CopyImageSchema
+		want []v2alpha1.CopyImageSchema
+	}{
+		{"adjacent duplicates removed", "mirrorToDisk", []v2alpha1.CopyImageSchema{a, a, b}, []v2alpha1.CopyImageSchema{a, b}},
+		{"non-adjacent duplicates removed, first occurrence kept", "mirrorToDisk", []v2alpha1.CopyImageSchema{a, b, a}, []v2alpha1.CopyImageSchema{a, b}},
+		{"same destination, different source kept when mirroring", "mirrorToDisk", []v2alpha1.CopyImageSchema{a, b, a2}, []v2alpha1.CopyImageSchema{a, b, a2}},
+		{"same destination collapsed when deleting", string(mirror.DeleteMode), []v2alpha1.CopyImageSchema{a, b, a2}, []v2alpha1.CopyImageSchema{a, b}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			in := slices.Clone(tt.in)
+			assert.Equal(t, tt.want, removeDuplicatedImages(in, tt.mode))
+			assert.Equal(t, tt.in, in, "input must not be mutated")
 		})
 	}
 }
