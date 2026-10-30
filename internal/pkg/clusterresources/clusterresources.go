@@ -593,10 +593,6 @@ func (o *ClusterResourcesGenerator) generateImageMirrors(allRelatedImages []v2al
 		if !ok {
 			continue
 		}
-		// sorted for a deterministic, diff-friendly output
-		for _, imgMirrors := range mirrors.mirrors {
-			slices.Sort(imgMirrors)
-		}
 		categorizedMirrorsList = append(categorizedMirrorsList, mirrors)
 	}
 	return categorizedMirrorsList, nil
@@ -883,6 +879,9 @@ func (o *ClusterResourcesGenerator) GenerateSignatureConfigMap(allRelatedImages 
 	return nil
 }
 
+// generateOcMirrorAnnotations returns the annotations added to the generated resources.
+// createdAt is the generation time, so it differs between runs on purpose: it is the only
+// expected difference between two runs with the same input (content ordering is deterministic).
 func generateOcMirrorAnnotations() map[string]string {
 	return map[string]string{
 		"createdBy":         "oc-mirror v2",

@@ -61,7 +61,9 @@ spec:
 
 Generated when tag-referenced images are mirrored (e.g., operator catalog images).
 
-The IDMS and ITMS output is deterministic so that regenerated files are easy to diff: resources are ordered by category (release, operator, generic), and the sources, and the mirrors of each source, are sorted alphabetically.
+The order of the IDMS and ITMS content is deterministic so that regenerated files are easy to diff: resources are ordered by category (release, operator, generic), and the sources are sorted alphabetically. The mirrors of each source keep their original order, since it is the pull priority used by the cluster.
+
+The `createdAt` annotation written by oc-mirror into the IDMS, ITMS and signature ConfigMap resources is a timestamp of the generation, so it changes on every run. This is a known and expected difference: when comparing two runs, a change limited to `createdAt` can be ignored, whereas any other difference reflects a change in the mirrored content.
 
 ### CatalogSource
 
