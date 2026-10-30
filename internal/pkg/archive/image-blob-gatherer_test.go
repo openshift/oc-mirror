@@ -13,6 +13,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/registry"
 	digest "github.com/opencontainers/go-digest"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.podman.io/image/v5/manifest"
 	"k8s.io/apimachinery/pkg/util/sets"
 
@@ -315,7 +316,7 @@ func TestImageBlobGatherer_SrcContextError(t *testing.T) {
 	ctx := context.Background()
 	// reserve a free port, then release it so that nothing listens on it
 	listener, err := net.Listen("tcp", "localhost:0")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	port := listener.Addr().(*net.TCPAddr).Port
 	assert.NoError(t, listener.Close())
 	host := fmt.Sprintf("localhost:%d", port)
