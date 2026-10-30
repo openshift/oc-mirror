@@ -61,6 +61,8 @@ spec:
 
 Generated when tag-referenced images are mirrored (e.g., operator catalog images).
 
+The IDMS and ITMS output is deterministic so that regenerated files are easy to diff: resources are ordered by category (release, operator, generic), and the sources, and the mirrors of each source, are sorted alphabetically.
+
 ### CatalogSource
 
 **File:** `cs-<catalog-name>-<suffix>.yaml`
