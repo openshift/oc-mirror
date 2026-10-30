@@ -2,11 +2,11 @@ package clusterresources
 
 import (
 	"bytes"
-	"cmp"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"iter"
 	"maps"
 	"os"
 	"path/filepath"
@@ -62,6 +62,17 @@ type (
 type categorizedMirrors struct {
 	category mirrorCategory
 	mirrors  map[string][]confv1.ImageMirror
+}
+
+// sortedBySource iterates over the mirrors ordered by source, for a deterministic, diff-friendly output.
+func (c categorizedMirrors) sortedBySource() iter.Seq2[string, []confv1.ImageMirror] {
+	return func(yield func(string, []confv1.ImageMirror) bool) {
+		for _, source := range slices.Sorted(maps.Keys(c.mirrors)) {
+			if !yield(source, c.mirrors[source]) {
+				return
+			}
+		}
+	}
 }
 
 const (
@@ -142,11 +153,10 @@ func (o *ClusterResourcesGenerator) generateITMS(mirrorsByCategory []categorized
 				ImageTagMirrors: []confv1.ImageTagMirrors{},
 			},
 		}
-		// sorted by source for a deterministic, diff-friendly output
-		for _, source := range slices.Sorted(maps.Keys(catMirrors.mirrors)) {
+		for source, imgMirrors := range catMirrors.sortedBySource() {
 			itm := confv1.ImageTagMirrors{
 				Source:  source,
-				Mirrors: catMirrors.mirrors[source],
+				Mirrors: imgMirrors,
 			}
 			itmsList[index].Spec.ImageTagMirrors = append(itmsList[index].Spec.ImageTagMirrors, itm)
 		}
@@ -489,11 +499,10 @@ func (o *ClusterResourcesGenerator) generateIDMS(mirrorsByCategory []categorized
 				ImageDigestMirrors: []confv1.ImageDigestMirrors{},
 			},
 		}
-		// sorted by source for a deterministic, diff-friendly output
-		for _, source := range slices.Sorted(maps.Keys(catMirrors.mirrors)) {
+		for source, imgMirrors := range catMirrors.sortedBySource() {
 			idm := confv1.ImageDigestMirrors{
 				Source:  source,
-				Mirrors: catMirrors.mirrors[source],
+				Mirrors: imgMirrors,
 			}
 			idmsList[index].Spec.ImageDigestMirrors = append(idmsList[index].Spec.ImageDigestMirrors, idm)
 		}
@@ -578,17 +587,18 @@ func (o *ClusterResourcesGenerator) generateImageMirrors(allRelatedImages []v2al
 		}
 	}
 	categorizedMirrorsList := make([]categorizedMirrors, 0, len(mirrorsByCategory))
-	for _, mirrors := range mirrorsByCategory {
+	// fixed category order (release, operator, generic) for a deterministic, diff-friendly output
+	for _, category := range []mirrorCategory{releaseCategory, operatorCategory, genericCategory} {
+		mirrors, ok := mirrorsByCategory[category]
+		if !ok {
+			continue
+		}
 		// sorted for a deterministic, diff-friendly output
 		for _, imgMirrors := range mirrors.mirrors {
 			slices.Sort(imgMirrors)
 		}
 		categorizedMirrorsList = append(categorizedMirrorsList, mirrors)
 	}
-	// sorted by category (release, operator, generic) for a deterministic, diff-friendly output
-	slices.SortFunc(categorizedMirrorsList, func(a, b categorizedMirrors) int {
-		return cmp.Compare(a.category, b.category)
-	})
 	return categorizedMirrorsList, nil
 }
 
