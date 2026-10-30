@@ -46,7 +46,7 @@ var _ = Describe("mirroring through an HTTP(S) proxy", func() {
 		expectOcMirrorCommandSuccess(result, err)
 
 		By("verifying images are mirrored in the local cache")
-		expectSuccessfulMirrorInLocalCache(filepath.Join(iscDir, iscHappyPath), cacheDir)
+		expectLocalCacheContainsExactly(cacheDir, happyPathCachedImages, testCatalogRepo)
 
 		By("verifying the proxy observed connections to the expected external hosts")
 		GinkgoWriter.Printf("hosts seen by proxy: %v\n", fwdProxy.Hosts())

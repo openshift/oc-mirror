@@ -10,7 +10,12 @@ import (
 )
 
 // dockerTransportPrefix is the "docker://" transport prefix used in mapping.txt entries.
-const dockerTransportPrefix = "docker://"
+const (
+	dockerTransportPrefix = "docker://"
+	localCacheHost        = "127.0.0.1:55000"
+	mappingFileName       = "mapping.txt"
+	missingFileName       = "missing.txt"
+)
 
 var _ = Describe("dry-run", func() {
 	var workDir string
@@ -72,7 +77,45 @@ var _ = Describe("dry-run", func() {
 		})
 	})
 
-	Describe("mirrorToDisk dry-run with a manifest list image", func() {
+	Describe("mirrorToDisk dry-run missing images report", func() {
+		initialImage := "docker://quay.io/oc-mirror/oc-mirror-dev:foo-bundle-v0.1.0=docker://" + localCacheHost + "/oc-mirror/oc-mirror-dev:foo-bundle-v0.1.0"
+		addedImage := "docker://quay.io/oc-mirror/oc-mirror-dev:foo-bundle-v0.2.0=docker://" + localCacheHost + "/oc-mirror/oc-mirror-dev:foo-bundle-v0.2.0"
+
+		It("should list in missing.txt only the images that are not in the local cache", func() {
+			iscInitial := filepath.Join(iscDir, "dry_run", "isc-missing-images-initial.yaml")
+			iscFull := filepath.Join(iscDir, "dry_run", "isc-missing-images-full.yaml")
+
+			By("running a dry-run with an empty cache")
+			result, err := runner.MirrorToDisk(ctx, iscFull, workDir, "--dry-run")
+			expectOcMirrorCommandSuccess(result, err)
+			expectDryRunFile(workDir, mappingFileName, []string{initialImage, addedImage})
+			expectDryRunFile(workDir, missingFileName, []string{initialImage, addedImage})
+
+			By("mirroring only the first image to the cache")
+			result, err = runner.MirrorToDisk(ctx, iscInitial, workDir)
+			expectOcMirrorCommandSuccess(result, err)
+
+			By("running a dry-run with a partially populated cache")
+			result, err = runner.MirrorToDisk(ctx, iscFull, workDir, "--dry-run")
+			expectOcMirrorCommandSuccess(result, err)
+			expectDryRunFile(workDir, mappingFileName, []string{initialImage, addedImage})
+			expectDryRunFile(workDir, missingFileName, []string{addedImage})
+
+			By("mirroring all images to the cache")
+			result, err = runner.MirrorToDisk(ctx, iscFull, workDir)
+			expectOcMirrorCommandSuccess(result, err)
+
+			By("running a dry-run with a fully populated cache")
+			result, err = runner.MirrorToDisk(ctx, iscFull, workDir, "--dry-run")
+			expectOcMirrorCommandSuccess(result, err)
+			expectDryRunFile(workDir, mappingFileName, []string{initialImage, addedImage})
+			_, err = os.Stat(filepath.Join(workDir, dirWorkingDir, "dry-run", missingFileName))
+			Expect(os.IsNotExist(err)).To(BeTrue(), "missing.txt should not exist when every image is in the cache")
+			Expect(result.Stdout + result.Stderr).To(ContainSubstring("all 2 images required for mirroring are available in local cache"))
+		})
+	})
+
+	Describe("dry-run with a manifest list image", func() {
 		iscManifestList := filepath.Join("dry_run", "isc-manifest-list.yaml")
 		topLevelSource := "docker://quay.io/openshifttest/hello-openshift@sha256:61b8f5e1a3b5dbd9e2c35fd448dc5106337d7a299873dd3a6f0cd8d4891ecc27"
 
@@ -92,8 +135,28 @@ var _ = Describe("dry-run", func() {
 			By("verifying mapping.txt contains an entry for each manifest list sub-digest")
 			expectMappingContainsManifestListSubDigests(workDir, topLevelSource, manifestListSubDigests)
 		})
+
+		It("should include manifest list sub-digests in mapping.txt in mirrorToMirror (OCPBUGS-66263)", func() {
+			By("running mirrorToMirror with --dry-run-manifest-lists")
+			result, err := runner.MirrorToMirror(ctx, filepath.Join(iscDir, iscManifestList), workDir, testRegistry.Endpoint(),
+				"--remove-signatures=true", "--dest-tls-verify=false", "--dry-run-manifest-lists")
+			expectOcMirrorCommandSuccess(result, err)
+
+			By("verifying mapping.txt contains an entry for each manifest list sub-digest")
+			expectMappingContainsManifestListSubDigests(workDir, topLevelSource, manifestListSubDigests)
+			expectNoRepositoriesInRegistry(*testRegistry)
+		})
 	})
 })
+
+// expectDryRunFile checks the exact source=destination lines in a dry-run report.
+func expectDryRunFile(workDir, fileName string, expected []string) {
+	GinkgoHelper()
+	data, err := os.ReadFile(filepath.Join(workDir, dirWorkingDir, "dry-run", fileName))
+	Expect(err).NotTo(HaveOccurred(), "%s not found", fileName)
+	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+	Expect(lines).To(ConsistOf(expected), "unexpected lines in %s", fileName)
+}
 
 // expectMappingContainsManifestListSubDigests verifies that mapping.txt contains one extra
 // line per manifest list sub-digest, each re-pinned to the top-level destination's repository.

@@ -33,7 +33,7 @@ var _ = Describe("delete", func() {
 			expectOcMirrorCommandSuccess(result, err)
 
 			By("verifying images are cached locally")
-			expectSuccessfulMirrorInLocalCache(filepath.Join(iscDir, iscHappyPath), cacheDir)
+			expectLocalCacheContainsExactly(cacheDir, happyPathCachedImages, testCatalogRepo)
 
 			By("running diskToMirror")
 			result, err = runner.DiskToMirror(ctx, filepath.Join(iscDir, iscHappyPath), workDir, testRegistry.Endpoint(),
@@ -56,7 +56,7 @@ var _ = Describe("delete", func() {
 			expectEmptyRegistry(*testRegistry)
 
 			By("verifying local cache is not deleted")
-			expectSuccessfulMirrorInLocalCache(filepath.Join(iscDir, iscHappyPath), cacheDir)
+			expectLocalCacheContainsExactly(cacheDir, happyPathCachedImages, testCatalogRepo)
 		})
 
 		// CLID-253 / OCP-77693 / OCP-86931
@@ -70,7 +70,7 @@ var _ = Describe("delete", func() {
 			expectOcMirrorCommandSuccess(result, err)
 
 			By("verifying images are cached locally")
-			expectSuccessfulMirrorInLocalCache(filepath.Join(iscDir, iscHappyPath), cacheDir)
+			expectLocalCacheContainsExactly(cacheDir, happyPathCachedImages, testCatalogRepo)
 
 			By("running diskToMirror")
 			result, err = runner.DiskToMirror(ctx, filepath.Join(iscDir, iscHappyPath), workDir, testRegistry.Endpoint(),
@@ -94,6 +94,9 @@ var _ = Describe("delete", func() {
 
 			By("verifying non-catalog images were also removed from the local cache")
 			expectRepositoriesAbsentFromLocalCache(cacheDir, nonCatalogRepos)
+			expectLocalCacheContainsExactly(cacheDir, map[string]string{
+				"oc-mirror/oc-mirror-dev:test-catalog-latest": happyPathCatalog,
+			}, testCatalogRepo)
 		})
 	})
 })

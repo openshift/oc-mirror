@@ -65,10 +65,11 @@ var _ = Describe("breakpoint resume", func() {
 			expectOcMirrorCommandSuccess(result, err)
 
 			By("verifying images are mirrored in the local cache registry")
-			expectSuccessfulMirrorInLocalCache(iscPath, cacheDir)
+			expectLocalCacheContainsExactly(cacheDir, happyPathCachedImages, testCatalogRepo)
 
 			By("verifying tar archive contents")
 			expectCorrectTarArchiveContents(iscPath, workDir)
+			expectArchiveContainsExactly(workDir, happyPathCachedImages, testCatalogRepo)
 		})
 
 		It("should produce correct results when re-run with existing cache", SpecTimeout(5*time.Minute), func(specCtx SpecContext) {
@@ -80,8 +81,9 @@ var _ = Describe("breakpoint resume", func() {
 			expectOcMirrorCommandSuccess(result, err)
 
 			By("verifying initial mirror produced correct results")
-			expectSuccessfulMirrorInLocalCache(iscPath, cacheDir)
+			expectLocalCacheContainsExactly(cacheDir, happyPathCachedImages, testCatalogRepo)
 			expectCorrectTarArchiveContents(iscPath, workDir)
+			expectArchiveContainsExactly(workDir, happyPathCachedImages, testCatalogRepo)
 
 			By("counting blob entries in the initial archive")
 			initialArchives := findTarArchives(workDir)
@@ -109,10 +111,11 @@ var _ = Describe("breakpoint resume", func() {
 				cachedBlobCount, initialBlobCount)
 
 			By("verifying images are mirrored in the local cache registry")
-			expectSuccessfulMirrorInLocalCache(iscPath, cacheDir)
+			expectLocalCacheContainsExactly(cacheDir, happyPathCachedImages, testCatalogRepo)
 
 			By("verifying tar archive contents")
 			expectCorrectTarArchiveContents(iscPath, workDir)
+			expectArchiveContainsExactly(workDir, happyPathCachedImages, testCatalogRepo)
 		})
 	})
 })
