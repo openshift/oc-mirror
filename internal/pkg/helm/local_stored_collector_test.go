@@ -694,7 +694,10 @@ func TestHelmImageCollector(t *testing.T) {
 			mockChartDownloader := MockChartDownloader{}
 			mockHttpClient := MockHttpClient{}
 
-			helmCollector := New(log, cfg, opts, mockIndexDownloader, mockChartDownloader, mockHttpClient)
+			helmCollector, err := New(log, cfg, opts, mockIndexDownloader, mockChartDownloader, mockHttpClient)
+			if !assert.NoError(t, err) {
+				return
+			}
 			if testCase.generateV1DestTags {
 				helmCollector = WithV1Tags(helmCollector)
 			}
@@ -794,7 +797,10 @@ func TestHelmImageCollectorNormalizesRepositoryURL(t *testing.T) {
 			}
 			client := &recordingHTTPClient{}
 
-			collector := New(clog.New("trace"), config, opts, MockIndexDownloader{}, MockChartDownloader{}, client)
+			collector, err := New(clog.New("trace"), config, opts, MockIndexDownloader{}, MockChartDownloader{}, client)
+			if !assert.NoError(t, err) {
+				return
+			}
 			imgs, err := collector.HelmImageCollector(context.Background())
 
 			assert.NoError(t, err)
@@ -828,7 +834,10 @@ func TestHelmImageCollectorNoSlashArchiveRoundTrip(t *testing.T) {
 		SrcImage: srcOpts,
 	}
 	m2dClient := &recordingHTTPClient{}
-	m2dCollector := New(clog.New("trace"), config, m2dOpts, MockIndexDownloader{}, MockChartDownloader{}, m2dClient)
+	m2dCollector, err := New(clog.New("trace"), config, m2dOpts, MockIndexDownloader{}, MockChartDownloader{}, m2dClient)
+	if !assert.NoError(t, err) {
+		return
+	}
 	_, err = m2dCollector.HelmImageCollector(context.Background())
 	assert.NoError(t, err)
 
@@ -839,7 +848,10 @@ func TestHelmImageCollectorNoSlashArchiveRoundTrip(t *testing.T) {
 		Destination:      testDest,
 		SrcImage:         srcOpts,
 	}
-	d2mCollector := New(clog.New("trace"), config, d2mOpts, nil, nil, nil)
+	d2mCollector, err := New(clog.New("trace"), config, d2mOpts, nil, nil, nil)
+	if !assert.NoError(t, err) {
+		return
+	}
 	imgs, err := d2mCollector.HelmImageCollector(context.Background())
 
 	assert.NoError(t, err)
@@ -861,6 +873,143 @@ func TestCreateIndexFileReturnsHTTPError(t *testing.T) {
 	assert.Error(t, err)
 	assert.ErrorContains(t, err, "status code")
 	assert.Equal(t, "https://example.test/charts/index.yaml", client.requestedURL)
+}
+
+func TestCreateTempFileCleanup(t *testing.T) {
+	lsc = &LocalStorageCollector{Log: clog.New("trace")}
+
+	cleanup, name, err := createTempFile(t.TempDir())
+	assert.NoError(t, err)
+	assert.FileExists(t, name)
+
+	cleanup()
+	assert.NoFileExists(t, name)
+}
+
+func TestCreateTempFileFailure(t *testing.T) {
+	lsc = &LocalStorageCollector{Log: clog.New("trace")}
+	dir := filepath.Join(t.TempDir(), "missing")
+
+	var cleanup func()
+	var name string
+	var err error
+	if !assert.NotPanics(t, func() {
+		cleanup, name, err = createTempFile(dir)
+	}) {
+		return
+	}
+
+	assert.Error(t, err)
+	assert.ErrorContains(t, err, dir)
+	assert.Empty(t, name)
+	if cleanup != nil {
+		assert.NotPanics(t, cleanup)
+	}
+}
+
+func TestHelmImageCollectorReturnsTempFileError(t *testing.T) {
+	log := clog.New("trace")
+	config := v2alpha1.ImageSetConfiguration{
+		ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
+			Mirror: v2alpha1.Mirror{
+				Helm: v2alpha1.Helm{
+					Repositories: []v2alpha1.Repository{{Name: "example", URL: "https://example.test/charts"}},
+				},
+			},
+		},
+	}
+	for _, mode := range []string{mirror.MirrorToDisk, mirror.MirrorToMirror} {
+		t.Run(mode, func(t *testing.T) {
+			_, srcOpts := mirror.ImageSrcFlags(nil, nil, nil, "src-", "screds")
+			workingDir := filepath.Join(t.TempDir(), "missing")
+			opts := mirror.CopyOptions{
+				Mode:     mode,
+				Global:   &mirror.GlobalOptions{WorkingDir: workingDir},
+				SrcImage: srcOpts,
+			}
+
+			var collector CollectorInterface
+			var err error
+			if !assert.NotPanics(t, func() {
+				collector, err = New(log, config, opts, MockIndexDownloader{}, MockChartDownloader{}, MockHttpClient{})
+			}) {
+				return
+			}
+			assert.Nil(t, collector)
+			assert.Error(t, err)
+			assert.ErrorContains(t, err, filepath.Join(workingDir, helmDir))
+		})
+	}
+
+	t.Run("local-only configuration does not create a temp file", func(t *testing.T) {
+		_, srcOpts := mirror.ImageSrcFlags(nil, nil, nil, "src-", "screds")
+		workingDir := filepath.Join(t.TempDir(), "missing")
+		opts := mirror.CopyOptions{
+			Mode:             mirror.MirrorToDisk,
+			Global:           &mirror.GlobalOptions{WorkingDir: workingDir},
+			LocalStorageFQDN: testLocalStorageFQDN,
+			SrcImage:         srcOpts,
+		}
+		localConfig := v2alpha1.ImageSetConfiguration{
+			ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
+				Mirror: v2alpha1.Mirror{
+					Helm: v2alpha1.Helm{
+						Local: []v2alpha1.Chart{{
+							Name: "podinfo-local",
+							Path: filepath.Join(testChartsDataPath, "podinfo-5.0.0.tgz"),
+						}},
+					},
+				},
+			},
+		}
+
+		collector, err := New(log, localConfig, opts, MockIndexDownloader{}, MockChartDownloader{}, MockHttpClient{})
+		if !assert.NoError(t, err) {
+			return
+		}
+		assert.NotNil(t, collector)
+		assert.NoDirExists(t, filepath.Join(workingDir, helmDir))
+		_, err = collector.HelmImageCollector(context.Background())
+		assert.NoError(t, err)
+	})
+
+	t.Run("empty configuration does not create a temp file", func(t *testing.T) {
+		_, srcOpts := mirror.ImageSrcFlags(nil, nil, nil, "src-", "screds")
+		workingDir := filepath.Join(t.TempDir(), "missing")
+		opts := mirror.CopyOptions{
+			Mode:     mirror.MirrorToMirror,
+			Global:   &mirror.GlobalOptions{WorkingDir: workingDir},
+			SrcImage: srcOpts,
+		}
+
+		collector, err := New(log, v2alpha1.ImageSetConfiguration{}, opts, MockIndexDownloader{}, MockChartDownloader{}, MockHttpClient{})
+		if !assert.NoError(t, err) {
+			return
+		}
+		assert.NotNil(t, collector)
+		assert.NoDirExists(t, filepath.Join(workingDir, helmDir))
+		_, err = collector.HelmImageCollector(context.Background())
+		assert.NoError(t, err)
+	})
+
+	t.Run("disk-to-mirror skips temp-file creation", func(t *testing.T) {
+		_, srcOpts := mirror.ImageSrcFlags(nil, nil, nil, "src-", "screds")
+		workingDir := filepath.Join(t.TempDir(), "missing")
+		opts := mirror.CopyOptions{
+			Mode:             mirror.DiskToMirror,
+			Global:           &mirror.GlobalOptions{WorkingDir: workingDir},
+			LocalStorageFQDN: testLocalStorageFQDN,
+			Destination:      testDest,
+			SrcImage:         srcOpts,
+		}
+
+		collector, err := New(log, config, opts, nil, nil, nil)
+		if !assert.NoError(t, err) {
+			return
+		}
+		assert.NotNil(t, collector)
+		assert.NoDirExists(t, filepath.Join(workingDir, helmDir))
+	})
 }
 
 // TestResolveChartPath verifies that resolveChartPath tolerates mismatches
@@ -1009,7 +1158,10 @@ func TestHelmImageCollectorVPrefixDiskToMirror(t *testing.T) {
 				SrcImage:         srcOpts,
 			}
 
-			New(log, testCfg, opts, nil, nil, nil)
+			_, err = New(log, testCfg, opts, nil, nil, nil)
+			if !assert.NoError(t, err) {
+				return
+			}
 
 			// Place the chart on disk using the downloader-supplied version
 			// string (which may differ from what the config specifies).

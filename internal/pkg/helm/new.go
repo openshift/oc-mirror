@@ -14,16 +14,28 @@ func New(log clog.PluggableLoggerInterface,
 	indexDownloader indexDownloader,
 	chartDownloader chartDownloader,
 	httpClient webClient,
-) CollectorInterface {
-	lsc = &LocalStorageCollector{Log: log, Config: config, Opts: opts, Helm: NewHelmOptions(opts.SrcImage.TlsVerify)}
+) (CollectorInterface, error) {
+	lsc = &LocalStorageCollector{
+		Log:     log,
+		Config:  config,
+		Opts:    opts,
+		Helm:    NewHelmOptions(opts.SrcImage.TlsVerify),
+		cleanup: func() {},
+	}
 	lsc.Log.Debug("helm.New opts.SrcImage.TlsVerify %t", opts.SrcImage.TlsVerify)
 
 	if !opts.IsDiskToMirror() {
 		wClient = httpClient
 
-		cleanup, file, _ := createTempFile(filepath.Join(lsc.Opts.Global.WorkingDir, helmDir))
-		lsc.Helm.settings.RepositoryConfig = file
-		lsc.cleanup = cleanup
+		if len(config.Mirror.Helm.Repositories) > 0 {
+			cleanup, file, err := createTempFile(filepath.Join(lsc.Opts.Global.WorkingDir, helmDir))
+			if err != nil {
+				cleanup()
+				return nil, err
+			}
+			lsc.Helm.settings.RepositoryConfig = file
+			lsc.cleanup = cleanup
+		}
 
 		lsc.Downloaders.indexDownloader = indexDownloader
 
@@ -35,5 +47,5 @@ func New(log clog.PluggableLoggerInterface,
 		}
 	}
 
-	return lsc
+	return lsc, nil
 }
