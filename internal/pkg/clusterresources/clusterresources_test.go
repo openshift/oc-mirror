@@ -1798,8 +1798,8 @@ func TestGenerateImageMirrors_SortedByCategory(t *testing.T) {
 	}
 }
 
-// Mirrors of a same source must be sorted so that generated files are diff-friendly across runs.
-func TestGenerateImageMirrors_MirrorsSorted(t *testing.T) {
+// The order of the mirrors of a same source is a pull priority for the cluster, so it must be preserved.
+func TestGenerateImageMirrors_MirrorsOrderPreserved(t *testing.T) {
 	const digest = "@sha256:3a06dc42529e7fb38b21e5381e2daf5687b2c04678cb5ed4026372e508865b0b"
 	newImg := func(dstRepo string) v2alpha1.CopyImageSchema {
 		return v2alpha1.CopyImageSchema{
@@ -1808,9 +1808,9 @@ func TestGenerateImageMirrors_MirrorsSorted(t *testing.T) {
 			Type:        v2alpha1.TypeOCPReleaseContent,
 		}
 	}
-	// same source, three different destinations, deliberately unsorted
+	// same source, three different destinations, deliberately not in alphabetical order
 	imgs := []v2alpha1.CopyImageSchema{newImg("zeta/release"), newImg("alpha/release"), newImg("mid/release")}
-	expected := []confv1.ImageMirror{"alpha/release", "mid/release", "zeta/release"}
+	expected := []confv1.ImageMirror{"zeta/release", "alpha/release", "mid/release"}
 
 	cr := &ClusterResourcesGenerator{Log: clog.New("trace")}
 	got, err := cr.generateImageMirrors(imgs, DigestsOnlyMode, true)
