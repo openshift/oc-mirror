@@ -10,6 +10,7 @@ import (
 	"path"
 	"sort"
 	"strconv"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -201,47 +202,49 @@ func (o *ChannelConcurrentBatch) Worker(ctx context.Context, collectorSchema v2a
 
 	completed := 0
 collect:
-	for completed < len(collectorSchema.AllImages) {
-		res := <-results
-		err := res.err
-		if res.skipped || len(res.platforms) > 0 {
-			if copiedImages.OperandPlatforms == nil {
-				copiedImages.OperandPlatforms = make(map[string][]v2alpha1.InstancePlatformFilter)
-			}
-			copiedImages.OperandPlatforms[res.img.Origin] = res.platforms
-			if !res.skipped {
-				if copiedImages.PlatformFilters == nil {
-					copiedImages.PlatformFilters = make(map[string][]v2alpha1.InstancePlatformFilter)
+		for completed < len(collectorSchema.AllImages) {
+			res := <-results
+			err := res.err
+			if res.skipped || len(res.platforms) > 0 {
+				if copiedImages.OperandPlatforms == nil {
+					copiedImages.OperandPlatforms = make(map[string][]v2alpha1.InstancePlatformFilter)
 				}
-				copiedImages.PlatformFilters[res.img.Origin] = res.platforms
+				copiedImages.OperandPlatforms[res.img.Origin] = res.platforms
+				if !res.skipped {
+					if copiedImages.PlatformFilters == nil {
+						copiedImages.PlatformFilters = make(map[string][]v2alpha1.InstancePlatformFilter)
+					}
+					copiedImages.PlatformFilters[res.img.Origin] = res.platforms
+				}
 			}
-		}
-		switch {
-		case res.skipped:
-			skippedCount++
-		case err == nil:
-			logImageSuccess(o.Log, &res.img, &opts)
-			copiedImages.AllImages = append(copiedImages.AllImages, res.img)
-			incrementTotals(res.imgType, &copiedImages)
-		default:
-			m.Lock()
-			errArray = append(errArray, *err)
-			m.Unlock()
-
-			logImageError(o.Log, &res.img, &opts)
-			if res.imgType.IsRelease() {
-				cancel()
-				// Labelled: plain break would leave only the switch.
-				break collect
+			switch {
+			case res.skipped:
+				skippedCount++
+			case err == nil:
+				logImageSuccess(o.Log, &res.img, &opts)
+				copiedImages.AllImages = append(copiedImages.AllImages, res.img)
+				incrementTotals(res.imgType, &copiedImages)
+			default:
+				m.Lock()
+				errArray = append(errArray, *err)
+				m.Unlock()
+	
+				logImageError(o.Log, &res.img, &opts)
+				if res.imgType.IsRelease() {
+					cancel()
+					// Labelled: plain break would leave only the switch.
+					break collect
+				}
 			}
+	
+			completed++
+			progressCh <- 1
 		}
-
-		completed++
-		progressCh <- 1
-	}
 	close(progressCh)
 
 	p.Wait()
+
+	sortByInputOrder(copiedImages.AllImages, collectorSchema.AllImages)
 
 	logResults(o.Log, opts.Function, &copiedImages, &collectorSchema, skippedCount)
 
@@ -453,4 +456,20 @@ func shouldSkipImage(img v2alpha1.CopyImageSchema, opts mirror.CopyOptions, errA
 	}
 
 	return false, nil
+}
+
+// sortByInputOrder restores the order of the input images: copies complete in
+// goroutine scheduling order, which would otherwise leak into the generated resources.
+func sortByInputOrder(copied, input []v2alpha1.CopyImageSchema) {
+	type key struct{ source, destination, origin string }
+	position := make(map[key]int, len(input))
+	for i, img := range input {
+		k := key{img.Source, img.Destination, img.Origin}
+		if _, found := position[k]; !found {
+			position[k] = i
+		}
+	}
+	slices.SortStableFunc(copied, func(a, b v2alpha1.CopyImageSchema) int {
+		return position[key{a.Source, a.Destination, a.Origin}] - position[key{b.Source, b.Destination, b.Origin}]
+	})
 }
