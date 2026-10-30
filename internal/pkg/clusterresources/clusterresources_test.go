@@ -1733,3 +1733,88 @@ func TestGenerateSignatureConfigMap(t *testing.T) {
 		}
 	})
 }
+
+// IDMS/ITMS entries must be sorted by source so that generated files are diff-friendly across runs.
+func TestGenerateIDMS_ITMS_SortedBySource(t *testing.T) {
+	sources := []string{"registry.redhat.io/zeta", "quay.io/alpha", "docker.io/mid", "quay.io/beta"}
+	mirrors := make(map[string][]confv1.ImageMirror, len(sources))
+	for _, s := range sources {
+		mirrors[s] = []confv1.ImageMirror{"myregistry/mynamespace"}
+	}
+	input := []categorizedMirrors{{category: genericCategory, mirrors: mirrors}}
+	expected := []string{"docker.io/mid", "quay.io/alpha", "quay.io/beta", "registry.redhat.io/zeta"}
+
+	cr := &ClusterResourcesGenerator{Log: clog.New("trace")}
+	// repeat to defeat random map iteration order
+	for range 20 {
+		idmsList, err := cr.generateIDMS(input)
+		assert.NoError(t, err)
+		var idmsSources []string
+		for _, m := range idmsList[0].Spec.ImageDigestMirrors {
+			idmsSources = append(idmsSources, m.Source)
+		}
+		assert.Equal(t, expected, idmsSources)
+
+		itmsList, err := cr.generateITMS(input)
+		assert.NoError(t, err)
+		var itmsSources []string
+		for _, m := range itmsList[0].Spec.ImageTagMirrors {
+			itmsSources = append(itmsSources, m.Source)
+		}
+		assert.Equal(t, expected, itmsSources)
+	}
+}
+
+// Mirror sets must be ordered by category (release, operator, generic) so that generated files are diff-friendly across runs.
+func TestGenerateImageMirrors_SortedByCategory(t *testing.T) {
+	imgs := []v2alpha1.CopyImageSchema{
+		{
+			Origin:      consts.DockerProtocol + "quay.io/generic/img@sha256:3a06dc42529e7fb38b21e5381e2daf5687b2c04678cb5ed4026372e508865b0b",
+			Destination: consts.DockerProtocol + "myregistry/generic/img@sha256:3a06dc42529e7fb38b21e5381e2daf5687b2c04678cb5ed4026372e508865b0b",
+			Type:        v2alpha1.TypeGeneric,
+		},
+		{
+			Origin:      consts.DockerProtocol + "registry.redhat.io/op/img@sha256:c1bc9a7f035bd40bafdbc915339027d671b8b491e219a352402748ea948dc3f2",
+			Destination: consts.DockerProtocol + "myregistry/op/img@sha256:c1bc9a7f035bd40bafdbc915339027d671b8b491e219a352402748ea948dc3f2",
+			Type:        v2alpha1.TypeOperatorRelatedImage,
+		},
+		{
+			Origin:      consts.DockerProtocol + "quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:3a06dc42529e7fb38b21e5381e2daf5687b2c04678cb5ed4026372e508865b0b",
+			Destination: consts.DockerProtocol + "myregistry/release/img@sha256:3a06dc42529e7fb38b21e5381e2daf5687b2c04678cb5ed4026372e508865b0b",
+			Type:        v2alpha1.TypeOCPReleaseContent,
+		},
+	}
+	cr := &ClusterResourcesGenerator{Log: clog.New("trace")}
+	expected := []mirrorCategory{releaseCategory, operatorCategory, genericCategory}
+	// repeat to defeat random map iteration order
+	for range 20 {
+		got, err := cr.generateImageMirrors(imgs, DigestsOnlyMode, false)
+		assert.NoError(t, err)
+		var categories []mirrorCategory
+		for _, c := range got {
+			categories = append(categories, c.category)
+		}
+		assert.Equal(t, expected, categories)
+	}
+}
+
+// Mirrors of a same source must be sorted so that generated files are diff-friendly across runs.
+func TestGenerateImageMirrors_MirrorsSorted(t *testing.T) {
+	const digest = "@sha256:3a06dc42529e7fb38b21e5381e2daf5687b2c04678cb5ed4026372e508865b0b"
+	newImg := func(dstRepo string) v2alpha1.CopyImageSchema {
+		return v2alpha1.CopyImageSchema{
+			Origin:      consts.DockerProtocol + "quay.io/openshift-release-dev/ocp-v4.0-art-dev" + digest,
+			Destination: consts.DockerProtocol + dstRepo + digest,
+			Type:        v2alpha1.TypeOCPReleaseContent,
+		}
+	}
+	// same source, three different destinations, deliberately unsorted
+	imgs := []v2alpha1.CopyImageSchema{newImg("zeta/release"), newImg("alpha/release"), newImg("mid/release")}
+	expected := []confv1.ImageMirror{"alpha/release", "mid/release", "zeta/release"}
+
+	cr := &ClusterResourcesGenerator{Log: clog.New("trace")}
+	got, err := cr.generateImageMirrors(imgs, DigestsOnlyMode, true)
+	assert.NoError(t, err)
+	assert.Len(t, got, 1)
+	assert.Equal(t, expected, got[0].mirrors["quay.io/openshift-release-dev/ocp-v4.0-art-dev"])
+}

@@ -2,6 +2,7 @@ package clusterresources
 
 import (
 	"bytes"
+	"cmp"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -10,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 	"unicode"
@@ -140,10 +142,11 @@ func (o *ClusterResourcesGenerator) generateITMS(mirrorsByCategory []categorized
 				ImageTagMirrors: []confv1.ImageTagMirrors{},
 			},
 		}
-		for source, imgMirrors := range catMirrors.mirrors {
+		// sorted by source for a deterministic, diff-friendly output
+		for _, source := range slices.Sorted(maps.Keys(catMirrors.mirrors)) {
 			itm := confv1.ImageTagMirrors{
 				Source:  source,
-				Mirrors: imgMirrors,
+				Mirrors: catMirrors.mirrors[source],
 			}
 			itmsList[index].Spec.ImageTagMirrors = append(itmsList[index].Spec.ImageTagMirrors, itm)
 		}
@@ -486,10 +489,11 @@ func (o *ClusterResourcesGenerator) generateIDMS(mirrorsByCategory []categorized
 				ImageDigestMirrors: []confv1.ImageDigestMirrors{},
 			},
 		}
-		for source, imgMirrors := range catMirrors.mirrors {
+		// sorted by source for a deterministic, diff-friendly output
+		for _, source := range slices.Sorted(maps.Keys(catMirrors.mirrors)) {
 			idm := confv1.ImageDigestMirrors{
 				Source:  source,
-				Mirrors: imgMirrors,
+				Mirrors: catMirrors.mirrors[source],
 			}
 			idmsList[index].Spec.ImageDigestMirrors = append(idmsList[index].Spec.ImageDigestMirrors, idm)
 		}
@@ -575,8 +579,16 @@ func (o *ClusterResourcesGenerator) generateImageMirrors(allRelatedImages []v2al
 	}
 	categorizedMirrorsList := make([]categorizedMirrors, 0, len(mirrorsByCategory))
 	for _, mirrors := range mirrorsByCategory {
+		// sorted for a deterministic, diff-friendly output
+		for _, imgMirrors := range mirrors.mirrors {
+			slices.Sort(imgMirrors)
+		}
 		categorizedMirrorsList = append(categorizedMirrorsList, mirrors)
 	}
+	// sorted by category (release, operator, generic) for a deterministic, diff-friendly output
+	slices.SortFunc(categorizedMirrorsList, func(a, b categorizedMirrors) int {
+		return cmp.Compare(a.category, b.category)
+	})
 	return categorizedMirrorsList, nil
 }
 
