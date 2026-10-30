@@ -146,8 +146,8 @@ func parseDomainAndPath(imgRef, name, transport string) (domain, pathComponent s
 	return domain, pathComponent, nil
 }
 
-// It expects the image reference not to have the transport prefix.
-// Otherwise, it will return an error.
+// ParseRef accepts transport-prefixed references. Docker references must
+// include a tag or digest.
 func ParseRef(imgRef string) (ImageSpec, error) {
 	imgSpec, err := parseImageSpec(imgRef)
 	if err != nil {
