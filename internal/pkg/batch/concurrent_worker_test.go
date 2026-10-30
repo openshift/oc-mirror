@@ -207,8 +207,9 @@ func TestChannelConcurrentWorker(t *testing.T) {
 		assert.Error(t, err)
 
 		errorMsg := err.Error()
+		assert.Contains(t, errorMsg, tempDir)
 
-		pattern := `/tmp/[^\s]+`
+		pattern := regexp.QuoteMeta(tempDir) + `/[^\s]+`
 		regex, err := regexp.Compile(pattern)
 		assert.NoError(t, err)
 
@@ -485,7 +486,16 @@ func (o *MirrorMock) Run(ctx context.Context, src, dest string, mode mirror.Mode
 }
 
 func (o *MirrorMock) Check(ctx context.Context, image string, opts *mirror.CopyOptions, asCopySrc bool) (bool, error) {
-	return true, nil
+	// Default: related image is not present at the destination so Worker tests keep
+	// cascade-skipping operator bundles when a related image fails for real.
+	// Tests that need a different answer should override via mock.On("Check", ...).
+	for _, call := range o.ExpectedCalls {
+		if call.Method == "Check" {
+			args := o.Called(ctx, image, opts, asCopySrc)
+			return args.Bool(0), args.Error(1)
+		}
+	}
+	return false, nil
 }
 
 // later, we can consider making this func smarter:
