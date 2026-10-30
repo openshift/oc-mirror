@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"hash/fnv"
+	"maps"
 	"path"
+	"slices"
 	"strings"
 
 	"go.podman.io/image/v5/types"
@@ -130,7 +132,9 @@ func (o OperatorCollector) catalogDigest(ctx context.Context, catalog v2alpha1.O
 func (o OperatorCollector) prepareD2MCopyBatch(images map[string][]v2alpha1.RelatedImage) ([]v2alpha1.CopyImageSchema, error) {
 	var result []v2alpha1.CopyImageSchema
 	var alreadyIncluded map[string]struct{} = make(map[string]struct{})
-	for _, relatedImgs := range images {
+	// sorted keys: the result order must not depend on map iteration order
+	for _, bundle := range slices.Sorted(maps.Keys(images)) {
+		relatedImgs := images[bundle]
 		for _, img := range relatedImgs {
 			var src string
 			var dest string
@@ -239,7 +243,9 @@ func (o OperatorCollector) prepareD2MCopyBatch(images map[string][]v2alpha1.Rela
 func (o OperatorCollector) prepareM2DCopyBatch(images map[string][]v2alpha1.RelatedImage) ([]v2alpha1.CopyImageSchema, error) {
 	var result []v2alpha1.CopyImageSchema
 	var alreadyIncluded map[string]struct{} = make(map[string]struct{})
-	for _, relatedImgs := range images {
+	// sorted keys: the result order must not depend on map iteration order
+	for _, bundle := range slices.Sorted(maps.Keys(images)) {
+		relatedImgs := images[bundle]
 		for _, img := range relatedImgs {
 			var src string
 			var dest string
@@ -307,7 +313,9 @@ func (o OperatorCollector) prepareM2DCopyBatch(images map[string][]v2alpha1.Rela
 func (o OperatorCollector) dispatchImagesForM2M(images map[string][]v2alpha1.RelatedImage) ([]v2alpha1.CopyImageSchema, error) {
 	var result []v2alpha1.CopyImageSchema
 	var alreadyIncluded map[string]struct{} = make(map[string]struct{})
-	for _, relatedImgs := range images {
+	// sorted keys: the result order must not depend on map iteration order
+	for _, bundle := range slices.Sorted(maps.Keys(images)) {
+		relatedImgs := images[bundle]
 		for _, img := range relatedImgs {
 			if img.Image == "" { // OCPBUGS-31622 skipping empty related images
 				continue
