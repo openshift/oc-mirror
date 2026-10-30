@@ -587,13 +587,10 @@ func (o *ClusterResourcesGenerator) generateImageMirrors(allRelatedImages []v2al
 		}
 	}
 	categorizedMirrorsList := make([]categorizedMirrors, 0, len(mirrorsByCategory))
-	// fixed category order (release, operator, generic) for a deterministic, diff-friendly output
-	for _, category := range []mirrorCategory{releaseCategory, operatorCategory, genericCategory} {
-		mirrors, ok := mirrorsByCategory[category]
-		if !ok {
-			continue
-		}
-		categorizedMirrorsList = append(categorizedMirrorsList, mirrors)
+	// categories are ordered by their constant value (release, operator, generic) for a deterministic,
+	// diff-friendly output; iterating the keys also guarantees no category is dropped
+	for _, category := range slices.Sorted(maps.Keys(mirrorsByCategory)) {
+		categorizedMirrorsList = append(categorizedMirrorsList, mirrorsByCategory[category])
 	}
 	return categorizedMirrorsList, nil
 }

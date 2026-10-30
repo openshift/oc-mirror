@@ -1452,17 +1452,20 @@ func TestRemoveDuplicatedImages(t *testing.T) {
 		name string
 		mode string
 		in   []v2alpha1.CopyImageSchema
-		want []v2alpha1.CopyImageSchema
+		// images returned by earlier collectors
+		collected []v2alpha1.CopyImageSchema
+		want      []v2alpha1.CopyImageSchema
 	}{
-		{"adjacent duplicates removed", "mirrorToDisk", []v2alpha1.CopyImageSchema{a, a, b}, []v2alpha1.CopyImageSchema{a, b}},
-		{"non-adjacent duplicates removed, first occurrence kept", "mirrorToDisk", []v2alpha1.CopyImageSchema{a, b, a}, []v2alpha1.CopyImageSchema{a, b}},
-		{"same destination, different source kept when mirroring", "mirrorToDisk", []v2alpha1.CopyImageSchema{a, b, a2}, []v2alpha1.CopyImageSchema{a, b, a2}},
-		{"same destination collapsed when deleting", string(mirror.DeleteMode), []v2alpha1.CopyImageSchema{a, b, a2}, []v2alpha1.CopyImageSchema{a, b}},
+		{"adjacent duplicates removed", "mirrorToDisk", []v2alpha1.CopyImageSchema{a, a, b}, nil, []v2alpha1.CopyImageSchema{a, b}},
+		{"non-adjacent duplicates removed, first occurrence kept", "mirrorToDisk", []v2alpha1.CopyImageSchema{a, b, a}, nil, []v2alpha1.CopyImageSchema{a, b}},
+		{"same destination, different source kept when mirroring", "mirrorToDisk", []v2alpha1.CopyImageSchema{a, b, a2}, nil, []v2alpha1.CopyImageSchema{a, b, a2}},
+		{"image already returned by an earlier collector is dropped", "mirrorToDisk", []v2alpha1.CopyImageSchema{b, a}, []v2alpha1.CopyImageSchema{a}, []v2alpha1.CopyImageSchema{b}},
+		{"same destination collapsed when deleting", string(mirror.DeleteMode), []v2alpha1.CopyImageSchema{a, b, a2}, nil, []v2alpha1.CopyImageSchema{a, b}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			in := slices.Clone(tt.in)
-			assert.Equal(t, tt.want, removeDuplicatedImages(in, tt.mode))
+			assert.Equal(t, tt.want, removeDuplicatedImages(in, tt.mode, tt.collected))
 			assert.Equal(t, tt.in, in, "input must not be mutated")
 		})
 	}

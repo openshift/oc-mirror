@@ -1190,7 +1190,7 @@ func (o *ExecutorSchema) CollectAll(ctx context.Context) (v2alpha1.CollectorSche
 		releaseErr = err
 	}
 	releaseImgs := excludeImages(releaseCS.AllImages, o.Config.Mirror.BlockedImages)
-	releaseImgs = removeDuplicatedImages(releaseImgs, o.Opts.Function)
+	releaseImgs = removeDuplicatedImages(releaseImgs, o.Opts.Function, allRelatedImages)
 	collectorSchema.TotalReleaseImages = len(releaseImgs)
 	o.Log.Debug(collecAllPrefix+"total release images to %s %d ", o.Opts.Function, collectorSchema.TotalReleaseImages)
 	allRelatedImages = append(allRelatedImages, releaseImgs...)
@@ -1205,7 +1205,7 @@ func (o *ExecutorSchema) CollectAll(ctx context.Context) (v2alpha1.CollectorSche
 		operatorErr = err
 	} else {
 		oImgs := excludeImages(operatorImgs.AllImages, o.Config.Mirror.BlockedImages)
-		oImgs = removeDuplicatedImages(oImgs, o.Opts.Function)
+		oImgs = removeDuplicatedImages(oImgs, o.Opts.Function, allRelatedImages)
 		collectorSchema.TotalOperatorImages = len(oImgs)
 		o.Log.Debug(collecAllPrefix+"total operator images to %s %d ", o.Opts.Function, collectorSchema.TotalOperatorImages)
 		allRelatedImages = append(allRelatedImages, oImgs...)
@@ -1224,7 +1224,7 @@ func (o *ExecutorSchema) CollectAll(ctx context.Context) (v2alpha1.CollectorSche
 		additionalImgErr = err
 	}
 	aImgs := excludeImages(additionalCS.AllImages, o.Config.Mirror.BlockedImages)
-	aImgs = removeDuplicatedImages(aImgs, o.Opts.Function)
+	aImgs = removeDuplicatedImages(aImgs, o.Opts.Function, allRelatedImages)
 	collectorSchema.TotalAdditionalImages = len(aImgs)
 	o.Log.Debug(collecAllPrefix+"total additional images to %s %d ", o.Opts.Function, collectorSchema.TotalAdditionalImages)
 	allRelatedImages = append(allRelatedImages, aImgs...)
@@ -1238,14 +1238,14 @@ func (o *ExecutorSchema) CollectAll(ctx context.Context) (v2alpha1.CollectorSche
 		helmErr = err
 	} else {
 		hImgs := excludeImages(helmCS.AllImages, o.Config.Mirror.BlockedImages)
-		hImgs = removeDuplicatedImages(hImgs, o.Opts.Function)
+		hImgs = removeDuplicatedImages(hImgs, o.Opts.Function, allRelatedImages)
 		collectorSchema.TotalHelmImages = len(hImgs)
 		o.Log.Debug(collecAllPrefix+"total helm images to %s %d ", o.Opts.Function, collectorSchema.TotalHelmImages)
 		allRelatedImages = append(allRelatedImages, hImgs...)
 		mergePlatformFilters(collectorSchema.PlatformFilters, helmCS.PlatformFilters)
 	}
 
-	sort.Sort(customsort.ByTypePriority(allRelatedImages))
+	sort.Stable(customsort.ByTypePriority(allRelatedImages))
 
 	collectorSchema.AllImages = allRelatedImages
 
@@ -1422,20 +1422,24 @@ func mergePlatformFilters(dst, src map[string][]v2alpha1.InstancePlatformFilter)
 	}
 }
 
-func removeDuplicatedImages(allRelatedImages []v2alpha1.CopyImageSchema, mode string) []v2alpha1.CopyImageSchema {
+func removeDuplicatedImages(images []v2alpha1.CopyImageSchema, mode string, alreadyCollected []v2alpha1.CopyImageSchema) []v2alpha1.CopyImageSchema {
 	// OCPBUGS-43731 - remove duplicates, keeping the first occurrence.
-	// A seen-set is used (instead of slices.CompactFunc) because duplicates
-	// within a collector's output (e.g. the same image coming from different
-	// catalogs) are not necessarily adjacent. This runs once per collector, so
-	// duplicates across collectors (e.g. additional image vs operator related
-	// image) are not removed here.
+	// A seen-set is used (instead of slices.CompactFunc) because duplicates are
+	// not necessarily adjacent. alreadyCollected seeds the set so that an image
+	// returned by an earlier collector is not kept again by a later one.
 	type key struct{ source, destination, origin string }
-	seen := make(map[key]struct{}, len(allRelatedImages))
-	return slices.DeleteFunc(slices.Clone(allRelatedImages), func(img v2alpha1.CopyImageSchema) bool {
-		k := key{source: img.Source, destination: img.Destination, origin: img.Origin}
+	keyOf := func(img v2alpha1.CopyImageSchema) key {
 		if mode == string(mirror.DeleteMode) {
-			k = key{destination: img.Destination}
+			return key{destination: img.Destination}
 		}
+		return key{source: img.Source, destination: img.Destination, origin: img.Origin}
+	}
+	seen := make(map[key]struct{}, len(alreadyCollected)+len(images))
+	for _, img := range alreadyCollected {
+		seen[keyOf(img)] = struct{}{}
+	}
+	return slices.DeleteFunc(slices.Clone(images), func(img v2alpha1.CopyImageSchema) bool {
+		k := keyOf(img)
 		if _, found := seen[k]; found {
 			return true
 		}
