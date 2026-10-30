@@ -121,9 +121,9 @@ func (o *Mirror) copy(ctx context.Context, src, dest string, opts *CopyOptions) 
 	}
 
 	if !opts.RemoveSignatures {
-		if err := applySignatureRegistriesDir(sourceCtx, opts.SrcImage.global.WorkingDir, copySigstoreAttachments); err != nil {
-			return err
-		}
+		// Source must keep use-sigstore-attachments so sigstoreSigned policy
+		// can verify existing .sig attachments. Lookaside-only is destination-only.
+		sourceCtx.RegistriesDirPath = registriesd.GetWorkingDirRegistrydConfigPath(opts.SrcImage.global.WorkingDir)
 	}
 
 	destinationCtx, err := opts.DestImage.NewSystemContext()
@@ -249,10 +249,11 @@ func (o *Mirror) copy(ctx context.Context, src, dest string, opts *CopyOptions) 
 	}, retryOptionsFrom(opts))
 }
 
-// applySignatureRegistriesDir sets registries.d on ctx. When copySigstoreAttachments
-// is true the parent copy must not enable use-sigstore-attachments, or
-// PutSignatures rewrites sha256-*.sig (new config digest, dropped history).
-// Lookaside/GPG configuration is kept. See OCPBUGS-129492 / oc-mirror#1478.
+// applySignatureRegistriesDir sets registries.d on the destination context.
+// When copySigstoreAttachments is true the parent copy must not enable
+// use-sigstore-attachments on the destination, or PutSignatures rewrites
+// sha256-*.sig (new config digest, dropped history). Lookaside/GPG
+// configuration is kept. See OCPBUGS-129492 / oc-mirror#1478.
 func applySignatureRegistriesDir(ctx *types.SystemContext, workingDir string, copySigstoreAttachments bool) error {
 	if copySigstoreAttachments {
 		dir, err := registriesd.PrepareLookasideOnlyDir(workingDir)

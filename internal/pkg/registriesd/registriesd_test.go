@@ -55,7 +55,7 @@ func TestPrepareLookasideOnlyDir(t *testing.T) {
 	assert.NoError(t, err)
 
 	lookasideFile := filepath.Join(GetWorkingDirRegistrydConfigPath(testFolder), "mymirror.com.yaml")
-	assert.NoError(t, os.WriteFile(lookasideFile, []byte("docker:\n  mymirror.com:\n    lookaside: file:///var/lib/oc-mirror/signatures\n    use-sigstore-attachments: true\n"), 0644))
+	assert.NoError(t, os.WriteFile(lookasideFile, []byte("docker:\n  mymirror.com:\n    lookaside: file:///var/lib/oc-mirror/signatures\n    use-sigstore-attachments: true\n"), 0o600))
 
 	dir, err := PrepareLookasideOnlyDir(testFolder)
 	assert.NoError(t, err)

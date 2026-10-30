@@ -110,6 +110,10 @@ func PrepareLookasideOnlyDir(workingDir string) (string, error) {
 }
 
 func writeLookasideOnlyFile(srcDir, dstDir, name string) error {
+	name = filepath.Base(name)
+	if name == "." || name == ".." {
+		return nil
+	}
 	if !strings.HasSuffix(name, ".yaml") && !strings.HasSuffix(name, ".yml") {
 		return nil
 	}
@@ -146,7 +150,7 @@ func writeFileAtomic(path string, body []byte) (err error) {
 	if closeErr := tmp.Close(); closeErr != nil {
 		return fmt.Errorf("error closing %s: %w", path, closeErr)
 	}
-	if renameErr := os.Rename(tmpName, path); renameErr != nil {
+	if renameErr := os.Rename(tmpName, path); renameErr != nil { //#nosec G703 -- dest is filepath.Join(dir, filepath.Base(name))
 		return fmt.Errorf("error writing %s: %w", path, renameErr)
 	}
 	return nil
