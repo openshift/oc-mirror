@@ -2,6 +2,7 @@ package image
 
 import (
 	"fmt"
+	"net/url"
 	"strings"
 
 	digest "github.com/opencontainers/go-digest"
@@ -164,6 +165,27 @@ func (i ImageSpec) DestinationTag() string {
 	return i.AlgorithmAndDigest()
 }
 
+// ValidateMaxNestedPaths checks that maxNestedPaths is strictly greater than the
+// number of path components in the docker destination, matching v1 checkDockerReference.
+// destination may be a bare registry (e.g. docker://host:8443) with no path prefix.
+func ValidateMaxNestedPaths(destination string, maxNestedPaths int) error {
+	if maxNestedPaths <= 0 {
+		return nil
+	}
+	u, err := url.Parse(destination)
+	if err != nil {
+		return fmt.Errorf("parse destination %q: %w", destination, err)
+	}
+	path := strings.TrimPrefix(u.Path, "/")
+	// Match v1: strings.Split(RepositoryName(), "/") — empty path yields one empty component.
+	depth := strings.Split(path, "/")
+	if len(depth) >= maxNestedPaths {
+		return fmt.Errorf("the max-nested-paths value (%d) must be strictly higher than the number of path-components in the destination %s - try increasing the value", maxNestedPaths, path)
+	}
+	return nil
+}
+
+// WithMaxNestedPaths flattens destination path components that exceed maxNestedPaths.
 func WithMaxNestedPaths(imageRef string, maxNestedPaths int) (string, error) {
 	if maxNestedPaths == 0 {
 		return imageRef, nil

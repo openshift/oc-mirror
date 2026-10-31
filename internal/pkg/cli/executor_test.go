@@ -587,6 +587,22 @@ func TestExecutorValidate(t *testing.T) {
 		opts.Global.WorkingDir = "" // reset
 		err = ex.Validate([]string{consts.DockerProtocol + "test"})
 		assert.EqualError(t, err, "when destination is docker://, either --from (assumes disk to mirror workflow) or --workspace (assumes mirror to mirror workflow) need to be provided")
+
+		// OCPBUGS-127439: max-nested-paths must be strictly greater than dest path components
+		opts.Global.WorkingDir = consts.FileProtocol + "test"
+		opts.Global.MaxNestedPaths = 1
+		err = ex.Validate([]string{consts.DockerProtocol + "registry.example.com:8443"})
+		assert.EqualError(t, err, "the max-nested-paths value (1) must be strictly higher than the number of path-components in the destination  - try increasing the value")
+
+		opts.Global.MaxNestedPaths = 2
+		assert.NoError(t, ex.Validate([]string{consts.DockerProtocol + "registry.example.com:8443"}))
+
+		opts.Global.MaxNestedPaths = 1
+		err = ex.Validate([]string{consts.DockerProtocol + "registry.example.com:8443/org"})
+		assert.EqualError(t, err, "the max-nested-paths value (1) must be strictly higher than the number of path-components in the destination org - try increasing the value")
+
+		opts.Global.MaxNestedPaths = 2
+		assert.NoError(t, ex.Validate([]string{consts.DockerProtocol + "registry.example.com:8443/org"}))
 	})
 }
 
