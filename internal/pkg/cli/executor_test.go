@@ -1409,8 +1409,9 @@ health:
     enabled: false
 `
 	// let the OS pick a free port, to avoid clashing with other listeners (e.g. macOS AirPlay Receiver on 5000)
-	// or with registries started by tests of other packages running in parallel
-	listener, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", "localhost:0")
+	// or with registries started by tests of other packages running in parallel.
+	// Probe all interfaces, the address the registry binds to below.
+	listener, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", ":0")
 	if err != nil {
 		return &configuration.Configuration{}, fmt.Errorf("unable to find a free port: %w", err)
 	}
