@@ -1749,7 +1749,7 @@ func TestGenerateIDMS_ITMS_SortedBySource(t *testing.T) {
 	for range 20 {
 		idmsList, err := cr.generateIDMS(input)
 		assert.NoError(t, err)
-		var idmsSources []string
+		idmsSources := make([]string, 0, len(idmsList[0].Spec.ImageDigestMirrors))
 		for _, m := range idmsList[0].Spec.ImageDigestMirrors {
 			idmsSources = append(idmsSources, m.Source)
 		}
@@ -1757,7 +1757,7 @@ func TestGenerateIDMS_ITMS_SortedBySource(t *testing.T) {
 
 		itmsList, err := cr.generateITMS(input)
 		assert.NoError(t, err)
-		var itmsSources []string
+		itmsSources := make([]string, 0, len(itmsList[0].Spec.ImageTagMirrors))
 		for _, m := range itmsList[0].Spec.ImageTagMirrors {
 			itmsSources = append(itmsSources, m.Source)
 		}
@@ -1790,7 +1790,7 @@ func TestGenerateImageMirrors_SortedByCategory(t *testing.T) {
 	for range 20 {
 		got, err := cr.generateImageMirrors(imgs, DigestsOnlyMode, false)
 		assert.NoError(t, err)
-		var categories []mirrorCategory
+		categories := make([]mirrorCategory, 0, len(got))
 		for _, c := range got {
 			categories = append(categories, c.category)
 		}

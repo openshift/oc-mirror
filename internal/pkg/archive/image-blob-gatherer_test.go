@@ -315,7 +315,7 @@ func TestImageBlobGatherer_ImgRefError(t *testing.T) {
 func TestImageBlobGatherer_SrcContextError(t *testing.T) {
 	ctx := context.Background()
 	// reserve a free port, then release it so that nothing listens on it
-	listener, err := net.Listen("tcp", "localhost:0")
+	listener, err := (&net.ListenConfig{}).Listen(ctx, "tcp", "localhost:0")
 	require.NoError(t, err)
 	port := listener.Addr().(*net.TCPAddr).Port
 	assert.NoError(t, listener.Close())

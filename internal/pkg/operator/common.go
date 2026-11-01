@@ -1,6 +1,7 @@
 package operator
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"hash/fnv"
@@ -129,11 +130,26 @@ func (o OperatorCollector) catalogDigest(ctx context.Context, catalog v2alpha1.O
 	return o.Manifest.ImageDigest(ctx, sourceCtx, imgSpec.ReferenceWithTransport)
 }
 
+// sortedBundleKeys returns the keys of images so that the copy batch does not depend on
+// map iteration order. Catalogs come first: images are deduplicated by reference, and a
+// bundle listing the catalog image as a related image must not take over its catalog role.
+func sortedBundleKeys(images map[string][]v2alpha1.RelatedImage) []string {
+	rank := func(key string) int {
+		isCatalog := func(img v2alpha1.RelatedImage) bool { return img.Type == v2alpha1.TypeOperatorCatalog }
+		if slices.ContainsFunc(images[key], isCatalog) {
+			return 0
+		}
+		return 1
+	}
+	return slices.SortedFunc(maps.Keys(images), func(a, b string) int {
+		return cmp.Or(cmp.Compare(rank(a), rank(b)), strings.Compare(a, b))
+	})
+}
+
 func (o OperatorCollector) prepareD2MCopyBatch(images map[string][]v2alpha1.RelatedImage) ([]v2alpha1.CopyImageSchema, error) {
 	var result []v2alpha1.CopyImageSchema
 	var alreadyIncluded map[string]struct{} = make(map[string]struct{})
-	// sorted keys: the result order must not depend on map iteration order
-	for _, bundle := range slices.Sorted(maps.Keys(images)) {
+	for _, bundle := range sortedBundleKeys(images) {
 		relatedImgs := images[bundle]
 		for _, img := range relatedImgs {
 			var src string
@@ -243,8 +259,7 @@ func (o OperatorCollector) prepareD2MCopyBatch(images map[string][]v2alpha1.Rela
 func (o OperatorCollector) prepareM2DCopyBatch(images map[string][]v2alpha1.RelatedImage) ([]v2alpha1.CopyImageSchema, error) {
 	var result []v2alpha1.CopyImageSchema
 	var alreadyIncluded map[string]struct{} = make(map[string]struct{})
-	// sorted keys: the result order must not depend on map iteration order
-	for _, bundle := range slices.Sorted(maps.Keys(images)) {
+	for _, bundle := range sortedBundleKeys(images) {
 		relatedImgs := images[bundle]
 		for _, img := range relatedImgs {
 			var src string
@@ -313,8 +328,7 @@ func (o OperatorCollector) prepareM2DCopyBatch(images map[string][]v2alpha1.Rela
 func (o OperatorCollector) dispatchImagesForM2M(images map[string][]v2alpha1.RelatedImage) ([]v2alpha1.CopyImageSchema, error) {
 	var result []v2alpha1.CopyImageSchema
 	var alreadyIncluded map[string]struct{} = make(map[string]struct{})
-	// sorted keys: the result order must not depend on map iteration order
-	for _, bundle := range slices.Sorted(maps.Keys(images)) {
+	for _, bundle := range sortedBundleKeys(images) {
 		relatedImgs := images[bundle]
 		for _, img := range relatedImgs {
 			if img.Image == "" { // OCPBUGS-31622 skipping empty related images
