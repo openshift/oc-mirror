@@ -1350,13 +1350,13 @@ health:
 `
 	// let the OS pick a free port, to avoid clashing with other listeners (e.g. macOS AirPlay Receiver on 5000)
 	// or with registries started by tests of other packages running in parallel
-	listener, err := net.Listen("tcp", "localhost:0")
+	listener, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", "localhost:0")
 	if err != nil {
-		return &configuration.Configuration{}, fmt.Errorf("unable to find a free port: %v", err)
+		return &configuration.Configuration{}, fmt.Errorf("unable to find a free port: %w", err)
 	}
 	port := listener.Addr().(*net.TCPAddr).Port
 	if err := listener.Close(); err != nil {
-		return &configuration.Configuration{}, fmt.Errorf("unable to release port %d: %v", port, err)
+		return &configuration.Configuration{}, fmt.Errorf("unable to release port %d: %w", port, err)
 	}
 	configYamlV01 = fmt.Sprintf(configYamlV01, testFolder, port)
 	config, err := configuration.Parse(bytes.NewReader([]byte(configYamlV01)))
