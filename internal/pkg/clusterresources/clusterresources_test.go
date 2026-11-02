@@ -11,6 +11,7 @@ import (
 	confv1 "github.com/openshift/api/config/v1"
 	"github.com/otiai10/copy"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/validation"
 
@@ -1190,6 +1191,20 @@ func TestCatalogSourceGenerator(t *testing.T) {
 		}, names)
 		assert.NotEqual(t, sanitizeRFC1035Suffix("v1-0"), sanitizeRFC1035Suffix("v1--0"))
 	})
+
+	t.Run("target catalog with underscores", func(t *testing.T) {
+		workingDir := t.TempDir()
+		ref := "docker://myregistry/redhat/redhat_operator_index:v4.22"
+		cr := &ClusterResourcesGenerator{Log: log, WorkingDir: workingDir, LocalStorageFQDN: "localhost:55000"}
+		cr.Config.Mirror.Operators = []v2alpha1.Operator{{Catalog: "registry.redhat.io/redhat/redhat-operator-index:v4.22", TargetCatalog: "redhat_operator_index"}}
+		images := []v2alpha1.CopyImageSchema{{Destination: ref, Type: v2alpha1.TypeOperatorCatalog}}
+		require.NoError(t, cr.CatalogSourceGenerator(images))
+		name := "cs-redhat-operator-index-v4-22"
+		catalog, err := parser.ParseYamlFile[ofv1alpha1.CatalogSource](filepath.Join(workingDir, clusterResourcesDir, name+".yaml"))
+		require.NoError(t, err)
+		assert.Equal(t, name, catalog.Name)
+		assert.Equal(t, "myregistry/redhat/redhat_operator_index:v4.22", catalog.Spec.Image)
+	})
 }
 
 func TestRFC1035NameSuffix(t *testing.T) {
@@ -1455,6 +1470,21 @@ func TestClusterCatalogGenerator(t *testing.T) {
 		assert.Equal(t, len(expectedCC.ObjectMeta.Annotations), len(actualCC.ObjectMeta.Annotations), "contents of catalogSource file incorrect (Annotations)")
 		assert.Equal(t, expectedCC.ObjectMeta.Annotations["createdBy"], actualCC.ObjectMeta.Annotations["createdBy"], "contents of catalogSource file incorrect (Annotations.createdBy)")
 		assert.Equal(t, expectedCC.ObjectMeta.Annotations["oc-mirror_version"], actualCC.ObjectMeta.Annotations["oc-mirror_version"], "contents of catalogSource file incorrect (Annotations.oc-mirror_version)")
+	})
+
+	t.Run("target catalog with underscores", func(t *testing.T) {
+		workingDir := t.TempDir()
+		ref := "docker://myregistry/redhat/redhat_operator_index:v4.22"
+		cr := &ClusterResourcesGenerator{Log: log, WorkingDir: workingDir, LocalStorageFQDN: "localhost:55000"}
+		cr.Config.Mirror.Operators = []v2alpha1.Operator{{Catalog: "registry.redhat.io/redhat/redhat-operator-index:v4.22", TargetCatalog: "redhat_operator_index"}}
+		images := []v2alpha1.CopyImageSchema{{Destination: ref, Type: v2alpha1.TypeOperatorCatalog}}
+		require.NoError(t, cr.ClusterCatalogGenerator(images))
+		name := "cc-redhat-operator-index-v4-22"
+		catalog, err := parser.ParseYamlFile[ofv1.ClusterCatalog](filepath.Join(workingDir, clusterResourcesDir, name+".yaml"))
+		require.NoError(t, err)
+		assert.Equal(t, name, catalog.Name)
+		require.NotNil(t, catalog.Spec.Source.Image)
+		assert.Equal(t, "myregistry/redhat/redhat_operator_index:v4.22", catalog.Spec.Source.Image.Ref)
 	})
 }
 
