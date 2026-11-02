@@ -53,7 +53,7 @@ Apply these conversions:
 
 #### Registry setup
 - **E2E**: Manual pod deployment via `createregistry()`, TLS trust via `trustCert()`, pull secret extraction.
-- **Integration**: Use the suite's `testRegistry` global — it's started in `BeforeEach` and stopped in `AfterEach` automatically. No TLS or pull secret setup needed.
+- **Integration**: Use the suite's `testRegistry` global as destination — it's started in `BeforeEach` and stopped in `AfterEach` automatically. Source images come from the session-wide `sourceRegistry` (`localhost:5001`, already trusted by oc-mirror). No TLS or pull secret setup needed.
 
 #### oc-mirror invocation
 - **E2E**: `oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args(...)` with manual flag construction.
@@ -83,14 +83,14 @@ Apply these conversions:
 #### Test images
 - **E2E**: Often uses real release images and production operator catalogs.
 - **Integration**: Use the self-hosted test images:
-  - Catalog: `quay.io/oc-mirror/oc-mirror-dev:test-catalog-latest`
-  - Release: `quay.io/oc-mirror/release/test-release-index:v0.0.1`
-  - Additional: `quay.io/openshifttest/hello-openshift@sha256:61b8f5...`
+  - Catalog: `localhost:5001/oc-mirror/oc-mirror-dev:test-catalog-latest`, served by the suite's session-wide source registry and built from `tests/integration/testdata/images` (see its README)
+  - Release: `localhost:5001/oc-mirror/release/test-release-index:v0.0.1` (built from `tests/integration/testdata/images/release`)
+  - Additional: `localhost:5001/oc-mirror/multi-platform-image:latest` and the other synthetic images listed in `tests/integration/testdata/images/README.md`
 
 #### Test data configs
 - Check existing ISC/DISC configs in `tests/integration/testdata/imagesetconfigs/` first.
 - Only create new ones if the scenario needs a config that doesn't exist.
-- Use test images (above) instead of production images.
+- Use test images (above) instead of production images. Tests must not depend on remote registries: add any new image to `tests/integration/pkg/testimages` instead.
 
 ### 6. Write the integration test
 

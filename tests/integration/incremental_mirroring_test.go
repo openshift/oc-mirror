@@ -9,9 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
-	"github.com/google/go-containerregistry/pkg/v1/remote"
+	v1 "github.com/google/go-containerregistry/pkg/v1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
@@ -177,9 +176,9 @@ var _ = Describe("incremental mirroring", func() {
 			iscUpdatePath := filepath.Join(iscDir, iscUpdate)
 
 			By("resolving the newly selected bar bundle independently of the mirror")
-			barBundleRef, err := name.NewTag("quay.io/oc-mirror/oc-mirror-dev:bar-bundle-v1.0.0")
+			barBundleRef, err := name.NewTag(sourceImageRef("oc-mirror/oc-mirror-dev:bar-bundle-v1.0.0"))
 			Expect(err).NotTo(HaveOccurred())
-			barBundle, err := remote.Head(barBundleRef, remote.WithAuth(authn.Anonymous), remote.WithContext(ctx))
+			barBundleDigest, err := v1.NewHash(sourceImageDigest("oc-mirror/oc-mirror-dev:bar-bundle-v1.0.0"))
 			Expect(err).NotTo(HaveOccurred())
 
 			By("running mirrorToDisk with the initial ISC (foo pinned at 0.2.0)")
@@ -238,7 +237,7 @@ var _ = Describe("incremental mirroring", func() {
 			// Check bar's image tag and manifest rather than its catalog files.
 			barTagPath := tarRepositoriesPath + barBundleRef.Context().RepositoryStr() +
 				"/_manifests/tags/" + barBundleRef.TagStr() + "/current/link"
-			barManifestPath := blobPrefix + "/" + barBundle.Digest.Hex[:2] + "/" + barBundle.Digest.Hex + "/data"
+			barManifestPath := blobPrefix + "/" + barBundleDigest.Hex[:2] + "/" + barBundleDigest.Hex + "/data"
 			initialEntries := listTarEntries(preservedTar)
 			expectTarDoesNotContainPath(initialEntries, barTagPath)
 			Expect(initialEntries).NotTo(ContainElement(barManifestPath),

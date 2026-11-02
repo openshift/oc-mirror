@@ -1,0 +1,20 @@
+# ImageSetConfig for the proxy tests. It references the source registry and the Helm
+# repository through host names that aren't loopback addresses, since Go never routes
+# traffic to localhost through a proxy. Only the test proxy resolves these names, by
+# routing them to the local servers (see sourceRegistryAlias and helmRepositoryAlias).
+kind: ImageSetConfiguration
+apiVersion: mirror.openshift.io/v2alpha1
+mirror:
+  helm:
+    repositories:
+    - name: test-chart
+      url: http://charts.oc-mirror.test
+      charts:
+      - name: test-chart
+        version: 1.0.0
+  additionalImages:
+  - name: source.oc-mirror.test/oc-mirror/multi-platform-image:latest
+  operators:
+  - catalog: source.oc-mirror.test/oc-mirror/oc-mirror-dev:test-catalog-latest
+    packages:
+    - name: foo

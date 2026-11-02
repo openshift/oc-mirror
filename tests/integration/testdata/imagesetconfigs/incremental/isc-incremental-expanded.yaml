@@ -3,7 +3,7 @@ kind: ImageSetConfiguration
 apiVersion: mirror.openshift.io/v2alpha1
 mirror:
   operators:
-    - catalog: quay.io/oc-mirror/oc-mirror-dev:test-catalog-latest
+    - catalog: localhost:5001/oc-mirror/oc-mirror-dev:test-catalog-latest
       packages:
       - name: foo
         defaultChannel: beta

@@ -5,18 +5,22 @@ apiVersion: mirror.openshift.io/v2alpha1
 mirror:
   platform:
     graph: false 
-    release: quay.io/oc-mirror/release/test-release-index:v0.0.1
+    release: localhost:5001/oc-mirror/release/test-release-index:v0.0.1
   helm:
     repositories:
-    - name: podinfo
-      url: https://stefanprodan.github.io/podinfo
+    - name: test-chart
+      url: http://localhost:5002
       charts:
-      - name: podinfo
-        version: 5.0.0
+      - name: test-chart
+        version: 1.0.0
   additionalImages:
-  - name: quay.io/openshifttest/hello-openshift@sha256:61b8f5e1a3b5dbd9e2c35fd448dc5106337d7a299873dd3a6f0cd8d4891ecc27
+  # Referenced by tag, not by digest: in mirrorToMirror, oc-mirror mistakes digest-only
+  # references from a registry with a port (localhost:5001/...@sha256:...) for tag+digest
+  # references (ImageSpec.IsImageByTagAndDigest), and fails. Switch back to the digest
+  # once that bug is fixed.
+  - name: localhost:5001/unsigned/docker-manifest-list:latest
   operators:
-  - catalog: quay.io/oc-mirror/oc-mirror-dev:test-catalog-latest
+  - catalog: localhost:5001/oc-mirror/oc-mirror-dev:test-catalog-latest
     packages:
     - name: foo
     - name: bar

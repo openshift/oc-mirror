@@ -85,12 +85,12 @@ var _ = Describe("sparse manifest platform filtering", Label("sparse-manifest"),
 
 				By("verifying helm chart image has only amd64 blobs")
 				expectOnlyPlatformBlobsPresent(ctx, sparseRegistry,
-					"stefanprodan/podinfo", "5.0.0",
+					"oc-mirror/test-chart", "1.0.0",
 					[]string{"linux/amd64"})
 
 				By("verifying additionalImage has only amd64 and arm64 blobs")
 				expectOnlyPlatformBlobsPresent(ctx, sparseRegistry,
-					"rh_ee_aguidi/multi-platform-container", "latest",
+					"oc-mirror/multi-platform-image", "latest",
 					[]string{"linux/amd64", "linux/arm64"})
 			})
 		})
@@ -104,9 +104,9 @@ var _ = Describe("sparse manifest platform filtering", Label("sparse-manifest"),
 					"--dest-tls-verify=false")
 				expectOcMirrorCommandSuccess(result, err)
 
-				By("verifying all platform blobs are present for multi-platform-container")
+				By("verifying all platform blobs are present for multi-platform-image")
 				expectAllPlatformBlobsPresent(ctx, testRegistry,
-					"rh_ee_aguidi/multi-platform-container", "latest")
+					"oc-mirror/multi-platform-image", "latest")
 
 				By("verifying the release image was mirrored")
 				expectRepositoriesExist(*testRegistry, []string{"openshift/release-images"})
@@ -171,12 +171,12 @@ var _ = Describe("sparse manifest platform filtering", Label("sparse-manifest"),
 
 				By("verifying helm chart image has only amd64 blobs")
 				expectOnlyPlatformBlobsPresent(ctx, sparseRegistry,
-					"stefanprodan/podinfo", "5.0.0",
+					"oc-mirror/test-chart", "1.0.0",
 					[]string{"linux/amd64"})
 
 				By("verifying additionalImage has only amd64 and arm64 blobs")
 				expectOnlyPlatformBlobsPresent(ctx, sparseRegistry,
-					"rh_ee_aguidi/multi-platform-container", "latest",
+					"oc-mirror/multi-platform-image", "latest",
 					[]string{"linux/amd64", "linux/arm64"})
 			})
 		})
@@ -196,9 +196,9 @@ var _ = Describe("sparse manifest platform filtering", Label("sparse-manifest"),
 					"--dest-tls-verify=false")
 				expectOcMirrorCommandSuccess(result, err)
 
-				By("verifying all platform blobs are present for multi-platform-container")
+				By("verifying all platform blobs are present for multi-platform-image")
 				expectAllPlatformBlobsPresent(ctx, testRegistry,
-					"rh_ee_aguidi/multi-platform-container", "latest")
+					"oc-mirror/multi-platform-image", "latest")
 
 				By("verifying the release image was mirrored")
 				expectRepositoriesExist(*testRegistry, []string{"openshift/release-images"})
@@ -225,8 +225,8 @@ var _ = Describe("deprecated platform.architectures field", Label("sparse-manife
 		Expect(result.Stdout + result.Stderr).To(ContainSubstring(
 			"platform.architectures is deprecated"))
 
-		By("verifying multi-platform-container repository exists")
-		expectRepositoriesExist(*testRegistry, []string{"rh_ee_aguidi/multi-platform-container"})
+		By("verifying multi-platform-image repository exists")
+		expectRepositoriesExist(*testRegistry, []string{"oc-mirror/multi-platform-image"})
 	})
 })
 
@@ -262,6 +262,10 @@ var _ = Describe("deprecated platform.architectures field with release channel",
 	BeforeAll(func() {
 		workDir = setupWorkDir()
 		// Mock Cincinnati server: returns different release payloads depending on ?arch=
+		const (
+			releasePayload      = "oc-mirror/release/test-release-index:v0.0.1"
+			multiReleasePayload = "oc-mirror/release/test-release-index-multi:v0.0.1"
+		)
 		cincinnatiServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.Header.Get("Accept") != "application/json" {
 				w.WriteHeader(http.StatusNotAcceptable)
@@ -272,9 +276,9 @@ var _ = Describe("deprecated platform.architectures field with release channel",
 			switch arch {
 			case "multi":
 				// Use digest reference so GenerateReleaseSignatures can find the GPG signature
-				payload = "quay.io/oc-mirror/release/test-release-index-multi@sha256:2352c020dacb945a96cf665e553644f3a3c39341b636a4d9ef1653944fd9de1f"
+				payload = sourceImageDigestRef(multiReleasePayload)
 			default: // amd64 and others — use digest reference for GPG signature lookup
-				payload = "quay.io/oc-mirror/release/test-release-index@sha256:f81792339c8b5934191d18a53b18bc1d584e01a9f37d59c0aa6905b00200aa1b"
+				payload = sourceImageDigestRef(releasePayload)
 			}
 			w.Header().Set("Content-Type", "application/json")
 			fmt.Fprintf(w, `{"nodes":[{"version":"4.18.1","payload":"%s"}],"edges":[]}`, payload)
@@ -304,7 +308,7 @@ var _ = Describe("deprecated platform.architectures field with release channel",
 		By("verifying both release payloads and the additional image are in the registry")
 		expectRepositoriesExist(*testRegistry, []string{
 			"openshift/release-images",
-			"rh_ee_aguidi/multi-platform-container",
+			"oc-mirror/multi-platform-image",
 		})
 	})
 })

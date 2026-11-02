@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/google/go-containerregistry/pkg/v1/remote"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
@@ -74,16 +75,13 @@ var _ = Describe("dry-run", func() {
 
 	Describe("mirrorToDisk dry-run with a manifest list image", func() {
 		iscManifestList := filepath.Join("dry_run", "isc-manifest-list.yaml")
-		topLevelSource := "docker://quay.io/openshifttest/hello-openshift@sha256:61b8f5e1a3b5dbd9e2c35fd448dc5106337d7a299873dd3a6f0cd8d4891ecc27"
-
-		// The digest above resolves to a manifest list (image index) with these two
-		// platform-specific sub-manifests, which never change since it's pinned by digest.
-		manifestListSubDigests := []string{
-			"sha256:685a0ca5f33d9f921966c9d9f5922e266affbf93dde0c156709ecdea362f88f4",
-			"sha256:a51d6da571b2e1f57249f4d966af65cbfb361dad66cde7121c1bb656ab196269",
-		}
+		const manifestList = "unsigned/docker-manifest-list:latest"
 
 		It("should include manifest list sub-digests in mapping.txt (OCPBUGS-66263)", func() {
+			topLevelSource := dockerTransportPrefix + sourceImageDigestRef(manifestList)
+			manifestListSubDigests := sourceIndexManifestDigests(manifestList)
+			Expect(manifestListSubDigests).To(HaveLen(2))
+
 			By("running mirrorToDisk with --dry-run-manifest-lists")
 			result, err := runner.MirrorToDisk(ctx, filepath.Join(iscDir, iscManifestList), workDir,
 				"--remove-signatures=true", "--dry-run-manifest-lists")
@@ -124,4 +122,22 @@ func expectMappingContainsManifestListSubDigests(workDir, topLevelSource string,
 		Expect(mappings).To(HaveKeyWithValue(subSource, subDest),
 			"mapping.txt is missing sub-digest entry %q -> %q", subSource, subDest)
 	}
+}
+
+// sourceIndexManifestDigests returns the digests of the manifests listed by the
+// source image index identified by "<repository>:<tag>".
+func sourceIndexManifestDigests(repoTag string) []string {
+	GinkgoHelper()
+	ref, err := sourceRegistry.Reference(repoTag)
+	Expect(err).NotTo(HaveOccurred())
+	idx, err := remote.Index(ref, sourceRegistry.RemoteOptions(ctx)...)
+	Expect(err).NotTo(HaveOccurred())
+	manifest, err := idx.IndexManifest()
+	Expect(err).NotTo(HaveOccurred())
+
+	var digests []string
+	for _, desc := range manifest.Manifests {
+		digests = append(digests, desc.Digest.String())
+	}
+	return digests
 }

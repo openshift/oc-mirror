@@ -3,4 +3,4 @@ kind: ImageSetConfiguration
 apiVersion: mirror.openshift.io/v2alpha1
 mirror:
   additionalImages:
-    - name: quay.io/oc-mirror/oc-mirror-dev:foo-v0.1.0
+    - name: localhost:5001/oc-mirror/oc-mirror-dev:foo-v0.1.0

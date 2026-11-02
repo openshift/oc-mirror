@@ -11,6 +11,7 @@ import (
 
 	"github.com/openshift/oc-mirror/tests/integration/pkg/ocmirror"
 	"github.com/openshift/oc-mirror/tests/integration/pkg/registry"
+	"github.com/openshift/oc-mirror/tests/integration/pkg/testimages"
 )
 
 // A registries.conf redirect makes the enclave-side oc-mirror pull from the
@@ -30,8 +31,8 @@ var _ = Describe("enclave", func() {
 		iscFile := filepath.Join("operators", "isc-operator-version-range.yaml")
 
 		// Workflow:
-		//  1. Mirror operators from the remote catalog into an intermediate registry.
-		//  2. Configure registries.conf to redirect quay.io pulls to the intermediate registry.
+		//  1. Mirror operators from the source catalog into an intermediate registry.
+		//  2. Configure registries.conf to redirect source registry pulls to the intermediate registry.
 		//  3. Mirror from the intermediate registry into a separate enclave registry.
 		//  4. Assert that the enclave catalog contains the correctly filtered bundles.
 		It("should forward operators from intermediate to enclave registry via registries.conf", func() {
@@ -47,7 +48,7 @@ var _ = Describe("enclave", func() {
 			GinkgoWriter.Printf("intermediate registry: %s\n", testRegistry.Endpoint())
 			GinkgoWriter.Printf("enclave registry:      %s\n", enclaveRegistry.Endpoint())
 
-			By("mirroring from the remote catalog to the intermediate registry")
+			By("mirroring from the source catalog to the intermediate registry")
 			result, err := runner.MirrorToMirror(ctx, iscPath, workDir, testRegistry.Endpoint(),
 				"--remove-signatures=true", "--dest-tls-verify=false")
 			logOcMirrorResult("step-1 mirrorToMirror", result)
@@ -86,14 +87,14 @@ var _ = Describe("enclave", func() {
 })
 
 // writeRegistriesConf generates a containers registries.conf file that
-// redirects all quay.io pulls to the given mirror endpoint over plain HTTP.
+// redirects all source registry pulls to the given mirror endpoint over plain HTTP.
 func writeRegistriesConf(dir, mirrorEndpoint string) string {
 	content := fmt.Sprintf(`[[registry]]
-  location = "quay.io"
+  location = "%s"
   [[registry.mirror]]
     location = "%s"
     insecure = true
-`, mirrorEndpoint)
+`, testimages.SourceRegistry, mirrorEndpoint)
 
 	p := filepath.Join(dir, "registries.conf")
 	Expect(os.WriteFile(p, []byte(content), 0o644)).To(Succeed())

@@ -1,0 +1,15 @@
+---
+entries:
+- defaultChannel: alpha
+  name: bar
+  schema: olm.package
+- entries:
+  - name: bar.v0.1.0
+    skipRange: <0.1.0
+  name: alpha
+  package: bar
+  schema: olm.channel
+- image: localhost:5001/oc-mirror/oc-mirror-dev:bar-bundle-v0.1.0
+  schema: olm.bundle
+schema: olm.template.basic
+

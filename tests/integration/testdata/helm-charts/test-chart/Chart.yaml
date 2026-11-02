@@ -1,0 +1,6 @@
+apiVersion: v2
+name: test-chart
+description: Chart served by the local Helm repository of the integration tests.
+type: application
+version: 1.0.0
+appVersion: "1.0.0"

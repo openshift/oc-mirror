@@ -23,30 +23,28 @@ import (
 // trip: their blob data is present in the tar archive and both are resolvable by digest in
 // the destination registry. They fail against the current (buggy) behavior and pass once
 // tag+digest images are cached under a per-digest tag.
-const (
-	// collisionRepo is the repository (path component) the colliding images land under.
-	collisionRepo = "oc-mirror/oc-mirror-dev"
-
-	// collisionDigestA and collisionDigestB are two distinct, real manifests that already
-	// exist in quay.io/oc-mirror/oc-mirror-dev. Both are referenced under the same
-	// "shared-operand" tag, so they collide on a single cache tag.
-	collisionDigestA = "sha256:1ce8c0187c8fe6b4be327dc848b8baf062ce1baa5096b4f5d955893d126d5b58"
-	collisionDigestB = "sha256:1b8392488dabcf78c82c72866d34edf6ef3d5bfb6ec00c81a377486a90d3d9ad"
-)
+// collisionRepo is the repository (path component) the colliding images land under.
+const collisionRepo = "oc-mirror/oc-mirror-dev"
 
 var _ = Describe("tag and digest collision", func() {
 	var workDir string
+	// collisionDigestA and collisionDigestB are the digests of two distinct test images
+	// (the operand and operand-alt images). The test ISCs, catalog and chart reference
+	// both under the same "shared-operand" tag, so they collide on a single cache tag.
+	var collisionDigestA, collisionDigestB string
 
 	BeforeEach(func() {
 		workDir = setupWorkDir()
+		collisionDigestA = sourceImageDigest(collisionRepo + ":operand")
+		collisionDigestB = sourceImageDigest(collisionRepo + ":operand-alt")
 	})
 
 	AfterEach(func() {
 		cleanupWorkDir(workDir)
 	})
 
-	// Requires the test-catalog-tag-digest-collision catalog image to be built and pushed -
-	// see tests/integration/image-builders/operator/catalogs/README.md.
+	// Uses the test-catalog-tag-digest-collision catalog, see
+	// testdata/images/operator/catalogs/README.md.
 	Describe("operator related images sharing a repo:tag with different digests", func() {
 		iscFile := filepath.Join("tag_digest_collision", "isc-operator-tag-digest-collision.yaml")
 
@@ -183,12 +181,13 @@ var _ = Describe("tag and digest collision", func() {
 // CWD (not the ISC file's location), which isn't guaranteed to match the test
 // binary's CWD in every environment - e.g. in this repo's Prow CI job the test
 // binary's CWD is an unrelated artifacts directory, not the checkout. So the
-// absolute path is derived from iscDir (already correctly rooted via
+// absolute path is derived from helmChartsDir (already correctly rooted via
 // ARTIFACTS_DIR, see integration_suite_test.go) rather than the process's CWD.
 func resolveHelmISC(workDir string) string {
 	const relChartPath = "testdata/helm-charts/tag-digest-collision"
 
-	absChartPath := filepath.Join(filepath.Dir(iscDir), "helm-charts", "tag-digest-collision")
+	absChartPath, err := filepath.Abs(filepath.Join(helmChartsDir, "tag-digest-collision"))
+	Expect(err).NotTo(HaveOccurred())
 
 	srcISC := filepath.Join(iscDir, "tag_digest_collision", "isc-helm-tag-digest-collision.yaml")
 	data, err := os.ReadFile(srcISC)

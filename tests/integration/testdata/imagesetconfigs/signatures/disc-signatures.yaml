@@ -3,8 +3,8 @@ apiVersion: mirror.openshift.io/v2alpha1
 delete:
   platform:
     graph: false
-    release: quay.io/oc-mirror/release/test-release-index:v0.0.1
+    release: localhost:5001/oc-mirror/release/test-release-index:v0.0.1
   operators:
-  - catalog: quay.io/oc-mirror/oc-mirror-dev:test-catalog-latest
+  - catalog: localhost:5001/oc-mirror/oc-mirror-dev:test-catalog-latest
     # Match the full catalog selected by isc-signatures.yaml.
     full: true

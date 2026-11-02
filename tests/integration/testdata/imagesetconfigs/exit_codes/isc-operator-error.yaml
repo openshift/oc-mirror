@@ -3,7 +3,7 @@ apiVersion: mirror.openshift.io/v2alpha1
 mirror:
   platform:
     graph: false
-    release: quay.io/oc-mirror/release/test-release-index:v0.0.1
+    release: localhost:5001/oc-mirror/release/test-release-index:v0.0.1
   operators:
     - catalog: registry.invalid.example.com/nonexistent/catalog:v4.23
       packages:
@@ -11,4 +11,4 @@ mirror:
           channels:
             - name: stable
   additionalImages:
-    - name: quay.io/openshifttest/hello-openshift@sha256:61b8f5e1a3b5dbd9e2c35fd448dc5106337d7a299873dd3a6f0cd8d4891ecc27
+    - name: localhost:5001/unsigned/docker-manifest-list@{{ digest "unsigned/docker-manifest-list:latest" }}

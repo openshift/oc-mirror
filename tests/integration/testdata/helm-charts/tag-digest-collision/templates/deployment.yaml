@@ -12,7 +12,7 @@ spec:
     spec:
       initContainers:
       - name: init
-        image: quay.io/oc-mirror/oc-mirror-dev:shared-operand@sha256:1b8392488dabcf78c82c72866d34edf6ef3d5bfb6ec00c81a377486a90d3d9ad
+        image: localhost:5001/oc-mirror/oc-mirror-dev:shared-operand@{{ digest "oc-mirror/oc-mirror-dev:operand-alt" }}
       containers:
       - name: main
-        image: quay.io/oc-mirror/oc-mirror-dev:shared-operand@sha256:1ce8c0187c8fe6b4be327dc848b8baf062ce1baa5096b4f5d955893d126d5b58
+        image: localhost:5001/oc-mirror/oc-mirror-dev:shared-operand@{{ digest "oc-mirror/oc-mirror-dev:operand" }}

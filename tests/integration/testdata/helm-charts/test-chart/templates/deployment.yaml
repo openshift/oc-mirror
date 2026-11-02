@@ -1,0 +1,19 @@
+# The image is a multi-arch test image (see additionalImages in pkg/testimages).
+# Templates must not use Helm template actions: charts are rendered as Go templates
+# by the test suite before Helm loads them.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: test-chart
+spec:
+  selector:
+    matchLabels:
+      app: test-chart
+  template:
+    metadata:
+      labels:
+        app: test-chart
+    spec:
+      containers:
+      - name: main
+        image: localhost:5001/oc-mirror/test-chart:1.0.0

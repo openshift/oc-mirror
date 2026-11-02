@@ -10,12 +10,13 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/operator-framework/operator-registry/alpha/declcfg"
+
+	"github.com/openshift/oc-mirror/tests/integration/pkg/testimages"
 )
 
 // releaseImagesRepo is the destination repository for the pinned platform release image
@@ -102,12 +103,13 @@ var _ = Describe("secure policy", func() {
 		catalogRepo := extractRepositoryName(cfg.Mirror.Operators[0].Catalog)
 		catalogTag := extractTag(cfg.Mirror.Operators[0].Catalog)
 		additionalImageRepo := extractRepositoryName(cfg.Mirror.AdditionalImages[0].Name)
-		policyPath := writeSigstoreSignedPolicy(workDir, filepath.Join(keysDir, "cosign.pub"), "quay.io/oc-mirror")
+		signedScope := testimages.SourceRegistry + "/oc-mirror"
+		policyPath := writeSigstoreSignedPolicy(workDir, filepath.Join(keysDir, "cosign.pub"), signedScope)
 
 		By("resolving expected operator images independently from the source catalog")
 		expectedImages := sourceCatalogImageDigests(ctx, cfg.Mirror.Operators[0].Catalog)
 
-		By("running mirrorToDisk with --secure-policy=true and a policy requiring cosign signatures for quay.io/oc-mirror")
+		By("running mirrorToDisk with --secure-policy=true and a policy requiring cosign signatures for " + signedScope)
 		result, err := runner.MirrorToDisk(ctx, filepath.Join(iscDir, isc), workDir,
 			"--secure-policy=true", "--policy", policyPath)
 		expectOcMirrorExitCode(result, err, 8, "is rejected by policy")
@@ -136,7 +138,7 @@ func sourceCatalogImageDigests(ctx context.Context, catalog string) []name.Diges
 	GinkgoHelper()
 	ref, err := name.ParseReference(catalog)
 	Expect(err).NotTo(HaveOccurred())
-	img, err := remote.Image(ref, remote.WithAuth(authn.Anonymous), remote.WithContext(ctx))
+	img, err := remote.Image(ref, sourceRegistry.RemoteOptions(ctx)...)
 	Expect(err).NotTo(HaveOccurred())
 	digest, err := img.Digest()
 	Expect(err).NotTo(HaveOccurred())
@@ -160,7 +162,7 @@ func sourceCatalogImageDigests(ctx context.Context, catalog string) []name.Diges
 	for _, image := range slices.Sorted(maps.Keys(images)) {
 		ref, err := name.ParseReference(image)
 		Expect(err).NotTo(HaveOccurred())
-		manifest, err := remote.Head(ref, remote.WithAuth(authn.Anonymous), remote.WithContext(ctx))
+		manifest, err := remote.Head(ref, sourceRegistry.RemoteOptions(ctx)...)
 		Expect(err).NotTo(HaveOccurred(), "failed to resolve source image %s", image)
 		expected = append(expected, ref.Context().Digest(manifest.Digest.String()))
 	}

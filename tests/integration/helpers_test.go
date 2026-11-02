@@ -32,9 +32,7 @@ import (
 )
 
 const (
-	// releasePublicKeyFile is the GPG public key filename in the keys directory.
-	releasePublicKeyFile = "release-pk.asc"
-	platformReleaseRepo  = "openshift/release"
+	platformReleaseRepo = "openshift/release"
 
 	dirWorkingDir = "working-dir"
 
@@ -504,8 +502,8 @@ func copyFile(src, dst string) error {
 	return os.WriteFile(dst, data, info.Mode().Perm())
 }
 
-// setupWorkDir creates a temporary working directory and copies signature files.
-// Returns the working directory path.
+// setupWorkDir creates a temporary working directory and copies the release
+// signature files into it. Returns the working directory path.
 func setupWorkDir() string {
 	workDir, err := os.MkdirTemp("", "oc-mirror-test-*")
 	Expect(err).NotTo(HaveOccurred())
@@ -515,20 +513,12 @@ func setupWorkDir() string {
 	err = os.MkdirAll(sigDir, 0o755)
 	Expect(err).NotTo(HaveOccurred())
 
-	// Copy all release signature files from keys/ (any file that isn't the public key or cosign key)
-	entries, err := os.ReadDir(keysDir)
+	entries, err := os.ReadDir(releaseSignaturesDir)
 	Expect(err).NotTo(HaveOccurred())
+	Expect(entries).NotTo(BeEmpty(), "no release signatures found in %s", releaseSignaturesDir)
 
-	var sigFiles []string
 	for _, entry := range entries {
-		if !entry.IsDir() && entry.Name() != releasePublicKeyFile && !strings.HasPrefix(entry.Name(), "cosign") {
-			sigFiles = append(sigFiles, entry.Name())
-		}
-	}
-	Expect(sigFiles).NotTo(BeEmpty(), "no signature files found in keys/")
-
-	for _, sigFile := range sigFiles {
-		err = copyFile(filepath.Join(keysDir, sigFile), filepath.Join(sigDir, sigFile))
+		err = copyFile(filepath.Join(releaseSignaturesDir, entry.Name()), filepath.Join(sigDir, entry.Name()))
 		Expect(err).NotTo(HaveOccurred())
 	}
 
@@ -956,6 +946,10 @@ func expectIDMSContainsExpectedContent(iscPath string, idmsSources []string) {
 	}
 
 	for _, img := range cfg.Mirror.AdditionalImages {
+		// Images referenced only by tag are covered by the ITMS, not the IDMS.
+		if !strings.Contains(img.Name, "@") {
+			continue
+		}
 		ref := referenceWithoutTagOrDigest(img.Name)
 		Expect(idmsSourceCoversRef(idmsSources, ref)).To(BeTrue(),
 			"no IDMS source is a prefix of additional image %q; sources: %v", ref, idmsSources)

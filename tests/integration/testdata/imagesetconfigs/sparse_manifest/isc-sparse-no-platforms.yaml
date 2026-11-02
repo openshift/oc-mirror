@@ -3,7 +3,7 @@ apiVersion: mirror.openshift.io/v2alpha1
 mirror:
   platform:
     graph: false
-    release: quay.io/oc-mirror/release/test-release-index:v0.0.1
+    release: localhost:5001/oc-mirror/release/test-release-index:v0.0.1
   additionalImages:
-    - name: quay.io/rh_ee_aguidi/multi-platform-container:latest
-    - name: quay.io/rh_ee_aguidi/empty-image:latest
+    - name: localhost:5001/oc-mirror/multi-platform-image:latest
+    - name: localhost:5001/oc-mirror/single-manifest-image:latest

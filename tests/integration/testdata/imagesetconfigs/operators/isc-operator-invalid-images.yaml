@@ -4,5 +4,5 @@ kind: ImageSetConfiguration
 apiVersion: mirror.openshift.io/v2alpha1
 mirror:
   operators:
-    - catalog: quay.io/oc-mirror/oc-mirror-dev:test-catalog-invalid-images
+    - catalog: localhost:5001/oc-mirror/oc-mirror-dev:test-catalog-invalid-images
       full: true
