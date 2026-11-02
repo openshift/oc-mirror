@@ -121,8 +121,10 @@ func (o *Mirror) copy(ctx context.Context, src, dest string, opts *CopyOptions) 
 	}
 
 	if !opts.RemoveSignatures {
-		// Source must keep use-sigstore-attachments so sigstoreSigned policy
-		// can verify existing .sig attachments. Lookaside-only is destination-only.
+		// Both source and dest keep use-sigstore-attachments. Disabling them on
+		// dest makes copy.Image fail with "writing sigstore attachments is
+		// disabled". PutSignatures may still rewrite sha256-*.sig; those tags
+		// are replaced below by copySigstoreAttachmentTags.
 		sourceCtx.RegistriesDirPath = registriesd.GetWorkingDirRegistrydConfigPath(opts.SrcImage.global.WorkingDir)
 	}
 
@@ -136,9 +138,7 @@ func (o *Mirror) copy(ctx context.Context, src, dest string, opts *CopyOptions) 
 	}
 
 	if !opts.RemoveSignatures {
-		if err := applySignatureRegistriesDir(destinationCtx, opts.DestImage.global.WorkingDir, copySigstoreAttachments); err != nil {
-			return err
-		}
+		destinationCtx.RegistriesDirPath = registriesd.GetWorkingDirRegistrydConfigPath(opts.DestImage.global.WorkingDir)
 	}
 
 	var manifestType string
@@ -247,24 +247,6 @@ func (o *Mirror) copy(ctx context.Context, src, dest string, opts *CopyOptions) 
 		}
 		return nil
 	}, retryOptionsFrom(opts))
-}
-
-// applySignatureRegistriesDir sets registries.d on the destination context.
-// When copySigstoreAttachments is true the parent copy must not enable
-// use-sigstore-attachments on the destination, or PutSignatures rewrites
-// sha256-*.sig (new config digest, dropped history). Lookaside/GPG
-// configuration is kept. See OCPBUGS-129492 / oc-mirror#1478.
-func applySignatureRegistriesDir(ctx *types.SystemContext, workingDir string, copySigstoreAttachments bool) error {
-	if copySigstoreAttachments {
-		dir, err := registriesd.PrepareLookasideOnlyDir(workingDir)
-		if err != nil {
-			return err
-		}
-		ctx.RegistriesDirPath = dir
-		return nil
-	}
-	ctx.RegistriesDirPath = registriesd.GetWorkingDirRegistrydConfigPath(workingDir)
-	return nil
 }
 
 // copySigstoreAttachmentTags copies sha256-<digest>.sig tags from src to dest as
