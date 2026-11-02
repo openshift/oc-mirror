@@ -52,4 +52,19 @@ var _ = Describe("mirrorToMirror", func() {
 		})
 	})
 
+	Describe("mirrorToMirror when no image can be copied", func() {
+		It("should not generate any cluster resources", func() {
+			isc := filepath.Join(iscDir, "exit_codes", "isc-additional-image-error.yaml")
+
+			By("running mirrorToMirror with only nonexistent additional images")
+			result, err := runner.MirrorToMirror(ctx, isc, workDir, testRegistry.Endpoint(),
+				"--remove-signatures=true", "--dest-tls-verify=false")
+			expectOcMirrorExitCode(result, err, 8, "some errors occurred during the mirroring")
+
+			By("verifying nothing was mirrored and no cluster resources were generated")
+			expectNoRepositoriesInRegistry(*testRegistry)
+			expectNoClusterResources(workDir)
+		})
+	})
+
 })

@@ -1,0 +1,32 @@
+# ImageSetConfig to test that mirror.blockedImages excludes images of every content type.
+# Each content type has one blocked image and one allowed image:
+#   - release: the test-image component is blocked, the release index is allowed
+#   - operators: the bar bundle is blocked, the baz bundle and the shared operand are allowed
+#   - additionalImages: foo-bundle-v0.1.0 is blocked, foo-bundle-v0.2.0 is allowed
+#   - helm: the local chart's foo-bundle-v0.3.0 is blocked, foo-bundle-v0.3.2 is allowed
+# The bundle images are used as additional and helm images only because they are small
+# and have distinct digests. The last pattern matches nothing and must not remove anything.
+kind: ImageSetConfiguration
+apiVersion: mirror.openshift.io/v2alpha1
+mirror:
+  platform:
+    graph: false
+    release: quay.io/oc-mirror/release/test-release-index:v0.0.1
+  operators:
+  - catalog: quay.io/oc-mirror/oc-mirror-dev:test-catalog-latest
+    packages:
+    - name: bar
+    - name: baz
+  additionalImages:
+  - name: quay.io/oc-mirror/oc-mirror-dev:foo-bundle-v0.1.0
+  - name: quay.io/oc-mirror/oc-mirror-dev:foo-bundle-v0.2.0
+  helm:
+    local:
+    - name: blocked-images
+      path: testdata/helm-charts/blocked-images
+  blockedImages:
+  - name: release/test-image
+  - name: bar-bundle
+  - name: foo-bundle-v0\.1\.0
+  - name: foo-bundle-v0\.3\.0
+  - name: registry\.example\.com/never-mirrored

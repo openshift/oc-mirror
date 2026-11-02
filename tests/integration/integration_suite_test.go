@@ -71,6 +71,8 @@ var _ = BeforeSuite(func() {
 })
 
 var _ = BeforeEach(func() {
+	clear(resolvedSourceDigests)
+
 	// Reset cache dir to default before each test.
 	// Individual tests can override this and pass --cache-dir to the runner commands
 	cacheDir = defaultCacheDir()

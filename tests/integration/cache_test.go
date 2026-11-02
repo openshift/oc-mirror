@@ -108,9 +108,15 @@ var _ = Describe("cache and workspace configuration", func() {
 		result, err := command.MirrorToDisk(specCtx, operatorISC, transport, cacheArgs...)
 		logOcMirrorResult("custom cache m2d", result)
 		expectOcMirrorCommandSuccess(result, err)
-		expectSuccessfulMirrorInLocalCache(operatorISC, effectiveCache)
+		cachedImages := map[string]string{
+			"oc-mirror/oc-mirror-dev:test-catalog-latest":                                                     happyPathCatalog,
+			"oc-mirror/oc-mirror-dev:foo-bundle-v0.3.1":                                                       "quay.io/oc-mirror/oc-mirror-dev:foo-bundle-v0.3.1",
+			"oc-mirror/oc-mirror-dev:sha256-1ce8c0187c8fe6b4be327dc848b8baf062ce1baa5096b4f5d955893d126d5b58": operandImage,
+		}
+		expectLocalCacheContainsExactly(effectiveCache, cachedImages, testCatalogRepo)
 		expectNoRepositoriesInRegistry(*testRegistry)
 		expectCorrectTarArchiveContents(operatorISC, transport)
+		expectArchiveContainsExactly(transport, cachedImages, testCatalogRepo)
 		expectImageInLocalCache(effectiveCache, ref.Context().Digest(bundle.Digest.String()))
 
 		By("removing the original cache and moving the transport directory before restoring")

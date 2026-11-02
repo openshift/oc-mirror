@@ -1,0 +1,13 @@
+# The first image is blocked by isc-blocked-images.yaml, the second one is allowed.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: blocked-images
+spec:
+  template:
+    spec:
+      containers:
+      - name: blocked
+        image: quay.io/oc-mirror/oc-mirror-dev:foo-bundle-v0.3.0
+      - name: allowed
+        image: quay.io/oc-mirror/oc-mirror-dev:foo-bundle-v0.3.2

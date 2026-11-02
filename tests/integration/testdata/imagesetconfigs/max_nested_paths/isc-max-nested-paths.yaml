@@ -1,0 +1,14 @@
+# ImageSetConfig to test --max-nested-paths. It mixes release, operator and additional
+# images, referenced by tag and by digest, so both IDMS and ITMS are generated.
+kind: ImageSetConfiguration
+apiVersion: mirror.openshift.io/v2alpha1
+mirror:
+  platform:
+    graph: false
+    release: quay.io/oc-mirror/release/test-release-index:v0.0.1
+  operators:
+  - catalog: quay.io/oc-mirror/oc-mirror-dev:test-catalog-latest
+    packages:
+    - name: baz
+  additionalImages:
+  - name: quay.io/oc-mirror/oc-mirror-dev:foo-bundle-v0.2.0
