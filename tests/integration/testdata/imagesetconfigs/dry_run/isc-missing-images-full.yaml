@@ -1,0 +1,7 @@
+# ImageSetConfig to test the dry-run missing images report - Step 2: add a second image.
+kind: ImageSetConfiguration
+apiVersion: mirror.openshift.io/v2alpha1
+mirror:
+  additionalImages:
+  - name: quay.io/oc-mirror/oc-mirror-dev:foo-bundle-v0.1.0
+  - name: quay.io/oc-mirror/oc-mirror-dev:foo-bundle-v0.2.0

@@ -26,6 +26,7 @@ import (
 	configv1 "github.com/openshift/api/config/v1"
 	"github.com/operator-framework/operator-registry/alpha/declcfg"
 	"gopkg.in/yaml.v3"
+	yamlutil "k8s.io/apimachinery/pkg/util/yaml"
 
 	"github.com/openshift/oc-mirror/tests/integration/pkg/ocmirror"
 	"github.com/openshift/oc-mirror/tests/integration/pkg/registry"
@@ -43,6 +44,9 @@ const (
 	dirHelm             = "helm"
 	dirClusterResources = "cluster-resources"
 	idmsFileName        = "idms-oc-mirror.yaml"
+
+	localCacheHost  = "127.0.0.1:55000"
+	mappingFileName = "mapping.txt"
 
 	// cacheRepositoriesSubdir is the path within the oc-mirror cache directory to the local cache repositories.
 	cacheRepositoriesSubdir = "docker/registry/v2/repositories"
@@ -558,6 +562,65 @@ func expectValidDeleteImagesFiles(workDir, deleteId string) {
 
 	_, err = os.Stat(filepath.Join(deleteDir, "delete-images.yaml"))
 	Expect(err).To(HaveOccurred(), "default delete-images.yaml should not exist when --delete-id is set")
+}
+
+// expectMirrorSets checks the complete source/destination pairs in the generated IDMS and ITMS.
+func expectMirrorSets(workDir, endpoint string, idms, itms map[string]string) {
+	GinkgoHelper()
+	for filename, expected := range map[string]map[string]string{
+		"idms-oc-mirror.yaml": idms,
+		"itms-oc-mirror.yaml": itms,
+	} {
+		data, err := os.ReadFile(filepath.Join(workDir, dirWorkingDir, dirClusterResources, filename))
+		Expect(err).NotTo(HaveOccurred())
+		actual := map[string]bool{}
+		decoder := yamlutil.NewYAMLOrJSONDecoder(strings.NewReader(string(data)), 4096)
+		for {
+			var digestSet configv1.ImageDigestMirrorSet
+			var tagSet configv1.ImageTagMirrorSet
+			var document any = &digestSet
+			if filename == "itms-oc-mirror.yaml" {
+				document = &tagSet
+			}
+			if err := decoder.Decode(document); err == io.EOF {
+				break
+			} else {
+				Expect(err).NotTo(HaveOccurred())
+			}
+			for _, entry := range digestSet.Spec.ImageDigestMirrors {
+				for _, destination := range entry.Mirrors {
+					actual[entry.Source+"="+string(destination)] = true
+				}
+			}
+			for _, entry := range tagSet.Spec.ImageTagMirrors {
+				for _, destination := range entry.Mirrors {
+					actual[entry.Source+"="+string(destination)] = true
+				}
+			}
+		}
+		wanted := map[string]bool{}
+		for source, repo := range expected {
+			wanted[source+"="+endpoint+"/"+repo] = true
+		}
+		Expect(actual).To(Equal(wanted), "unexpected mirrors in %s", filename)
+	}
+}
+
+// expectNoClusterResources verifies that no cluster resource files were generated.
+func expectNoClusterResources(workDir string) {
+	GinkgoHelper()
+	files, err := filepath.Glob(filepath.Join(workDir, dirWorkingDir, dirClusterResources, "*"))
+	Expect(err).NotTo(HaveOccurred())
+	Expect(files).To(BeEmpty(), "expected no cluster resources to be generated")
+}
+
+// expectDryRunFile checks the exact source=destination lines in a dry-run report.
+func expectDryRunFile(workDir, fileName string, expected []string) {
+	GinkgoHelper()
+	data, err := os.ReadFile(filepath.Join(workDir, dirWorkingDir, "dry-run", fileName))
+	Expect(err).NotTo(HaveOccurred(), "%s not found", fileName)
+	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+	Expect(lines).To(ConsistOf(expected), "unexpected lines in %s", fileName)
 }
 
 // expectValidMappingFile verifies that the dry-run mapping.txt file was created, that every line

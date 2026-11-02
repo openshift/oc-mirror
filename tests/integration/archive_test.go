@@ -44,6 +44,7 @@ var _ = Describe("tar archive edge cases", func() {
 
 			By("verifying tar archive contents")
 			expectCorrectTarArchiveContents(filepath.Join(iscDir, iscHappyPath), workDir)
+			expectArchiveContainsExactly(workDir, happyPathCachedImages, testCatalogRepo)
 
 			By("creating an extra empty tar file")
 			createEmptyTar(workDir, "mirror_000002.tar")
@@ -68,6 +69,7 @@ var _ = Describe("tar archive edge cases", func() {
 			newTarPath := filepath.Join(workDir, "mirror_000002.tar")
 			By("verifying tar archive contents")
 			expectCorrectTarArchiveContents(filepath.Join(iscDir, iscHappyPath), workDir)
+			expectArchiveContainsExactly(workDir, happyPathCachedImages, testCatalogRepo)
 			Expect(newTarPath).ToNot(BeAnExistingFile(), "should generate only one tar file")
 
 			By("renaming existing tar")
@@ -80,6 +82,7 @@ var _ = Describe("tar archive edge cases", func() {
 
 			By("verifying tar archive contents")
 			expectCorrectTarArchiveContents(filepath.Join(iscDir, iscHappyPath), workDir)
+			expectArchiveContainsExactly(workDir, happyPathCachedImages, testCatalogRepo)
 			Expect(newTarPath).NotTo(BeAnExistingFile(), "previous tar files should be deleted")
 			Expect(tarPath).To(BeAnExistingFile(), "mirror_000001.tar should exist")
 		})

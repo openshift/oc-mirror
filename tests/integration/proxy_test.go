@@ -2,10 +2,14 @@ package integration_test
 
 import (
 	"context"
+	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"time"
 
+	"github.com/google/go-containerregistry/pkg/v1/remote"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
@@ -45,9 +49,7 @@ var _ = Describe("mirroring through an HTTP(S) proxy", func() {
 		result, err := proxyRunner.MirrorToDisk(ctx, filepath.Join(iscDir, iscHappyPath), workDir)
 		expectOcMirrorCommandSuccess(result, err)
 
-		By("verifying images are mirrored in the local cache")
-		expectSuccessfulMirrorInLocalCache(filepath.Join(iscDir, iscHappyPath), cacheDir)
-
+		// Check mirroring traffic before expected-digest lookups add their own proxy connections.
 		By("verifying the proxy observed connections to the expected external hosts")
 		GinkgoWriter.Printf("hosts seen by proxy: %v\n", fwdProxy.Hosts())
 		Expect(fwdProxy.SawHost("quay.io")).To(BeTrue(),
@@ -56,6 +58,24 @@ var _ = Describe("mirroring through an HTTP(S) proxy", func() {
 			"expected the proxy to observe a connection to stefanprodan.github.io (helm repository index/chart); hosts seen: %v", fwdProxy.Hosts())
 		Expect(fwdProxy.SawHost("ghcr.io")).To(BeTrue(),
 			"expected the proxy to observe a connection to ghcr.io (image referenced by the helm chart); hosts seen: %v", fwdProxy.Hosts())
+
+		By("verifying images are mirrored in the local cache, resolving expected digests through the same proxy")
+		proxyURL, err := url.Parse(fwdProxy.URL())
+		Expect(err).NotTo(HaveOccurred(), "failed to parse the test proxy URL")
+		transport := remote.DefaultTransport.(*http.Transport).Clone()
+		DeferCleanup(transport.CloseIdleConnections)
+		var digestProxyRequests atomic.Int32
+		transport.Proxy = func(*http.Request) (*url.URL, error) {
+			digestProxyRequests.Add(1)
+			return proxyURL, nil
+		}
+		originalTransport := sourceDigestTransport
+		sourceDigestTransport = transport
+		DeferCleanup(func() { sourceDigestTransport = originalTransport })
+
+		expectLocalCacheContainsExactly(cacheDir, happyPathCachedImages, testCatalogRepo)
+		Expect(digestProxyRequests.Load()).To(BeNumerically(">", 0),
+			"expected source-digest lookups to use the test proxy")
 
 		By("verifying the proxy itself did not fail unexpectedly while serving connections")
 		Expect(fwdProxy.Err()).NotTo(HaveOccurred())
