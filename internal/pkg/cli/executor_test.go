@@ -1078,10 +1078,11 @@ func TestExcludeImages(t *testing.T) {
 }
 
 func TestExecutorCheckRegistryAccess(t *testing.T) {
-	const validRegistry = "localhost:5000"
 	testFolder := t.TempDir()
 	regCfg, err := setupRegForTest(testFolder)
 	assert.NoError(t, err, "failed to parse local registry config")
+	// setupRegForTest picks the first free port from 5000 (e.g. macOS AirPlay Receiver holds 5000)
+	validRegistry := "localhost" + regCfg.HTTP.Addr
 	reg, err := registry.NewRegistry(context.Background(), regCfg)
 	assert.NoError(t, err, "failed to create local registry service")
 	global := &mirror.GlobalOptions{
