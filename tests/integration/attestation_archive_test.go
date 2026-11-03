@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"bytes"
 	"context"
+	_ "embed"
 	"errors"
 	"fmt"
 	"io"
@@ -30,6 +31,9 @@ import (
 	"github.com/openshift/oc-mirror/tests/integration/pkg/ocmirror"
 	localregistry "github.com/openshift/oc-mirror/tests/integration/pkg/registry"
 )
+
+//go:embed testdata/registry-config-sparse.yaml
+var attestationArchiveRegistryConfig []byte
 
 func TestAttestationArchiveCLI(t *testing.T) {
 	for _, scenario := range []struct {
@@ -187,7 +191,9 @@ func TestAttestationArchiveCLI(t *testing.T) {
 				assertSyntheticArchiveBlobs(t, extracted, expected)
 			}
 			source.Close()
-			target, err := localregistry.Start(ctx, "testdata/registry-config-sparse.yaml", 0)
+			registryConfig := filepath.Join(t.TempDir(), "registry-config-sparse.yaml")
+			archiveRequireNoError(t, os.WriteFile(registryConfig, attestationArchiveRegistryConfig, 0o600))
+			target, err := localregistry.Start(ctx, registryConfig, 0)
 			archiveRequireNoError(t, err)
 			defer func() { archiveRequireNoError(t, target.Stop()) }()
 			archiveRequireNoError(t, target.WaitReady(ctx, 10*time.Second))
