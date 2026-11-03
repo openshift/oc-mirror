@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"maps"
 	"net/url"
 	"os"
 	"path"
@@ -46,10 +47,11 @@ type ChannelConcurrentBatch struct {
 }
 
 type GoroutineResult struct {
-	err     *mirrorErrorSchema
-	imgType v2alpha1.ImageType
-	img     v2alpha1.CopyImageSchema
-	skipped bool // Intentionally omitted, not copied or failed.
+	err       *mirrorErrorSchema
+	imgType   v2alpha1.ImageType
+	img       v2alpha1.CopyImageSchema
+	skipped   bool                              // Intentionally omitted, not copied or failed.
+	platforms []v2alpha1.InstancePlatformFilter // Non-empty after a partial copy.
 }
 
 // Worker - the main batch processor
@@ -58,7 +60,7 @@ func (o *ChannelConcurrentBatch) Worker(ctx context.Context, collectorSchema v2a
 
 	copiedImages := v2alpha1.CollectorSchema{
 		AllImages:       []v2alpha1.CopyImageSchema{},
-		PlatformFilters: collectorSchema.PlatformFilters,
+		PlatformFilters: maps.Clone(collectorSchema.PlatformFilters),
 	}
 
 	var errArray []mirrorErrorSchema
@@ -163,9 +165,11 @@ func (o *ChannelConcurrentBatch) Worker(ctx context.Context, collectorSchema v2a
 							err = o.Mirror.Run(timeoutCtx, img.Source, img.Destination, mirror.Mode(opts.Function), &options) //nolint:contextcheck
 
 							// "no instances found for platform" is only emitted by the copy library
-							// for manifest lists. Only a proven operand may be skipped.
+							// for manifest lists when any requested platform is absent. Only a
+							// proven operand may retry with that platform removed; never remove
+							// the filter entirely, which would copy unrequested platforms.
 							if err != nil && len(options.InstancePlatforms) > 0 && strings.Contains(err.Error(), "no instances found for platform") {
-								result.skipped, err = o.skipOperand(timeoutCtx, img, collectorSchema, options, err) //nolint:contextcheck
+								result.platforms, result.skipped, err = o.retryOperandCopy(timeoutCtx, img, collectorSchema, options, err) //nolint:contextcheck
 							}
 
 							switch {
@@ -200,11 +204,17 @@ collect:
 	for completed < len(collectorSchema.AllImages) {
 		res := <-results
 		err := res.err
-		if res.skipped {
+		if res.skipped || len(res.platforms) > 0 {
 			if copiedImages.OperandPlatforms == nil {
 				copiedImages.OperandPlatforms = make(map[string][]v2alpha1.InstancePlatformFilter)
 			}
-			copiedImages.OperandPlatforms[res.img.Origin] = nil
+			copiedImages.OperandPlatforms[res.img.Origin] = res.platforms
+			if !res.skipped {
+				if copiedImages.PlatformFilters == nil {
+					copiedImages.PlatformFilters = make(map[string][]v2alpha1.InstancePlatformFilter)
+				}
+				copiedImages.PlatformFilters[res.img.Origin] = res.platforms
+			}
 		}
 		switch {
 		case res.skipped:

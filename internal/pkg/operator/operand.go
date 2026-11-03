@@ -8,7 +8,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
+	"github.com/distribution/reference"
+
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/manifest"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
@@ -31,46 +32,54 @@ func NewOperandResolver(log clog.PluggableLoggerInterface, opts *mirror.CopyOpti
 }
 
 // IsOperand never skips an image used by any listing bundle's deployments.
+// An unreadable bundle or reference is not proof that an image is an operand.
 func (r *OperandResolver) IsOperand(ctx context.Context, origin string, bundles map[string]string) (bool, error) {
 	if len(bundles) == 0 {
 		return false, nil
 	}
 	ref := referenceWithoutTransport(origin)
-	candidate, parseErr := image.ParseRef(ref)
+	candidate, parseErr := reference.ParseNormalizedNamed(ref)
 	for bundle := range bundles {
 		controllers, err := r.controllersOf(ctx, bundle)
 		if err != nil {
 			return false, err
 		}
-		if _, runsIt := controllers[ref]; runsIt {
-			return false, nil
-		}
-		if parseErr != nil {
-			continue
-		}
 		for controller := range controllers {
-			if spec, err := image.ParseRef(controller); err == nil && sameImage(candidate, spec) {
+			if ref == controller {
+				return false, nil
+			}
+			if parseErr != nil {
+				return false, parseErr
+			}
+			named, err := reference.ParseNormalizedNamed(controller)
+			if err != nil {
+				return false, err
+			}
+			if sameImage(reference.TagNameOnly(candidate), reference.TagNameOnly(named)) {
 				return false, nil
 			}
 		}
+	}
+	if parseErr != nil {
+		return false, parseErr
 	}
 	return true, nil
 }
 
 // Tags and digests cannot be compared without resolving the tag. Conservatively
 // consider them a match, so an operator's controller cannot be silently skipped.
-func sameImage(a, b image.ImageSpec) bool {
-	if a.Name != b.Name {
+func sameImage(a, b reference.Named) bool {
+	if a.Name() != b.Name() {
 		return false
 	}
-	switch {
-	case a.Digest != "" && b.Digest != "":
-		return a.Digest == b.Digest
-	case a.Tag != "" && b.Tag != "":
-		return a.Tag == b.Tag
-	default:
-		return true
+	ad, aDigest := a.(reference.Digested)
+	bd, bDigest := b.(reference.Digested)
+	if aDigest && bDigest {
+		return ad.Digest() == bd.Digest()
 	}
+	at, aTag := a.(reference.Tagged)
+	bt, bTag := b.(reference.Tagged)
+	return aDigest || bDigest || !aTag || !bTag || at.Tag() == bt.Tag()
 }
 
 func (r *OperandResolver) controllersOf(ctx context.Context, bundle string) (map[string]struct{}, error) {

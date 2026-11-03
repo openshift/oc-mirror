@@ -8,9 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"sigs.k8s.io/yaml"
-
-	"github.com/operator-framework/api/pkg/operators/v1alpha1"
+	"github.com/operator-framework/operator-registry/pkg/registry"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/folder"
@@ -45,20 +43,17 @@ func (o BundleHandler) ControllerImages(ctx context.Context, bundleImage, bundle
 		return nil, err
 	}
 
-	images := make(map[string]struct{})
-	for _, dep := range csv.Spec.InstallStrategy.StrategySpec.DeploymentSpecs {
-		for _, c := range dep.Spec.Template.Spec.Containers {
-			images[c.Image] = struct{}{}
-		}
-		for _, c := range dep.Spec.Template.Spec.InitContainers {
-			images[c.Image] = struct{}{}
-		}
+	images, err := csv.GetOperatorImages()
+	if err != nil {
+		return nil, err
 	}
-
+	if len(images) == 0 {
+		return nil, fmt.Errorf("bundle %s has no deployment images; cannot identify operands", bundleImage)
+	}
 	return images, nil
 }
 
-func (o BundleHandler) clusterServiceVersion(ctx context.Context, bundleImage, bundleDir, manifestsDir string, opts mirror.CopyOptions) (*v1alpha1.ClusterServiceVersion, error) {
+func (o BundleHandler) clusterServiceVersion(ctx context.Context, bundleImage, bundleDir, manifestsDir string, opts mirror.CopyOptions) (*registry.ClusterServiceVersion, error) {
 	imageDir := filepath.Join(bundleDir, operatorBundleImageDir)
 
 	if err := o.ensureBundleInOCIFormat(ctx, bundleImage, imageDir, opts); err != nil {
@@ -155,44 +150,6 @@ func bundleManifestsSubdir(label string) (string, error) {
 	return clean, nil
 }
 
-// isCSVFileName matches a CSV by filename. name must be lower-cased.
-func isCSVFileName(name string) bool {
-	if !strings.Contains(name, "clusterserviceversion") && !strings.Contains(name, "csv") {
-		return false
-	}
-	return strings.HasSuffix(name, ".yaml") || strings.HasSuffix(name, ".yml") || strings.HasSuffix(name, ".json")
-}
-
-func findClusterServiceVersion(dir string) (*v1alpha1.ClusterServiceVersion, error) {
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return nil, fmt.Errorf("read manifests directory: %w", err)
-	}
-
-	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
-		}
-		if !isCSVFileName(strings.ToLower(entry.Name())) {
-			continue
-		}
-
-		data, err := os.ReadFile(filepath.Join(dir, entry.Name()))
-		if err != nil {
-			return nil, fmt.Errorf("read %s: %w", entry.Name(), err)
-		}
-
-		var csv v1alpha1.ClusterServiceVersion
-		if err := yaml.Unmarshal(data, &csv); err != nil {
-			return nil, fmt.Errorf("parse %s: %w", entry.Name(), err)
-		}
-		// Require the kind: the filename filter is loose, and an empty CSV
-		// would make every related image look like an operand.
-		if csv.Kind != "ClusterServiceVersion" {
-			continue
-		}
-		return &csv, nil
-	}
-
-	return nil, fmt.Errorf("no ClusterServiceVersion found in %s", dir)
+func findClusterServiceVersion(dir string) (*registry.ClusterServiceVersion, error) {
+	return registry.ReadCSVFromBundleDirectory(dir)
 }

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -415,6 +416,63 @@ func TestWorkerSkipsOperandWithNoMatchingPlatform(t *testing.T) {
 				"nothing showed the operator runs this image")
 		})
 	}
+}
+
+func TestWorkerMirrorsAvailableOperandPlatforms(t *testing.T) {
+	for _, mode := range []string{mirror.MirrorToMirror, mirror.MirrorToDisk} {
+		t.Run(mode, func(t *testing.T) {
+			schema := operandSchema()
+			requested := []v2alpha1.InstancePlatformFilter{
+				{OS: "linux", Architecture: "amd64"},
+				{OS: "linux", Architecture: "arm64"},
+			}
+			schema.PlatformFilters[operandRef] = requested
+			opts := platformFilterOpts(t)
+			opts.Mode = mode
+			m := new(MirrorMock)
+			m.On("Run", mock.Anything, operandRef, mock.Anything, mirror.CopyMode,
+				mock.MatchedBy(func(o *mirror.CopyOptions) bool {
+					return slices.Equal(o.InstancePlatforms, []string{"linux/amd64", "linux/arm64"})
+				})).Return(platformMiss("linux/arm64")).Once()
+			m.On("Run", mock.Anything, operandRef, mock.Anything, mirror.CopyMode,
+				mock.MatchedBy(func(o *mirror.CopyOptions) bool {
+					return slices.Equal(o.InstancePlatforms, []string{"linux/amd64"}) && o.PreserveDigests
+				})).Return(nil).Once()
+			for _, ref := range []string{bundleRef, controlRef} {
+				m.On("Run", mock.Anything, ref, mock.Anything, mirror.CopyMode, mock.Anything).Return(nil).Once()
+			}
+			resolver := &resolverStub{operand: true}
+			w := New(ChannelConcurrentWorker, clog.New("trace"), t.TempDir(), m, 8, "test", resolver)
+			copied, err := w.Worker(context.Background(), schema, opts)
+			require.NoError(t, err)
+			assert.Len(t, copied.AllImages, 3, "partial operands and their bundles must remain mirrored")
+			assert.Equal(t, 3, copied.TotalOperatorImages)
+			require.Len(t, copied.OperandPlatforms, 1)
+			assert.Equal(t, requested[:1], copied.OperandPlatforms[operandRef])
+			assert.Equal(t, requested[:1], copied.PlatformFilters[operandRef], "archive only the selected platforms")
+			assert.Equal(t, requested, schema.PlatformFilters[operandRef], "do not modify shared collector filters")
+			assert.Equal(t, 1, resolver.callCount())
+			m.AssertExpectations(t)
+		})
+	}
+}
+
+func TestWorkerNeverSkipsBundlePlatforms(t *testing.T) {
+	schema := operandSchema()
+	schema.PlatformFilters[bundleRef] = schema.PlatformFilters[operandRef]
+	schema.CopyImageSchemaMap.BundlesByImage[bundleRef] = map[string]string{bundleRef: "some-operator.v1.0.0"}
+	m := new(MirrorMock)
+	for _, ref := range []string{operandRef, controlRef} {
+		m.On("Run", mock.Anything, ref, mock.Anything, mock.Anything, mock.Anything).Return(nil).Once()
+	}
+	m.On("Run", mock.Anything, bundleRef, mock.Anything, mock.Anything, mock.Anything).Return(errNoMatchingPlatform).Once()
+	resolver := &resolverStub{operand: true}
+	w := New(ChannelConcurrentWorker, clog.New("trace"), t.TempDir(), m, 8, "test", resolver)
+	copied, err := w.Worker(context.Background(), schema, platformFilterOpts(t))
+	require.Error(t, err)
+	assert.Empty(t, copied.OperandPlatforms)
+	assert.Zero(t, resolver.callCount(), "a bundle must never be classified as an operand")
+	m.AssertExpectations(t)
 }
 
 // readMirroringErrors returns the contents of the error report the worker

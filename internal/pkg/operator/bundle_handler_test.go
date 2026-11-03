@@ -65,7 +65,7 @@ func TestFindClusterServiceVersion(t *testing.T) {
 
 		_, err := findClusterServiceVersion(dir)
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "no ClusterServiceVersion found")
+		assert.Contains(t, err.Error(), "no ClusterServiceVersion")
 	})
 
 	csv := `apiVersion: operators.coreos.com/v1alpha1
@@ -74,6 +74,7 @@ metadata:
   name: test-operator.v1.0.0
 spec:
   install:
+    strategy: deployment
     spec:
       deployments:
         - name: controller
@@ -98,15 +99,8 @@ spec:
 		parsed, err := findClusterServiceVersion(dir)
 		require.NoError(t, err)
 
-		images := map[string]struct{}{}
-		for _, dep := range parsed.Spec.InstallStrategy.StrategySpec.DeploymentSpecs {
-			for _, c := range dep.Spec.Template.Spec.Containers {
-				images[c.Image] = struct{}{}
-			}
-			for _, c := range dep.Spec.Template.Spec.InitContainers {
-				images[c.Image] = struct{}{}
-			}
-		}
+		images, err := parsed.GetOperatorImages()
+		require.NoError(t, err)
 		assert.Contains(t, images, "registry.example.com/controller@sha256:aaa")
 		assert.Contains(t, images, "registry.example.com/init@sha256:bbb")
 		assert.NotContains(t, images, "registry.example.com/operand@sha256:ccc",

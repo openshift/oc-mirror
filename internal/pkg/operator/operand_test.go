@@ -49,8 +49,8 @@ func (h *countingBundleHandler) callCount() int {
 }
 
 const (
-	controllerImg = "registry.redhat.io/ns/virt-operator-rhel9@sha256:aaa"
-	operandImg    = "registry.redhat.io/ns/virt-launcher-4-nv-rhel10@sha256:bbb"
+	controllerImg = "registry.redhat.io/ns/virt-operator-rhel9@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	operandImg    = "registry.redhat.io/ns/virt-launcher-4-nv-rhel10@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 	bundleImg     = "registry.redhat.io/ns/hco-bundle@sha256:ccc"
 )
 
@@ -186,6 +186,9 @@ func TestIsOperandReferenceMatching(t *testing.T) {
 		// Same path, different registry: must not be treated as the same image.
 		{"different registry", "quay.io/ns/virt-operator-rhel9@" + digestA, repo + "@" + digestA, true},
 		{"unrelated repository", repo + "@" + digestA, "registry.redhat.io/ns/virt-launcher@" + digestB, true},
+		{"implicit registry", "busybox:latest", "docker.io/library/busybox:latest", false},
+		{"implicit latest", "quay.io/ns/controller", "quay.io/ns/controller:latest", false},
+		{"digest takes precedence over tag", repo + ":old@" + digestA, repo + ":new@" + digestA, false},
 	}
 
 	for _, tt := range tests {
