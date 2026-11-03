@@ -769,8 +769,8 @@ func (o MockManifest) ImageManifest(ctx context.Context, sourceCtx *types.System
 	return nil, "", nil
 }
 
-func (o MockManifest) GetManifestListDigests(ctx context.Context, sourceCtx *types.SystemContext, source string) ([]string, error) {
-	return nil, nil
+func (o MockManifest) InspectImage(ctx context.Context, sourceCtx *types.SystemContext, imgRef string, platformFilters []v2alpha1.InstancePlatformFilter, includeSizes bool) ([]string, []types.BlobInfo, error) {
+	return nil, nil, nil
 }
 
 func (o MockCincinnati) GetReleaseReferenceImages(ctx context.Context) ([]v2alpha1.CopyImageSchema, error) {
@@ -846,8 +846,8 @@ func (o *ManifestMock) ImageManifest(ctx context.Context, sourceCtx *types.Syste
 	return nil, "", nil
 }
 
-func (o *ManifestMock) GetManifestListDigests(ctx context.Context, sourceCtx *types.SystemContext, source string) ([]string, error) {
-	return nil, nil
+func (o *ManifestMock) InspectImage(ctx context.Context, sourceCtx *types.SystemContext, imgRef string, platformFilters []v2alpha1.InstancePlatformFilter, includeSizes bool) ([]string, []types.BlobInfo, error) {
+	return nil, nil, nil
 }
 
 // TestRequestedKubeVirtArchKeys verifies that the architecture-key resolution

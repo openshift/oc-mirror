@@ -2,6 +2,7 @@ package imagebuilder
 
 import (
 	"context"
+	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"os"
@@ -10,8 +11,11 @@ import (
 
 	"github.com/google/go-containerregistry/pkg/registry"
 	"github.com/google/go-containerregistry/pkg/v1/layout"
+	"github.com/otiai10/copy"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
+	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/folder"
 
@@ -67,6 +71,33 @@ func TestImageBuilder(t *testing.T) {
 
 		e := ErrInvalidReference{image: "broken"}
 		log.Error("testing error %v", e.Error())
+	})
+
+	t.Run("dry-run prepares catalog without registry requests", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+			t.Error("dry-run must not contact the registry while rebuilding")
+		}))
+		defer server.Close()
+		for _, mode := range []string{mirror.MirrorToDisk, mirror.MirrorToMirror} {
+			t.Run(mode, func(t *testing.T) {
+				root := t.TempDir()
+				configPath := filepath.Join(root, "filtered-catalogs", "filtered", operatorCatalogConfigDir)
+				require.NoError(t, os.MkdirAll(configPath, 0755))
+				require.NoError(t, os.WriteFile(filepath.Join(configPath, "index.json"), []byte("{}"), 0600))
+				require.NoError(t, copy.Copy(consts.TestFolder+"simple-test-bundle", filepath.Join(root, operatorCatalogImageDir)))
+				dryOpts := opts
+				dryOpts.Mode, dryOpts.IsDryRun = mode, true
+				dryOpts.Destination = consts.DockerProtocol + server.Listener.Addr().String()
+				dryOpts.LocalStorageFQDN = server.Listener.Addr().String()
+				ref := v2alpha1.CopyImageSchema{Origin: "docker://source.example/catalog:latest", Destination: dryOpts.Destination + "/catalog:latest"}
+				require.NoError(t, NewGCRCatalogBuilder(log, dryOpts).RebuildCatalog(context.Background(), ref, configPath))
+				require.FileExists(t, filepath.Join(filepath.Dir(configPath), "digest"))
+				idx, err := layout.ImageIndexFromPath(filepath.Join(filepath.Dir(configPath), FilteredCatalogImageDir))
+				require.NoError(t, err)
+				_, err = idx.Digest()
+				require.NoError(t, err)
+			})
+		}
 	})
 
 	t.Run("Testing NewImageBuilder All : should pass", func(t *testing.T) {

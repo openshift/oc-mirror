@@ -10,4 +10,7 @@ const (
 	segMultiplier         int64 = 1024 * 1024 * 1024
 	defaultSegSize        int64 = 500
 	archiveFileNameFormat       = "%s_%06d.tar"
+	// MirrorArchiveFileRegexp matches producer archive names (mirror_NNNNNN.tar).
+	// Anchored so suffixes like .tar.backup are not treated as archives.
+	MirrorArchiveFileRegexp = `^` + archiveFilePrefix + `_[0-9]{6}\.tar$`
 )

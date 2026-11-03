@@ -3,23 +3,35 @@ package cli
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
+	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/distribution/distribution/v3/registry"
 	godigest "github.com/opencontainers/go-digest"
 	specv1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	libmanifest "go.podman.io/image/v5/manifest"
+	"go.podman.io/image/v5/types"
+	"k8s.io/apimachinery/pkg/util/sets"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/archive"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/clusterresources"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/config"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/history"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/manifest"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/signature"
 )
 
 func getTestImages() []v2alpha1.CopyImageSchema {
@@ -163,7 +175,7 @@ func runDryRunTestCase(t *testing.T, tt struct {
 	ex, testImages, err := setupDryRunTest(t, testFolder, tt, imgs, log)
 	assert.NoError(t, err)
 
-	err = ex.DryRun(context.TODO(), testImages)
+	err = ex.DryRun(context.TODO(), v2alpha1.CollectorSchema{AllImages: testImages})
 	assert.NoError(t, err)
 
 	verifyDryRunResults(t, testFolder, tt, testImages)
@@ -773,7 +785,7 @@ func TestDryRunWithManifestList(t *testing.T) {
 			MakeDir:             MakeDir{},
 		}
 
-		err = ex.DryRun(context.TODO(), imgs)
+		err = ex.DryRun(context.TODO(), v2alpha1.CollectorSchema{AllImages: imgs})
 		if err != nil {
 			t.Fatalf("should not fail: %v", err)
 		}
@@ -863,7 +875,7 @@ func TestDryRunUnreachableImagesWarnButDontFail(t *testing.T) {
 	}
 
 	// Should not fail even though manifest inspection will warn for unreachable images
-	err = ex.DryRun(context.TODO(), imgs)
+	err = ex.DryRun(context.TODO(), v2alpha1.CollectorSchema{AllImages: imgs})
 	if err != nil {
 		t.Fatalf("should not fail: %v", err)
 	}
@@ -922,4 +934,395 @@ func TestSubDigestDestination(t *testing.T) {
 			assert.Equal(t, tt.expected, result)
 		})
 	}
+}
+
+// --- Size estimation tests ---
+
+type mockManifestWithSizes struct {
+	manifest.Manifest
+	blobsByImage   map[string][]types.BlobInfo
+	failImages     map[string]error
+	mu             sync.Mutex
+	filtersByImage map[string][]v2alpha1.InstancePlatformFilter
+	digestsByImage map[string][]string
+	sizeCalls      map[string][]bool
+}
+
+func (m *mockManifestWithSizes) InspectImage(ctx context.Context, sourceCtx *types.SystemContext, imgRef string, platformFilters []v2alpha1.InstancePlatformFilter, includeSizes bool) ([]string, []types.BlobInfo, error) {
+	m.mu.Lock()
+	if m.filtersByImage == nil {
+		m.filtersByImage = map[string][]v2alpha1.InstancePlatformFilter{}
+	}
+	m.filtersByImage[imgRef] = append([]v2alpha1.InstancePlatformFilter(nil), platformFilters...)
+	if m.sizeCalls == nil {
+		m.sizeCalls = map[string][]bool{}
+	}
+	m.sizeCalls[imgRef] = append(m.sizeCalls[imgRef], includeSizes)
+	m.mu.Unlock()
+	digests := m.digestsByImage[imgRef]
+	if err, ok := m.failImages[imgRef]; ok {
+		return digests, m.blobsByImage[imgRef], err
+	}
+	if !includeSizes {
+		return digests, nil, nil
+	}
+	return digests, m.blobsByImage[imgRef], nil
+}
+
+type capturingLogger struct {
+	mu       sync.Mutex
+	messages []string
+}
+
+func (c *capturingLogger) record(prefix, msg string, val ...interface{}) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.messages = append(c.messages, prefix+fmt.Sprintf(msg, val...))
+}
+func (c *capturingLogger) output() string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return strings.Join(c.messages, "\n")
+}
+func (c *capturingLogger) Info(msg string, val ...interface{})  { c.record("[INFO] ", msg, val...) }
+func (c *capturingLogger) Debug(msg string, val ...interface{}) { c.record("[DEBUG] ", msg, val...) }
+func (c *capturingLogger) Warn(msg string, val ...interface{})  { c.record("[WARN] ", msg, val...) }
+func (c *capturingLogger) Error(msg string, val ...interface{}) { c.record("[ERROR] ", msg, val...) }
+func (c *capturingLogger) Trace(msg string, val ...interface{}) { c.record("[TRACE] ", msg, val...) }
+func (c *capturingLogger) Level(string)                         {}
+func (c *capturingLogger) GetLevel() string                     { return "debug" }
+
+func newTestExecutorWithManifest(m manifest.ManifestInterface) *ExecutorSchema {
+	_, sharedOpts := mirror.SharedImageFlags()
+	_, deprecatedTLS := mirror.DeprecatedTLSVerifyFlags()
+	_, srcOpts := mirror.ImageSrcFlags(&mirror.GlobalOptions{}, sharedOpts, deprecatedTLS, "src-", "screds")
+	return &ExecutorSchema{Log: clog.New("debug"), Manifest: m, Opts: &mirror.CopyOptions{SrcImage: srcOpts}}
+}
+
+// loadTestManifestBlobs loads digests/sizes from tests/unit/testdata/image-manifest.json.
+func loadTestManifestBlobs(t *testing.T) []types.BlobInfo {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(consts.TestFolder, "image-manifest.json"))
+	assert.NoError(t, err)
+	var m specv1.Manifest
+	assert.NoError(t, json.Unmarshal(data, &m))
+	blobs := make([]types.BlobInfo, 0, len(m.Layers)+1)
+	for _, layer := range m.Layers {
+		blobs = append(blobs, libmanifest.BlobInfoFromOCI1Descriptor(layer))
+	}
+	return append(blobs, libmanifest.BlobInfoFromOCI1Descriptor(m.Config))
+}
+
+func TestSizeEstimationHelpers(t *testing.T) {
+	imgs := getTestImages()
+	blobs := loadTestManifestBlobs(t)
+	require.GreaterOrEqual(t, len(blobs), 3)
+
+	t.Run("inspectImages + Origin filters", func(t *testing.T) {
+		localSrc := consts.DockerProtocol + "127.0.0.1:55000/ns/img@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea"
+		wantFilters := []v2alpha1.InstancePlatformFilter{{OS: "linux", Architecture: "amd64"}}
+		mock := &mockManifestWithSizes{
+			blobsByImage: map[string][]types.BlobInfo{
+				imgs[0].Source: blobs[:2],
+				imgs[1].Source: {blobs[0]},
+				localSrc:       {blobs[0]},
+			},
+			failImages: map[string]error{imgs[1].Source: fmt.Errorf("connection refused")},
+		}
+		ex := newTestExecutorWithManifest(mock)
+		_, ok := ex.inspectImages(context.TODO(), []v2alpha1.CopyImageSchema{{Source: imgs[0].Source}}, nil, true)
+		assert.Len(t, ok[imgs[0].Source].Blobs, 2)
+		_, bad := ex.inspectImages(context.TODO(), []v2alpha1.CopyImageSchema{{Source: imgs[1].Source}}, nil, true)
+		require.Len(t, bad[imgs[1].Source].Errors, 1)
+		assert.ErrorContains(t, bad[imgs[1].Source].Errors[0], "connection refused")
+		assert.Empty(t, bad[imgs[1].Source].Blobs, "failed inspections must discard partial content")
+		_, _ = ex.inspectImages(context.TODO(),
+			[]v2alpha1.CopyImageSchema{{Source: localSrc, Origin: imgs[0].Source}},
+			map[string][]v2alpha1.InstancePlatformFilter{imgs[0].Source: wantFilters}, true)
+		mock.mu.Lock()
+		defer mock.mu.Unlock()
+		assert.Equal(t, wantFilters, mock.filtersByImage[localSrc])
+	})
+
+	t.Run("local-cache filter matches authority only", func(t *testing.T) {
+		fqdn := "mirror.local:55000"
+		digest := "@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea"
+		local := consts.DockerProtocol + fqdn + "/ns/c" + digest
+		lookalike := consts.DockerProtocol + "not" + fqdn + "/ns/i" + digest
+		remote := imgs[0].Source
+		assert.True(t, isLocalCacheSource(local, fqdn))
+		assert.False(t, isLocalCacheSource(lookalike, fqdn))
+		assert.False(t, isLocalCacheSource(remote, fqdn))
+	})
+
+	t.Run("dedupeImagesBySource", func(t *testing.T) {
+		src := imgs[0].Source
+		got := dedupeImagesBySource([]v2alpha1.CopyImageSchema{
+			{Source: src, Type: v2alpha1.TypeGeneric},
+			{Source: src, Origin: "origin", Type: v2alpha1.TypeOperatorCatalog},
+			{Source: imgs[1].Source},
+		})
+		assert.Len(t, got, 2)
+		assert.Equal(t, "origin", got[0].Origin)
+		assert.True(t, got[0].Type.IsOperatorCatalog())
+	})
+
+	t.Run("saturating arithmetic", func(t *testing.T) {
+		assert.Equal(t, int64(math.MaxInt64), archive.AddSize(math.MaxInt64-1, 2))
+		assert.Equal(t, int64(3), archive.AddSize(-1, 3))
+	})
+}
+
+func TestDryRunSizeReport(t *testing.T) {
+	imgs := getTestImages()
+	blobs := loadTestManifestBlobs(t)
+	require.GreaterOrEqual(t, len(blobs), 2)
+
+	newEx := func(t *testing.T, mode string, m *mockManifestWithSizes) (*ExecutorSchema, *capturingLogger, *mirror.CopyOptions, string) {
+		t.Helper()
+		dir := t.TempDir()
+		opts, _, err := setupTestEnvironment(t, dir, mode)
+		require.NoError(t, err)
+		log := &capturingLogger{}
+		opts.RemoveSignatures = true
+		return &ExecutorSchema{Log: log, Opts: opts, Manifest: m, MakeDir: MakeDir{}, Mirror: Mirror{},
+			LocalStorageDisk: filepath.Join(dir, "cache"),
+			blobExists:       func(context.Context, string, types.BlobInfo) (bool, error) { return false, nil },
+		}, log, opts, dir
+	}
+
+	t.Run("m2m happy path", func(t *testing.T) {
+		ex, log, _, dir := newEx(t, mirror.MirrorToMirror, &mockManifestWithSizes{
+			blobsByImage: map[string][]types.BlobInfo{
+				imgs[0].Source: {blobs[0], blobs[1]},
+				imgs[1].Source: {blobs[0]},
+			},
+		})
+		require.NoError(t, ex.DryRun(context.TODO(), v2alpha1.CollectorSchema{AllImages: []v2alpha1.CopyImageSchema{
+			{Source: imgs[0].Source, Destination: "docker://mirror.example.com/a:latest"},
+			{Source: imgs[1].Source, Destination: "docker://mirror.example.com/b:latest"},
+		}}))
+		out := log.output()
+		assert.Contains(t, out, fmt.Sprintf("(%d bytes)", blobs[0].Size*2+blobs[1].Size))
+		assert.Contains(t, out, "Images: 2")
+		assert.FileExists(t, filepath.Join(dir, dryRunOutDir, "mapping.txt"))
+	})
+
+	t.Run("m2m incomplete on sizing errors", func(t *testing.T) {
+		ex, log, _, _ := newEx(t, mirror.MirrorToMirror, &mockManifestWithSizes{
+			blobsByImage: map[string][]types.BlobInfo{imgs[0].Source: {blobs[0]}},
+			failImages:   map[string]error{imgs[1].Source: fmt.Errorf("connection refused")},
+		})
+		require.NoError(t, ex.DryRun(context.TODO(), v2alpha1.CollectorSchema{AllImages: []v2alpha1.CopyImageSchema{
+			{Source: imgs[0].Source, Destination: "docker://mirror.example.com/a:latest"},
+			{Source: imgs[1].Source, Destination: "docker://mirror.example.com/b:latest"},
+		}}))
+		out := log.output()
+		assert.Contains(t, out, fmt.Sprintf("(%d bytes; incomplete)", blobs[0].Size))
+		assert.Contains(t, out, "Total Download Size")
+		assert.Contains(t, out, imgs[1].Source)
+		assert.Contains(t, out, "connection refused")
+	})
+
+	t.Run("summarizes sizing failures", func(t *testing.T) {
+		log := &capturingLogger{}
+		ex := &ExecutorSchema{Log: log}
+		estimate := sizeEstimate{Bytes: 100}
+		for range 200 {
+			estimate.addError("docker://source.example/image:latest", errors.New("signature unavailable"))
+		}
+		ex.logSizeReport(dryRunSizeReport{TotalDownloadSize: estimate, LocalStorageSize: estimate, TarballSize: estimate})
+		out := log.output()
+		assert.Equal(t, 3, strings.Count(out, "[WARN]"))
+		assert.Equal(t, 3, strings.Count(out, "200 issue(s); rerun with --log-level=debug for details"))
+		assert.Equal(t, 600, strings.Count(out, "[DEBUG]"))
+	})
+
+	t.Run("d2m size reporting is deferred", func(t *testing.T) {
+		ex, log, opts, _ := newEx(t, mirror.DiskToMirror, &mockManifestWithSizes{})
+		digest := "@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea"
+		require.NoError(t, ex.DryRun(context.TODO(), v2alpha1.CollectorSchema{AllImages: []v2alpha1.CopyImageSchema{
+			{Source: consts.DockerProtocol + opts.LocalStorageFQDN + "/ns/a" + digest, Destination: "docker://mirror.example.com/a:latest"},
+			{Source: consts.DockerProtocol + opts.LocalStorageFQDN + "/ns/b" + digest, Destination: "docker://mirror.example.com/b:latest"},
+			{Source: consts.DockerProtocol + opts.LocalStorageFQDN + "/ns/c" + digest, Destination: "docker://mirror.example.com/c"},
+		}}))
+		assert.NotContains(t, log.output(), "Dry-run size estimate")
+
+		ex2, log2, opts2, _ := newEx(t, mirror.DiskToMirror, &mockManifestWithSizes{})
+		opts2.Global.From = "file:///nonexistent/archive-path"
+		require.NoError(t, ex2.DryRun(context.TODO(), v2alpha1.CollectorSchema{AllImages: []v2alpha1.CopyImageSchema{
+			{Source: consts.DockerProtocol + opts2.LocalStorageFQDN + "/ns/a" + digest, Destination: "docker://mirror.example.com/a:latest"},
+		}}))
+		out := log2.output()
+		assert.NotContains(t, out, "Dry-run size estimate")
+		assert.NotContains(t, out, "/nonexistent/archive-path")
+	})
+}
+
+func TestDryRunCombinedInspection(t *testing.T) {
+	img := getTestImages()[0]
+	blob := loadTestManifestBlobs(t)[0]
+	for _, mode := range []string{mirror.MirrorToMirror, mirror.MirrorToDisk, mirror.DiskToMirror} {
+		for _, inspectLists := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/lists=%t", mode, inspectLists), func(t *testing.T) {
+				dir := t.TempDir()
+				opts, _, err := setupTestEnvironment(t, dir, mode)
+				require.NoError(t, err)
+				opts.IsDryRunManifestLists = inspectLists
+				local := img
+				local.Source = consts.DockerProtocol + opts.LocalStorageFQDN + "/ns/catalog:latest"
+				m := &mockManifestWithSizes{
+					digestsByImage: map[string][]string{img.Source: {blob.Digest.String()}},
+					failImages:     map[string]error{img.Source: fmt.Errorf("sub-manifest unavailable")},
+				}
+				log := &capturingLogger{}
+				ex := &ExecutorSchema{Log: log, Opts: opts, Manifest: m, MakeDir: MakeDir{}, Mirror: Mirror{}}
+				require.NoError(t, ex.DryRun(context.Background(), v2alpha1.CollectorSchema{AllImages: []v2alpha1.CopyImageSchema{img, img, local}}))
+				warning := "[WARN] unable to inspect manifest for " + img.Source + ": sub-manifest unavailable"
+				assert.Equal(t, inspectLists, strings.Contains(log.output(), warning), "manifest-list failures must identify the image in every workflow")
+				wantCalls := []bool{mode != mirror.DiskToMirror}
+				if mode == mirror.DiskToMirror && !inspectLists {
+					wantCalls = nil
+				}
+				assert.Equal(t, wantCalls, m.sizeCalls[img.Source])
+				switch {
+				case mode != mirror.DiskToMirror:
+					assert.Equal(t, []bool{true}, m.sizeCalls[local.Source])
+					assert.Contains(t, log.output(), "bytes; incomplete", "inspection failures must remain in the size report")
+				case inspectLists:
+					assert.Equal(t, []bool{false}, m.sizeCalls[local.Source])
+				default:
+					assert.Empty(t, m.sizeCalls[local.Source])
+				}
+				mapping, err := os.ReadFile(filepath.Join(dir, dryRunOutDir, mappingFile))
+				require.NoError(t, err)
+				assert.Equal(t, inspectLists, strings.Contains(string(mapping), blob.Digest.String()), "sub-digests must be flag-gated and survive size failures")
+			})
+		}
+	}
+}
+
+func newIncrementalExecutor(t *testing.T, mode string) *ExecutorSchema {
+	t.Helper()
+	root := t.TempDir()
+	working := filepath.Join(root, "working-dir")
+	require.NoError(t, os.MkdirAll(working, 0755))
+	config := filepath.Join(root, "isc.yaml")
+	require.NoError(t, os.WriteFile(config, []byte("kind: ImageSetConfiguration\n"), 0600))
+	return &ExecutorSchema{
+		Log: &capturingLogger{}, LocalStorageDisk: filepath.Join(root, "cache"),
+		Opts: &mirror.CopyOptions{Mode: mode, LocalStorageFQDN: "localhost:55000", RemoveSignatures: true,
+			Global: &mirror.GlobalOptions{WorkingDir: working, ConfigPath: config}},
+		blobExists: func(context.Context, string, types.BlobInfo) (bool, error) { return false, nil },
+	}
+}
+
+func TestIncrementalCacheAndHistoryAreIndependent(t *testing.T) {
+	for _, cached := range []bool{false, true} {
+		for _, archived := range []bool{false, true} {
+			t.Run(fmt.Sprintf("cached=%t/history=%t", cached, archived), func(t *testing.T) {
+				ex := newIncrementalExecutor(t, mirror.MirrorToDisk)
+				blob := types.BlobInfo{Digest: godigest.FromString("layer"), Size: 8192}
+				img := v2alpha1.CopyImageSchema{Source: "docker://source.example/ns/image:latest", Destination: "docker://localhost:55000/ns/image:latest"}
+				if cached {
+					path, err := archive.BlobPath(ex.LocalStorageDisk, blob.Digest)
+					require.NoError(t, err)
+					require.NoError(t, os.MkdirAll(filepath.Dir(path), 0755))
+					require.NoError(t, os.WriteFile(path, make([]byte, blob.Size), 0600))
+				}
+				if archived {
+					h, err := history.NewHistory(ex.Opts.Global.WorkingDir, time.Time{}, ex.Log, history.OSFileCreator{})
+					require.NoError(t, err)
+					_, err = h.Append(sets.New(blob.Digest.String()))
+					require.NoError(t, err)
+				}
+				cs := v2alpha1.CollectorSchema{AllImages: []v2alpha1.CopyImageSchema{img, img}}
+				results := map[string]imageSizeResult{img.Source: {Blobs: []types.BlobInfo{blob}}}
+				report := ex.estimateDryRunSize(context.Background(), cs, results)
+				wantDownload := blob.Size
+				if cached {
+					wantDownload = 0
+				}
+				require.Equal(t, wantDownload, report.TotalDownloadSize.Bytes)
+				// A new repository link occupies one digest string even when its blob is cached.
+				require.Equal(t, wantDownload+int64(len(blob.Digest.String())), report.LocalStorageSize.Bytes)
+				require.Empty(t, report.TarballSize.Errors)
+				require.False(t, report.TarballSize.Unavailable)
+				empty, err := archive.EstimateSize(context.Background(), ex.Opts, ex.LocalStorageDisk, v2alpha1.CollectorSchema{}, nil, nil, 0, ex.Log)
+				require.NoError(t, err)
+				if archived {
+					require.Less(t, report.TarballSize.Bytes-empty, blob.Size)
+				} else {
+					require.Greater(t, report.TarballSize.Bytes-empty, blob.Size)
+				}
+			})
+		}
+	}
+}
+
+func TestIncrementalM2MScopesDownloadsAndCachesCatalogs(t *testing.T) {
+	ex := newIncrementalExecutor(t, mirror.MirrorToMirror)
+	blob := types.BlobInfo{Digest: godigest.FromString("shared"), Size: 1000}
+	images := []v2alpha1.CopyImageSchema{
+		{Source: "docker://source.example/catalog:latest", Destination: "docker://localhost:55000/catalog:latest", Type: v2alpha1.TypeOperatorCatalog},
+		{Source: "docker://source.example/catalog:latest", Destination: "docker://mirror.example/a:latest", Type: v2alpha1.TypeOperatorCatalog},
+		{Source: "docker://source.example/catalog:latest", Destination: "docker://mirror.example/a:other", Type: v2alpha1.TypeOperatorCatalog},
+		{Source: "docker://source.example/catalog:latest", Destination: "docker://mirror.example/b:latest", Type: v2alpha1.TypeOperatorCatalog},
+	}
+	ex.blobExists = func(_ context.Context, dst string, _ types.BlobInfo) (bool, error) {
+		return strings.Contains(dst, "/b:"), nil
+	}
+	report := ex.estimateDryRunSize(context.Background(), v2alpha1.CollectorSchema{AllImages: images},
+		map[string]imageSizeResult{images[0].Source: {Blobs: []types.BlobInfo{blob}}})
+	require.Equal(t, int64(2000), report.TotalDownloadSize.Bytes, "cache and repository a each need one transfer")
+	require.Equal(t, blob.Size+int64(len(blob.Digest.String())), report.LocalStorageSize.Bytes)
+	require.Equal(t, sizeEstimate{}, report.TarballSize)
+
+	t.Run("rebuilt catalog cache includes unselected platforms", func(t *testing.T) {
+		rebuilt := images[0]
+		rebuilt.Source, rebuilt.RebuiltTag = "oci:/catalog", "filtered"
+		otherPlatform := types.BlobInfo{Digest: godigest.FromString("other-platform"), Size: 2000}
+		ex.Manifest = &mockManifestWithSizes{blobsByImage: map[string][]types.BlobInfo{rebuilt.Source: {blob, otherPlatform}}}
+		ex.Opts.SrcImage = newTestExecutorWithManifest(ex.Manifest).Opts.SrcImage
+		selected := map[string]imageSizeResult{rebuilt.Source: {Blobs: []types.BlobInfo{blob}}}
+		report := ex.estimateDryRunSize(context.Background(), v2alpha1.CollectorSchema{AllImages: []v2alpha1.CopyImageSchema{rebuilt}},
+			selected)
+		require.Empty(t, report.LocalStorageSize.Errors)
+		require.Equal(t, blob.Size+otherPlatform.Size+2*int64(len(blob.Digest.String())), report.LocalStorageSize.Bytes)
+		require.Zero(t, report.TotalDownloadSize.Bytes, "locally generated catalog content is not downloaded")
+		require.Equal(t, []types.BlobInfo{blob}, selected[rebuilt.Source].Blobs, "cache sizing must preserve the selected-platform inventory")
+	})
+}
+
+func TestDryRunSignatureSizeInventory(t *testing.T) {
+	top := types.BlobInfo{Digest: godigest.FromString("manifest"), Size: 300, MediaType: "application/vnd.oci.image.manifest.v1+json"}
+	sig := types.BlobInfo{Digest: godigest.FromString("signature"), Size: 400, MediaType: top.MediaType}
+	tag, err := signature.SigstoreAttachmentTag(top.Digest)
+	require.NoError(t, err)
+	for _, source := range []string{
+		"docker://source.example/image:latest",
+		"docker://source.example/image@" + top.Digest.String(),
+		"docker://source.example/image:latest@" + top.Digest.String(),
+	} {
+		t.Run(source, func(t *testing.T) {
+			img := v2alpha1.CopyImageSchema{Source: source, Destination: "docker://localhost:55000/image:latest"}
+			mock := &mockManifestWithSizes{blobsByImage: map[string][]types.BlobInfo{source: {top}, "docker://source.example/image:" + tag: {sig}}}
+			_, result := newTestExecutorWithManifest(mock).inspectImage(context.Background(), img, nil, true)
+			require.Empty(t, result.Errors)
+			require.Len(t, result.Blobs, 2)
+			require.Equal(t, top.Digest, result.Blobs[1].Digest)
+			require.Equal(t, top.Digest.String(), result.Blobs[0].Annotations[consts.SignatureFor])
+		})
+	}
+	t.Run("signature failure retains image content", func(t *testing.T) {
+		source := "docker://source.example/image:latest"
+		mock := &mockManifestWithSizes{
+			blobsByImage: map[string][]types.BlobInfo{source: {top}},
+			failImages:   map[string]error{"docker://source.example/image:" + tag: errors.New("registry denied")},
+		}
+		_, result := newTestExecutorWithManifest(mock).inspectImage(context.Background(), v2alpha1.CopyImageSchema{Source: source}, nil, true)
+		require.Equal(t, []types.BlobInfo{top}, result.Blobs)
+		require.Len(t, result.Errors, 1)
+		require.ErrorContains(t, result.Errors[0], "registry denied")
+	})
 }
