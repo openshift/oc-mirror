@@ -21,12 +21,54 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/config"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/skipped"
 )
+
+func TestExcludeSkippedImagesRestoresAvailableOperandPlatforms(t *testing.T) {
+	for _, hasFilters := range []bool{false, true} {
+		name := "without existing filters"
+		if hasFilters {
+			name = "with original requested filters"
+		}
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			available := []v2alpha1.InstancePlatformFilter{{OS: "linux", Architecture: "amd64"}}
+			records := map[string][]v2alpha1.InstancePlatformFilter{
+				"fully-skipped":      nil,
+				"partially-mirrored": available,
+			}
+			require.NoError(t, skipped.WriteOperandPlatforms(dir, records))
+			schema := v2alpha1.CollectorSchema{
+				AllImages: []v2alpha1.CopyImageSchema{
+					{Origin: "fully-skipped", Type: v2alpha1.TypeOperatorRelatedImage},
+					{Origin: "partially-mirrored", Type: v2alpha1.TypeOperatorRelatedImage},
+					{Origin: "bundle", Type: v2alpha1.TypeOperatorBundle},
+				},
+				TotalOperatorImages: 3,
+			}
+			if hasFilters {
+				schema.PlatformFilters = map[string][]v2alpha1.InstancePlatformFilter{
+					"partially-mirrored": {{OS: "linux", Architecture: "amd64"}, {OS: "linux", Architecture: "arm64"}},
+				}
+			}
+			executor := &ExecutorSchema{
+				Log:  clog.New("trace"),
+				Opts: &mirror.CopyOptions{Global: &mirror.GlobalOptions{WorkingDir: dir}},
+			}
+			require.NoError(t, executor.excludeSkippedImages(&schema))
+			assert.Len(t, schema.AllImages, 2)
+			assert.Equal(t, "partially-mirrored", schema.AllImages[0].Origin)
+			assert.Equal(t, 2, schema.TotalOperatorImages)
+			assert.Equal(t, available, schema.PlatformFilters["partially-mirrored"])
+		})
+	}
+}
 
 // TestExecutorMirroring - test both mirrorToDisk
 // and diskToMirror, using mocks

@@ -1,6 +1,4 @@
-// Package skipped persists images a mirror-to-disk run intentionally did not
-// mirror, so disk-to-mirror makes the same decision instead of failing on a
-// cache miss.
+// Package skipped preserves operand platform exceptions for offline mirroring.
 package skipped
 
 import (
@@ -15,51 +13,30 @@ import (
 	"github.com/openshift/oc-mirror/v2/internal/pkg/parser"
 )
 
-// WriteSkippedImages records the skipped images under workingDir/internal/.
-// An empty list is valid: it records that nothing was skipped.
-func WriteSkippedImages(workingDir string, images []v2alpha1.SkippedImage) error {
-	internalDir := filepath.Join(workingDir, config.InternalDir)
-	if err := os.MkdirAll(internalDir, 0o755); err != nil {
-		return fmt.Errorf("unable to create internal directory: %w", err)
+// WriteOperandPlatforms replaces the previous run's decisions, even when empty.
+// A present origin with no platforms means that the whole operand was skipped.
+func WriteOperandPlatforms(workingDir string, platforms map[string][]v2alpha1.InstancePlatformFilter) error {
+	if err := os.MkdirAll(filepath.Join(workingDir, config.InternalDir), 0o755); err != nil {
+		return err
 	}
-
-	if images == nil {
-		images = []v2alpha1.SkippedImage{}
+	if platforms == nil {
+		platforms = map[string][]v2alpha1.InstancePlatformFilter{}
 	}
-
-	data, err := json.MarshalIndent(images, "", "  ")
+	data, err := json.Marshal(platforms)
 	if err != nil {
-		return fmt.Errorf("unable to marshal skipped images: %w", err)
+		return err
 	}
-
-	path := filepath.Join(workingDir, config.SkippedImagesPath)
-	if err := os.WriteFile(path, data, 0o644); err != nil { //nolint:gosec // image references are not sensitive info
-		return fmt.Errorf("unable to write skipped images: %w", err)
-	}
-
-	return nil
+	return os.WriteFile(filepath.Join(workingDir, config.SkippedImagesPath), data, 0o644)
 }
 
-// ReadSkippedImages reads the record under workingDir/internal/. A missing
-// file is not an error: older archives recorded nothing.
-func ReadSkippedImages(workingDir string) ([]v2alpha1.SkippedImage, error) {
-	path := filepath.Join(workingDir, config.SkippedImagesPath)
-
-	images, err := parser.ParseJsonFile[[]v2alpha1.SkippedImage](path)
+// ReadOperandPlatforms allows older archives without a decision file.
+func ReadOperandPlatforms(workingDir string) (map[string][]v2alpha1.InstancePlatformFilter, error) {
+	platforms, err := parser.ParseJsonFile[map[string][]v2alpha1.InstancePlatformFilter](filepath.Join(workingDir, config.SkippedImagesPath))
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
 	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return nil, nil
-		}
-		return nil, fmt.Errorf("skipped images: %w", err)
+		return nil, fmt.Errorf("operand platform decisions: %w", err)
 	}
-
-	return images, nil
-}
-
-func Origins(images []v2alpha1.SkippedImage) map[string]struct{} {
-	origins := make(map[string]struct{}, len(images))
-	for _, img := range images {
-		origins[img.Origin] = struct{}{}
-	}
-	return origins
+	return platforms, nil
 }

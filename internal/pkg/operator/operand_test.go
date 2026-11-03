@@ -10,7 +10,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 )
 
@@ -58,10 +57,8 @@ const (
 func newResolver(t *testing.T, handler bundleHandlerInterface) *OperandResolver {
 	t.Helper()
 	return &OperandResolver{
-		Log:     clog.New("trace"),
 		Opts:    &mirror.CopyOptions{Global: &mirror.GlobalOptions{WorkingDir: t.TempDir()}},
 		handler: handler,
-		bundles: make(map[string]*bundleControllers),
 	}
 }
 

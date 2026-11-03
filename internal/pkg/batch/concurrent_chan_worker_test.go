@@ -276,13 +276,9 @@ func TestWorkerSkipsOperandWithNoMatchingPlatform(t *testing.T) {
 		// 3 operator images in, 1 skipped, so 2 counted as copied.
 		assert.Equal(t, 2, copied.TotalOperatorImages)
 
-		if assert.Len(t, copied.SkippedImages, 1) {
-			assert.Equal(t, operandRef, copied.SkippedImages[0].Origin)
-			assert.Equal(t, v2alpha1.TypeOperatorOperand, copied.SkippedImages[0].Type,
-				"the record must say what the image turned out to be")
-			assert.Equal(t, noMatchingPlatformReason, copied.SkippedImages[0].Reason)
-			assert.Equal(t, []string{"linux/amd64"}, copied.SkippedImages[0].Platforms)
-		}
+		require.Len(t, copied.OperandPlatforms, 1)
+		assert.Contains(t, copied.OperandPlatforms, operandRef)
+		assert.Empty(t, copied.OperandPlatforms[operandRef], "no platforms means wholly skipped")
 	})
 
 	t.Run("the resolver is only consulted on a platform miss", func(t *testing.T) {
@@ -305,7 +301,7 @@ func TestWorkerSkipsOperandWithNoMatchingPlatform(t *testing.T) {
 		copied, err := w.Worker(context.Background(), operandSchema(), opts)
 
 		require.Error(t, err, "a controller image with no matching platform is a real failure")
-		assert.Empty(t, copied.SkippedImages)
+		assert.Empty(t, copied.OperandPlatforms)
 
 		reported := readMirroringErrors(t, logsDir)
 		assert.Contains(t, reported, `operator "some-operator" does not support linux/amd64`)
@@ -320,7 +316,7 @@ func TestWorkerSkipsOperandWithNoMatchingPlatform(t *testing.T) {
 		copied, err := w.Worker(context.Background(), operandSchema(), opts)
 
 		require.Error(t, err, "we could not prove it is an operand, so it must fail")
-		assert.Empty(t, copied.SkippedImages)
+		assert.Empty(t, copied.OperandPlatforms)
 
 		// We only know the image has no matching instance, so the report must
 		// not claim the operator lacks support for the platform.
@@ -347,7 +343,7 @@ func TestWorkerSkipsOperandWithNoMatchingPlatform(t *testing.T) {
 		copied, err := w.Worker(context.Background(), schema, opts)
 
 		require.Error(t, err, "the user named this image explicitly, so a platform miss is a config error")
-		assert.Empty(t, copied.SkippedImages)
+		assert.Empty(t, copied.OperandPlatforms)
 		assert.Zero(t, resolver.callCount(), "an additional image is never an operand")
 	})
 
@@ -361,7 +357,7 @@ func TestWorkerSkipsOperandWithNoMatchingPlatform(t *testing.T) {
 		copied, err := w.Worker(context.Background(), operandSchema(), opts)
 
 		require.Error(t, err, "only a platform mismatch is skippable")
-		assert.Empty(t, copied.SkippedImages)
+		assert.Empty(t, copied.OperandPlatforms)
 	})
 
 	t.Run("no platform filter means the error is never downgraded", func(t *testing.T) {
@@ -376,7 +372,7 @@ func TestWorkerSkipsOperandWithNoMatchingPlatform(t *testing.T) {
 		require.Error(t, err)
 	})
 
-	// classifyOperand has three early returns that answer nothing. Each must
+	// Unclassified images must
 	// fail without blaming the operator.
 	for _, tt := range []struct {
 		name     string
@@ -408,7 +404,7 @@ func TestWorkerSkipsOperandWithNoMatchingPlatform(t *testing.T) {
 			copied, err := w.Worker(context.Background(), schema, runOpts)
 
 			require.Error(t, err)
-			assert.Empty(t, copied.SkippedImages, "nothing proved it is an operand")
+			assert.Empty(t, copied.OperandPlatforms, "nothing proved it is an operand")
 			if resolver != nil {
 				assert.Zero(t, resolver.callCount())
 			}

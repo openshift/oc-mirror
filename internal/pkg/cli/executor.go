@@ -952,10 +952,10 @@ func (o *ExecutorSchema) RunMirrorToDisk(cmd *cobra.Command, args []string) erro
 
 	// Written on every run: a reused workspace may hold an earlier record, and
 	// disk-to-mirror would then exclude images this run copied.
-	if err := skipped.WriteSkippedImages(o.Opts.Global.WorkingDir, copiedSchema.SkippedImages); err != nil {
+	if err := skipped.WriteOperandPlatforms(o.Opts.Global.WorkingDir, copiedSchema.OperandPlatforms); err != nil {
 		return fmt.Errorf("unable to record skipped images: %w", err)
 	}
-	o.Log.Debug("recorded %d skipped images", len(copiedSchema.SkippedImages))
+	o.Log.Debug("recorded %d operand platform decisions", len(copiedSchema.OperandPlatforms))
 
 	o.Log.Info(emoji.Package + " Preparing the tarball archive...")
 	// The registry is stopped via callback once BuildArchive no longer needs it (see
@@ -1078,25 +1078,32 @@ func (o *ExecutorSchema) RunDiskToMirror(cmd *cobra.Command, args []string) erro
 }
 
 // excludeSkippedImages drops images the mirror-to-disk run recorded as skipped
-// and adjusts the totals, so the report does not count them as failures.
+// and adjusts the totals, so the report does not count them as failures. For
+// partially mirrored operands it restores the platforms available in the archive.
 func (o *ExecutorSchema) excludeSkippedImages(collectorSchema *v2alpha1.CollectorSchema) error {
-	skippedImages, err := skipped.ReadSkippedImages(o.Opts.Global.WorkingDir)
+	decisions, err := skipped.ReadOperandPlatforms(o.Opts.Global.WorkingDir)
 	if err != nil {
 		return err
 	}
-	if len(skippedImages) == 0 {
+	if len(decisions) == 0 {
 		return nil
 	}
 
-	origins := skipped.Origins(skippedImages)
+	if collectorSchema.PlatformFilters == nil {
+		collectorSchema.PlatformFilters = make(map[string][]v2alpha1.InstancePlatformFilter)
+	}
 	kept := make([]v2alpha1.CopyImageSchema, 0, len(collectorSchema.AllImages))
 	excluded := 0
 	for _, img := range collectorSchema.AllImages {
-		if _, isSkipped := origins[img.Origin]; isSkipped {
+		platforms, recorded := decisions[img.Origin]
+		if recorded && len(platforms) == 0 {
 			o.Log.Debug("excluding %s: skipped during mirror to disk", img.Origin)
 			decrementTotals(img.Type, collectorSchema)
 			excluded++
 			continue
+		}
+		if recorded {
+			collectorSchema.PlatformFilters[img.Origin] = platforms
 		}
 		kept = append(kept, img)
 	}

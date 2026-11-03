@@ -208,7 +208,7 @@ chooses that list, not you:
 | image with no instance for any requested platform | result |
 |---|---|
 | one the operator runs | mirroring fails: `operator "kubevirt-hyperconverged" does not support linux/ppc64le` |
-| an operand | skipped with a warning and listed under `=== Skipped images ===`; the operator is still mirrored in full |
+| an operand | skipped with a warning; the operator is still mirrored in full |
 | one you named in `additionalImages` or a release | mirroring fails: the platform is missing from your configuration |
 
 Telling the two apart means reading the bundle's ClusterServiceVersion, so

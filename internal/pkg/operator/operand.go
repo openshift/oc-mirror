@@ -2,6 +2,8 @@ package operator
 
 import (
 	"context"
+	"crypto/sha256"
+	"fmt"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -12,85 +14,51 @@ import (
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 )
 
-// OperandResolver answers whether an image is an operand the operator deploys
-// rather than one it runs itself.
-//
-// Answering costs a bundle pull, so it is deliberately lazy: asked only once a
-// copy has already failed on a platform mismatch. A catalog of thousands of
-// bundles then pulls none as long as its images mirror cleanly.
+// OperandResolver reads CSV controller images only after a platform mismatch.
+// Cache successful reads; serialize this rare fallback to avoid duplicate pulls.
 type OperandResolver struct {
-	Log      clog.PluggableLoggerInterface
-	Opts     *mirror.CopyOptions
-	handler  bundleHandlerInterface
-	mu       sync.Mutex
-	bundles  map[string]*bundleControllers
-	initOnce sync.Once
+	Opts    *mirror.CopyOptions
+	handler bundleHandlerInterface
+	mu      sync.Mutex
+	bundles map[string]map[string]struct{}
 }
 
-// bundleControllers holds the images one bundle runs itself, fetched once
-// however many goroutines ask. Raw strings remain for refs ParseRef rejects.
-type bundleControllers struct {
-	once   sync.Once
-	images map[string]struct{}
-	specs  []image.ImageSpec
-	err    error
-}
-
-func NewOperandResolver(
-	log clog.PluggableLoggerInterface,
-	opts *mirror.CopyOptions,
-	mirror mirror.MirrorInterface,
-	manifest manifest.ManifestInterface,
-) *OperandResolver {
+func NewOperandResolver(log clog.PluggableLoggerInterface, opts *mirror.CopyOptions, copier mirror.MirrorInterface, manifests manifest.ManifestInterface) *OperandResolver {
 	return &OperandResolver{
-		Log:  log,
-		Opts: opts,
-		handler: BundleHandler{
-			Log:      log,
-			Mirror:   mirror,
-			Manifest: manifest,
-		},
-		bundles: make(map[string]*bundleControllers),
+		Opts:    opts,
+		handler: BundleHandler{Log: log, Mirror: copier, Manifest: manifests},
 	}
 }
 
-// IsOperand reports whether imageOrigin is an operand of the bundles listing
-// it, keyed as CopyImageSchemaMap.BundlesByImage records them. An image that
-// any of those bundles runs itself is not an operand: that operator needs it.
-func (r *OperandResolver) IsOperand(ctx context.Context, imageOrigin string, bundles map[string]string) (bool, error) {
+// IsOperand never skips an image used by any listing bundle's deployments.
+func (r *OperandResolver) IsOperand(ctx context.Context, origin string, bundles map[string]string) (bool, error) {
 	if len(bundles) == 0 {
-		// Nothing proves it is an operand, so treat it as one the operator needs.
 		return false, nil
 	}
-
-	ref := referenceWithoutTransport(imageOrigin)
-	spec, specErr := image.ParseRef(ref)
-
-	for bundleImage := range bundles {
-		controllers, err := r.controllersOf(ctx, bundleImage)
+	ref := referenceWithoutTransport(origin)
+	candidate, parseErr := image.ParseRef(ref)
+	for bundle := range bundles {
+		controllers, err := r.controllersOf(ctx, bundle)
 		if err != nil {
 			return false, err
 		}
-		if _, runsIt := controllers.images[ref]; runsIt {
+		if _, runsIt := controllers[ref]; runsIt {
 			return false, nil
 		}
-		if specErr != nil {
+		if parseErr != nil {
 			continue
 		}
-		for _, controller := range controllers.specs {
-			if sameImage(spec, controller) {
+		for controller := range controllers {
+			if spec, err := image.ParseRef(controller); err == nil && sameImage(candidate, spec) {
 				return false, nil
 			}
 		}
 	}
-
 	return true, nil
 }
 
-// sameImage reports whether two references denote the same image. Name carries
-// the registry, so the same path on different hosts does not match. Tag against
-// digest cannot be compared, so it counts as a match: the reverse would
-// silently skip an image the operator runs.
+// Tags and digests cannot be compared without resolving the tag. Conservatively
+// consider them a match, so an operator's controller cannot be silently skipped.
 func sameImage(a, b image.ImageSpec) bool {
 	if a.Name != b.Name {
 		return false
@@ -105,44 +73,24 @@ func sameImage(a, b image.ImageSpec) bool {
 	}
 }
 
-func (r *OperandResolver) controllersOf(ctx context.Context, bundleImage string) (*bundleControllers, error) {
-	r.initOnce.Do(func() {
-		if r.bundles == nil {
-			r.bundles = make(map[string]*bundleControllers)
-		}
-	})
-
+func (r *OperandResolver) controllersOf(ctx context.Context, bundle string) (map[string]struct{}, error) {
 	r.mu.Lock()
-	entry, found := r.bundles[bundleImage]
-	if !found {
-		entry = &bundleControllers{}
-		r.bundles[bundleImage] = entry
+	defer r.mu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
-	r.mu.Unlock()
-
-	entry.once.Do(func() {
-		dir := filepath.Join(r.Opts.Global.WorkingDir, operatorBundlesDir, bundleDirName(bundleImage))
-		r.Log.Debug(collectorPrefix+"reading bundle %s to identify its operands", bundleImage)
-		entry.images, entry.err = r.handler.ControllerImages(ctx, bundleImage, dir, *r.Opts)
-		for controller := range entry.images {
-			if spec, err := image.ParseRef(controller); err == nil {
-				entry.specs = append(entry.specs, spec)
-			}
-		}
-	})
-
-	if entry.err != nil {
-		// Let the next caller retry rather than caching the failure. Drop it
-		// only while it is still the current entry: another goroutine may
-		// already have replaced it with a retry.
-		r.mu.Lock()
-		if r.bundles[bundleImage] == entry {
-			delete(r.bundles, bundleImage)
-		}
-		r.mu.Unlock()
+	if images, ok := r.bundles[bundle]; ok {
+		return images, nil
 	}
-
-	return entry, entry.err
+	dir := filepath.Join(r.Opts.Global.WorkingDir, operatorBundlesDir, fmt.Sprintf("%x", sha256.Sum256([]byte(bundle))))
+	images, err := r.handler.ControllerImages(ctx, bundle, dir, *r.Opts)
+	if err == nil {
+		if r.bundles == nil {
+			r.bundles = make(map[string]map[string]struct{})
+		}
+		r.bundles[bundle] = images
+	}
+	return images, err
 }
 
 func referenceWithoutTransport(ref string) string {
@@ -150,11 +98,4 @@ func referenceWithoutTransport(ref string) string {
 		return after
 	}
 	return ref
-}
-
-func bundleDirName(bundleImage string) string {
-	if spec, err := image.ParseRef(bundleImage); err == nil && spec.Digest != "" {
-		return spec.Digest
-	}
-	return strings.NewReplacer("/", "-", ":", "-", "@", "-").Replace(referenceWithoutTransport(bundleImage))
 }
