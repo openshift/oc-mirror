@@ -46,7 +46,7 @@ func (o *ChannelConcurrentBatch) copyAvailableOperandPlatforms(ctx context.Conte
 	var missing []string
 	for copyErr != nil {
 		if err := ctx.Err(); err != nil {
-			return nil, nil, err
+			return nil, nil, fmt.Errorf("copying available platforms of %s: %w", img.Origin, err)
 		}
 		_, after, found := strings.Cut(copyErr.Error(), "no instances found for platform ")
 		fields := strings.Fields(after)

@@ -26,7 +26,10 @@ func WriteOperandPlatforms(workingDir string, platforms map[string][]v2alpha1.In
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(filepath.Join(workingDir, config.SkippedImagesPath), data, 0o644)
+	if err := os.WriteFile(filepath.Join(workingDir, config.SkippedImagesPath), data, 0o644); err != nil { // #nosec G306 -- non-secret metadata must remain readable across users during disk-to-mirror.
+		return fmt.Errorf("write operand platform decisions: %w", err)
+	}
+	return nil
 }
 
 // ReadOperandPlatforms allows older archives without a decision file.
