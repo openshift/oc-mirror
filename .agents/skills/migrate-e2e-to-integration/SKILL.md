@@ -83,9 +83,11 @@ Apply these conversions:
 #### Test images
 - **E2E**: Often uses real release images and production operator catalogs.
 - **Integration**: Use the self-hosted test images:
-  - Catalog: `quay.io/oc-mirror/oc-mirror-dev:test-catalog-latest`
+  - Catalog: `quay.io/oc-mirror/oc-mirror-dev:test-catalog-20261103-2e526488d`
   - Release: `quay.io/oc-mirror/release/test-release-index:v0.0.1`
   - Additional: `quay.io/openshifttest/hello-openshift@sha256:61b8f5...`
+
+Reuse the pinned image tags in existing test data. See `tests/integration/image-builders/README.md` before publishing a new fixture version.
 
 #### Test data configs
 - Check existing ISC/DISC configs in `tests/integration/testdata/imagesetconfigs/` first.

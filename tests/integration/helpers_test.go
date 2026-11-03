@@ -422,7 +422,7 @@ func collectExpectedRepos(cfg ImageSetConfiguration) []string {
 // extractRepositoryName parses an image reference and extracts the repository part.
 // It removes the registry prefix and any tag/digest suffix.
 // Examples:
-//   - "quay.io/oc-mirror/oc-mirror-dev:test-catalog-latest" -> "oc-mirror/oc-mirror-dev"
+//   - "quay.io/oc-mirror/oc-mirror-dev:test-catalog-20261103-2e526488d" -> "oc-mirror/oc-mirror-dev"
 //   - "quay.io/openshifttest/hello-openshift@sha256:..." -> "openshifttest/hello-openshift"
 func extractRepositoryName(imageRef string) string {
 	ref, err := reference.ParseNormalizedNamed(imageRef)
@@ -433,7 +433,7 @@ func extractRepositoryName(imageRef string) string {
 // extractImageName parses an image reference and extracts just the image name (final component).
 // It removes the registry prefix, organization/namespace, and any tag/digest suffix.
 // Examples:
-//   - "quay.io/oc-mirror/oc-mirror-dev:test-catalog-latest" -> "oc-mirror-dev"
+//   - "quay.io/oc-mirror/oc-mirror-dev:test-catalog-20261103-2e526488d" -> "oc-mirror-dev"
 //   - "registry.redhat.io/redhat/redhat-operator-index:v4.17" -> "redhat-operator-index"
 func extractImageName(imageRef string) string {
 	ref, err := reference.ParseNormalizedNamed(imageRef)

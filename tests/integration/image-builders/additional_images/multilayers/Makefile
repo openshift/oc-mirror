@@ -1,5 +1,6 @@
 REGISTRY ?= quay.io/oc-mirror/oc-mirror-dev
-TAG ?= multilayers-latest
+IMAGE_VERSION ?= $(shell date -u +%Y%m%d)-$(shell git rev-parse --short HEAD)
+TAG ?= multilayers-$(IMAGE_VERSION)
 RUNTIME ?= podman
 
 IMAGE_REF = $(REGISTRY):$(TAG)

@@ -45,8 +45,8 @@ var _ = Describe("tag and digest collision", func() {
 		cleanupWorkDir(workDir)
 	})
 
-	// Requires the test-catalog-tag-digest-collision catalog image to be built and pushed -
-	// see tests/integration/image-builders/operator/catalogs/README.md.
+	// Requires the pinned catalog image to be published -
+	// see tests/integration/image-builders/README.md.
 	Describe("operator related images sharing a repo:tag with different digests", func() {
 		iscFile := filepath.Join("tag_digest_collision", "isc-operator-tag-digest-collision.yaml")
 

@@ -195,7 +195,7 @@ var _ = Describe("incremental mirroring", func() {
 			By("verifying the initial tar contains expected content")
 			expectCorrectTarArchiveContents(iscInitialPath, workDir)
 			expectArchiveContainsExactly(workDir, map[string]string{
-				"oc-mirror/oc-mirror-dev:test-catalog-latest":                                                     happyPathCatalog,
+				testCatalogRepo + ":" + testCatalogTag:                                                            happyPathCatalog,
 				"oc-mirror/oc-mirror-dev:foo-bundle-v0.2.0":                                                       "quay.io/oc-mirror/oc-mirror-dev:foo-bundle-v0.2.0",
 				"oc-mirror/oc-mirror-dev:sha256-1ce8c0187c8fe6b4be327dc848b8baf062ce1baa5096b4f5d955893d126d5b58": operandImage,
 			}, testCatalogRepo)
@@ -257,7 +257,7 @@ var _ = Describe("incremental mirroring", func() {
 			expectCorrectTarArchiveContents(iscUpdatePath, workDir)
 			// The cache and archive retain the catalogs rebuilt by both runs.
 			expectArchiveContainsExactly(workDir, map[string]string{
-				"oc-mirror/oc-mirror-dev:test-catalog-latest":                                                     happyPathCatalog,
+				testCatalogRepo + ":" + testCatalogTag:                                                            happyPathCatalog,
 				"oc-mirror/oc-mirror-dev:foo-bundle-v0.2.0":                                                       "quay.io/oc-mirror/oc-mirror-dev:foo-bundle-v0.2.0",
 				"oc-mirror/oc-mirror-dev:foo-bundle-v0.3.0":                                                       "quay.io/oc-mirror/oc-mirror-dev:foo-bundle-v0.3.0",
 				"oc-mirror/oc-mirror-dev:foo-bundle-v0.3.1":                                                       "quay.io/oc-mirror/oc-mirror-dev:foo-bundle-v0.3.1",
@@ -270,7 +270,7 @@ var _ = Describe("incremental mirroring", func() {
 	// CLID-722: Validate config-based incremental mirroring for additional images.
 	// Runs mirrorToDisk twice against the same workspace:
 	//   Step 1: mirror foo-v0.1.0
-	//   Step 2: keep foo-v0.1.0 and add multilayers-latest (distinct layers)
+	//   Step 2: keep foo-v0.1.0 and add the multilayers image (distinct layers)
 	// The second archive should contain only the new blobs with no overlap
 	// from the first archive. A same-ISC re-run should produce no image blobs.
 	Describe("additional images incremental mirrorToDisk", func() {
@@ -342,7 +342,7 @@ var _ = Describe("incremental mirroring", func() {
 			err = os.Rename(initialTar, preservedTar)
 			Expect(err).NotTo(HaveOccurred(), "failed to move initial tar")
 
-			By("running mirrorToDisk with the updated ISC (foo-v0.1.0 + multilayers-latest)")
+			By("running mirrorToDisk with the updated ISC (foo-v0.1.0 + multilayers)")
 			result, err = runner.MirrorToDisk(ctx, iscUpdatePath, workDir, "--remove-signatures=true")
 			logOcMirrorResult("additional-images incremental step-2 mirrorToDisk", result)
 			expectOcMirrorCommandSuccess(result, err)
@@ -371,11 +371,11 @@ var _ = Describe("incremental mirroring", func() {
 
 			By("verifying the initial tar does not contain the newly added additional image")
 			initialEntries := listTarEntries(preservedTar)
-			expectTarDoesNotContainPath(initialEntries, "_manifests/tags/multilayers-latest")
+			expectTarDoesNotContainPath(initialEntries, "_manifests/tags/"+multilayersTag)
 
 			By("verifying the incremental tar contains the newly added additional image")
 			expectTarContainsPath(listTarEntries(incrementalTar),
-				tarRepositoriesPath+"oc-mirror/oc-mirror-dev/_manifests/tags/multilayers-latest")
+				tarRepositoriesPath+testCatalogRepo+"/_manifests/tags/"+multilayersTag)
 		})
 	})
 })

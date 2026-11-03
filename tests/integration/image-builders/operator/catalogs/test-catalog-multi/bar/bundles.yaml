@@ -39,7 +39,7 @@ relatedImages:
   name: operator
 schema: olm.bundle
 ---
-image: quay.io/oc-mirror/oc-mirror-dev:bar-bundle-v1.0.0-multi
+image: quay.io/oc-mirror/oc-mirror-dev:bar-bundle-v1.0.0-multi-20261103-2e526488d
 name: bar.v1.0.0
 package: bar
 properties:
@@ -58,7 +58,7 @@ properties:
     packageName: bar
     version: 1.0.0
 relatedImages:
-- image: quay.io/oc-mirror/oc-mirror-dev:bar-bundle-v1.0.0-multi
+- image: quay.io/oc-mirror/oc-mirror-dev:bar-bundle-v1.0.0-multi-20261103-2e526488d
   name: ""
 - image: quay.io/oc-mirror/oc-mirror-dev@sha256:1ce8c0187c8fe6b4be327dc848b8baf062ce1baa5096b4f5d955893d126d5b58
   name: operator
