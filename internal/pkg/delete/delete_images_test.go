@@ -718,6 +718,10 @@ func (o mockManifest) GetManifestListDigests(ctx context.Context, sourceCtx *typ
 	return nil, nil
 }
 
+func (o mockManifest) ImageBlobSizes(ctx context.Context, sourceCtx *types.SystemContext, imgRef string, platformFilters []v2alpha1.InstancePlatformFilter) ([]v2alpha1.BlobSizeInfo, error) {
+	return nil, nil
+}
+
 func (o mockManifest) GetOCIImageFromIndex(dir string) (gcrv1.Image, error) { //nolint:ireturn // as expected by go-containerregistry
 	return nil, nil
 }

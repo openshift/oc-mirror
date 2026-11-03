@@ -22,4 +22,8 @@ type ManifestInterface interface {
 	ImageDigest(ctx context.Context, sourceCtx *types.SystemContext, imgRef string) (string, error)
 	ImageManifest(ctx context.Context, sourceCtx *types.SystemContext, imgRef string, instanceDigest *digest.Digest) ([]byte, string, error)
 	GetManifestListDigests(ctx context.Context, sourceCtx *types.SystemContext, source string) ([]string, error)
+	// ImageBlobSizes fetches the manifest for imgRef and returns the digest+size
+	// of every blob (layers + config). For manifest lists, sub-manifests are resolved
+	// and filtered by platformFilters.
+	ImageBlobSizes(ctx context.Context, sourceCtx *types.SystemContext, imgRef string, platformFilters []v2alpha1.InstancePlatformFilter) ([]v2alpha1.BlobSizeInfo, error)
 }

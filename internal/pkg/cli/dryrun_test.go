@@ -4,14 +4,19 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
+	"strings"
+	"sync"
 	"testing"
 
 	"github.com/distribution/distribution/v3/registry"
 	godigest "github.com/opencontainers/go-digest"
 	specv1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"go.podman.io/image/v5/types"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/clusterresources"
@@ -922,4 +927,258 @@ func TestSubDigestDestination(t *testing.T) {
 			assert.Equal(t, tt.expected, result)
 		})
 	}
+}
+
+// --- Size estimation tests ---
+
+type mockManifestWithSizes struct {
+	manifest.Manifest
+	blobsByImage   map[string][]v2alpha1.BlobSizeInfo
+	failImages     map[string]error
+	mu             sync.Mutex
+	filtersByImage map[string][]v2alpha1.InstancePlatformFilter
+}
+
+func (m *mockManifestWithSizes) ImageBlobSizes(ctx context.Context, sourceCtx *types.SystemContext, imgRef string, platformFilters []v2alpha1.InstancePlatformFilter) ([]v2alpha1.BlobSizeInfo, error) {
+	m.mu.Lock()
+	if m.filtersByImage == nil {
+		m.filtersByImage = map[string][]v2alpha1.InstancePlatformFilter{}
+	}
+	m.filtersByImage[imgRef] = append([]v2alpha1.InstancePlatformFilter(nil), platformFilters...)
+	m.mu.Unlock()
+	if err, ok := m.failImages[imgRef]; ok {
+		return nil, err
+	}
+	return m.blobsByImage[imgRef], nil
+}
+
+type capturingLogger struct {
+	mu       sync.Mutex
+	messages []string
+}
+
+func (c *capturingLogger) record(prefix, msg string, val ...interface{}) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.messages = append(c.messages, prefix+fmt.Sprintf(msg, val...))
+}
+func (c *capturingLogger) output() string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return strings.Join(c.messages, "\n")
+}
+func (c *capturingLogger) Info(msg string, val ...interface{})  { c.record("[INFO] ", msg, val...) }
+func (c *capturingLogger) Debug(msg string, val ...interface{}) { c.record("[DEBUG] ", msg, val...) }
+func (c *capturingLogger) Warn(msg string, val ...interface{})  { c.record("[WARN] ", msg, val...) }
+func (c *capturingLogger) Error(msg string, val ...interface{}) { c.record("[ERROR] ", msg, val...) }
+func (c *capturingLogger) Trace(msg string, val ...interface{}) { c.record("[TRACE] ", msg, val...) }
+func (c *capturingLogger) Level(string)                         {}
+func (c *capturingLogger) GetLevel() string                     { return "debug" }
+
+func newTestExecutorWithManifest(m manifest.ManifestInterface) *ExecutorSchema {
+	_, sharedOpts := mirror.SharedImageFlags()
+	_, deprecatedTLS := mirror.DeprecatedTLSVerifyFlags()
+	_, srcOpts := mirror.ImageSrcFlags(&mirror.GlobalOptions{}, sharedOpts, deprecatedTLS, "src-", "screds")
+	return &ExecutorSchema{Log: clog.New("debug"), Manifest: m, Opts: &mirror.CopyOptions{SrcImage: srcOpts}}
+}
+
+// loadTestManifestBlobs loads digests/sizes from tests/unit/testdata/image-manifest.json.
+func loadTestManifestBlobs(t *testing.T) []v2alpha1.BlobSizeInfo {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(consts.TestFolder, "image-manifest.json"))
+	assert.NoError(t, err)
+	var m specv1.Manifest
+	assert.NoError(t, json.Unmarshal(data, &m))
+	blobs := make([]v2alpha1.BlobSizeInfo, 0, len(m.Layers)+1)
+	for _, layer := range m.Layers {
+		blobs = append(blobs, v2alpha1.BlobSizeInfo{Digest: layer.Digest.String(), Size: layer.Size})
+	}
+	return append(blobs, v2alpha1.BlobSizeInfo{Digest: m.Config.Digest.String(), Size: m.Config.Size})
+}
+
+func TestSizeEstimationHelpers(t *testing.T) {
+	imgs := getTestImages()
+	blobs := loadTestManifestBlobs(t)
+	require.GreaterOrEqual(t, len(blobs), 3)
+
+	t.Run("computeSizeReport dedups and records errors", func(t *testing.T) {
+		report := computeSizeReport([]v2alpha1.ImageSizeResult{
+			{Source: imgs[0].Source, Blobs: blobs[:3]},
+			{Source: imgs[1].Source, Blobs: append([]v2alpha1.BlobSizeInfo{blobs[0], blobs[1]}, blobs[3:]...)},
+			{Source: imgs[2].Source, Error: "connection refused"},
+			{},
+		})
+		var full int64
+		for _, b := range blobs {
+			full += b.Size
+		}
+		assert.Equal(t, full, report.TotalSize)
+		assert.Equal(t, 2, report.ImageCount)
+		assert.Len(t, report.Errors, 1)
+	})
+
+	t.Run("estimateImageSizes + Origin filters", func(t *testing.T) {
+		localSrc := consts.DockerProtocol + "127.0.0.1:55000/ns/img@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea"
+		wantFilters := []v2alpha1.InstancePlatformFilter{{OS: "linux", Architecture: "amd64"}}
+		mock := &mockManifestWithSizes{
+			blobsByImage: map[string][]v2alpha1.BlobSizeInfo{
+				imgs[0].Source: blobs[:2],
+				imgs[1].Source: {blobs[0]},
+				localSrc:       {blobs[0]},
+			},
+			failImages: map[string]error{imgs[1].Source: fmt.Errorf("connection refused")},
+		}
+		ex := newTestExecutorWithManifest(mock)
+		ok := ex.estimateImageSizes(context.TODO(), []v2alpha1.CopyImageSchema{{Source: imgs[0].Source}}, nil)
+		assert.Len(t, ok[0].Blobs, 2)
+		bad := ex.estimateImageSizes(context.TODO(), []v2alpha1.CopyImageSchema{{Source: imgs[1].Source}}, nil)
+		assert.Contains(t, bad[0].Error, "connection refused")
+		_ = ex.estimateImageSizes(context.TODO(),
+			[]v2alpha1.CopyImageSchema{{Source: localSrc, Origin: imgs[0].Source}},
+			map[string][]v2alpha1.InstancePlatformFilter{imgs[0].Source: wantFilters})
+		mock.mu.Lock()
+		defer mock.mu.Unlock()
+		assert.Equal(t, wantFilters, mock.filtersByImage[localSrc])
+	})
+
+	t.Run("local-cache filter matches authority only", func(t *testing.T) {
+		fqdn := "mirror.local:55000"
+		digest := "@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea"
+		local := consts.DockerProtocol + fqdn + "/ns/c" + digest
+		lookalike := consts.DockerProtocol + "not" + fqdn + "/ns/i" + digest
+		remote := imgs[0].Source
+		got := filterLocalCacheSourceImages([]v2alpha1.CopyImageSchema{{Source: remote}, {Source: local}, {Source: lookalike}}, fqdn)
+		assert.Equal(t, []v2alpha1.CopyImageSchema{{Source: remote}, {Source: lookalike}}, got)
+		assert.Len(t, filterLocalCacheSourceImages(got[:1], ""), 1)
+	})
+
+	t.Run("dedupeImagesBySource", func(t *testing.T) {
+		src := imgs[0].Source
+		got := dedupeImagesBySource([]v2alpha1.CopyImageSchema{
+			{Source: src, Type: v2alpha1.TypeGeneric},
+			{Source: src, Origin: "origin", Type: v2alpha1.TypeOperatorCatalog},
+			{Source: imgs[1].Source},
+		})
+		assert.Len(t, got, 2)
+		assert.Equal(t, "origin", got[0].Origin)
+		assert.True(t, got[0].Type.IsOperatorCatalog())
+	})
+
+	t.Run("workflow adjust + catalog cache + saturation", func(t *testing.T) {
+		catalog := []v2alpha1.ImageSizeResult{
+			{Source: imgs[0].Source, Blobs: []v2alpha1.BlobSizeInfo{blobs[0]}},
+			{Source: imgs[1].Source, Blobs: []v2alpha1.BlobSizeInfo{blobs[1], blobs[0]}},
+			{Source: imgs[2].Source, Error: "error"},
+		}
+		images := []v2alpha1.CopyImageSchema{
+			{Source: imgs[0].Source, Type: v2alpha1.TypeOCPRelease},
+			{Source: imgs[1].Source, Type: v2alpha1.TypeOperatorCatalog},
+			{Source: imgs[2].Source, Type: v2alpha1.TypeOperatorCatalog},
+		}
+		assert.Equal(t, blobs[0].Size+blobs[1].Size, computeOperatorCatalogCacheSize(catalog, images))
+		raw := blobs[0].Size + blobs[1].Size
+		// m2m adds only the catalog image's unique blob sum (blobs[1] here).
+		m2m := []v2alpha1.ImageSizeResult{
+			{Source: imgs[0].Source, Blobs: []v2alpha1.BlobSizeInfo{blobs[0]}},
+			{Source: imgs[1].Source, Blobs: []v2alpha1.BlobSizeInfo{blobs[1]}},
+		}
+		assert.Equal(t, raw+blobs[1].Size, adjustSizeForWorkflow(raw, mirror.MirrorToMirror, m2m, images, 0))
+		assert.Equal(t, blobs[0].Size*2, adjustSizeForWorkflow(blobs[0].Size, mirror.MirrorToDisk, nil, nil, 0))
+		assert.Equal(t, int64(8000), adjustSizeForWorkflow(0, mirror.DiskToMirror, nil, nil, 8000))
+		assert.Equal(t, int64(math.MaxInt64), adjustSizeForWorkflow(math.MaxInt64/2+1, mirror.MirrorToDisk, nil, nil, 0))
+		assert.Equal(t, int64(math.MaxInt64), saturatingAdd(math.MaxInt64-1, 2))
+		assert.Equal(t, int64(3), saturatingAdd(-1, 3)) // negatives treated as 0
+		assert.Equal(t, int64(math.MaxInt64), sumMapValues(map[string]int64{
+			"a": math.MaxInt64 - 5,
+			"b": 10,
+		}))
+	})
+
+	t.Run("tarball size follows symlink", func(t *testing.T) {
+		assert.Equal(t, int64(0), mustTarballSize(t, ""))
+		dir := t.TempDir()
+		assert.NoError(t, os.WriteFile(filepath.Join(dir, "mirror_000001.tar"), make([]byte, 1000), 0o600))
+		assert.NoError(t, os.WriteFile(filepath.Join(dir, "mirror_000002.tar"), make([]byte, 2000), 0o600))
+		assert.NoError(t, os.WriteFile(filepath.Join(dir, "other.tar"), make([]byte, 500), 0o600))
+		target := filepath.Join(dir, "real.tar")
+		assert.NoError(t, os.WriteFile(target, make([]byte, 400), 0o600))
+		assert.NoError(t, os.Symlink(target, filepath.Join(dir, "mirror_000003.tar")))
+		assert.Equal(t, int64(3400), mustTarballSize(t, "file://"+dir))
+		_, err := computeTarballFilesSize("/nonexistent/path")
+		assert.Error(t, err)
+	})
+}
+
+func mustTarballSize(t *testing.T, from string) int64 {
+	t.Helper()
+	size, err := computeTarballFilesSize(from)
+	assert.NoError(t, err)
+	return size
+}
+
+func TestDryRunSizeReport(t *testing.T) {
+	imgs := getTestImages()
+	blobs := loadTestManifestBlobs(t)
+	require.GreaterOrEqual(t, len(blobs), 2)
+
+	newEx := func(t *testing.T, mode string, m *mockManifestWithSizes) (*ExecutorSchema, *capturingLogger, *mirror.CopyOptions, string) {
+		t.Helper()
+		dir := t.TempDir()
+		opts, _, err := setupTestEnvironment(t, dir, mode)
+		require.NoError(t, err)
+		log := &capturingLogger{}
+		return &ExecutorSchema{Log: log, Opts: opts, Manifest: m, MakeDir: MakeDir{}, Mirror: Mirror{}}, log, opts, dir
+	}
+
+	t.Run("m2m happy path", func(t *testing.T) {
+		ex, log, _, dir := newEx(t, mirror.MirrorToMirror, &mockManifestWithSizes{
+			blobsByImage: map[string][]v2alpha1.BlobSizeInfo{
+				imgs[0].Source: {blobs[0], blobs[1]},
+				imgs[1].Source: {blobs[0]},
+			},
+		})
+		require.NoError(t, ex.DryRun(context.TODO(), []v2alpha1.CopyImageSchema{
+			{Source: imgs[0].Source, Destination: "docker://mirror.example.com/a"},
+			{Source: imgs[1].Source, Destination: "docker://mirror.example.com/b"},
+		}))
+		out := log.output()
+		assert.Contains(t, out, fmt.Sprintf("(%d bytes)", blobs[0].Size+blobs[1].Size))
+		assert.Contains(t, out, "Images: 2")
+		assert.FileExists(t, filepath.Join(dir, dryRunOutDir, "mapping.txt"))
+	})
+
+	t.Run("m2m incomplete on sizing errors", func(t *testing.T) {
+		ex, log, _, _ := newEx(t, mirror.MirrorToMirror, &mockManifestWithSizes{
+			blobsByImage: map[string][]v2alpha1.BlobSizeInfo{imgs[0].Source: {blobs[0]}},
+			failImages:   map[string]error{imgs[1].Source: fmt.Errorf("connection refused")},
+		})
+		require.NoError(t, ex.DryRun(context.TODO(), []v2alpha1.CopyImageSchema{
+			{Source: imgs[0].Source, Destination: "docker://mirror.example.com/a"},
+			{Source: imgs[1].Source, Destination: "docker://mirror.example.com/b"},
+		}))
+		out := log.output()
+		assert.Contains(t, out, fmt.Sprintf("(%d bytes; incomplete)", blobs[0].Size))
+		assert.Contains(t, out, "1 image(s) could not be sized")
+		assert.NotContains(t, out, imgs[1].Source)
+	})
+
+	t.Run("d2m image count and unavailable archive", func(t *testing.T) {
+		ex, log, opts, _ := newEx(t, mirror.DiskToMirror, &mockManifestWithSizes{})
+		digest := "@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea"
+		require.NoError(t, ex.DryRun(context.TODO(), []v2alpha1.CopyImageSchema{
+			{Source: consts.DockerProtocol + opts.LocalStorageFQDN + "/ns/a" + digest, Destination: "docker://mirror.example.com/a"},
+			{Source: consts.DockerProtocol + opts.LocalStorageFQDN + "/ns/b" + digest, Destination: "docker://mirror.example.com/b"},
+			{Source: consts.DockerProtocol + opts.LocalStorageFQDN + "/ns/c" + digest, Destination: "docker://mirror.example.com/c"},
+		}))
+		assert.Contains(t, log.output(), "Images: 3")
+
+		ex2, log2, opts2, _ := newEx(t, mirror.DiskToMirror, &mockManifestWithSizes{})
+		opts2.Global.From = "file:///nonexistent/archive-path"
+		require.NoError(t, ex2.DryRun(context.TODO(), []v2alpha1.CopyImageSchema{
+			{Source: consts.DockerProtocol + opts2.LocalStorageFQDN + "/ns/a" + digest, Destination: "docker://mirror.example.com/a"},
+		}))
+		out := log2.output()
+		assert.Contains(t, out, "Total estimated size: unavailable")
+		assert.NotContains(t, out, "/nonexistent/archive-path")
+	})
 }
