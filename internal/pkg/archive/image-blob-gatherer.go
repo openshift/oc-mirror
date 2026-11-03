@@ -94,24 +94,11 @@ func (o *ImageBlobGatherer) multiArchBlobs(ctx context.Context, in internalImage
 		}
 	}
 
-	digests := manifestList.Instances()
-	if len(in.allowedPlatforms) == 0 {
-		selected, err := mirror.AttestationExcludedInstances(manifestList)
-		if err != nil {
-			return nil, err
-		}
-		if len(selected) > 0 {
-			digests = selected
-		}
+	digests, err := o.archiveInstances(manifestList, in.allowedPlatforms)
+	if err != nil {
+		return nil, err
 	}
 	for _, digest := range digests {
-		if platform := platformForDigest(manifestList, digest); len(in.allowedPlatforms) > 0 && platform != "" && !slices.Contains(in.allowedPlatforms, platform) {
-			// Platform was intentionally not mirrored (sparse manifest filtering).
-			// Do not add its digest to blobs — the blob file does not exist locally.
-			o.log.Debug("Skipping absent platform %q for digest %s (not in allowed platforms)", platform, digest.String())
-			continue
-		}
-
 		singleIn := in
 		singleIn.manifestBytes, singleIn.mimeType, err = o.ocmirrormanifest.ImageManifest(ctx, in.sourceCtx, in.imgRef, &digest)
 		if err != nil {
@@ -135,6 +122,29 @@ func (o *ImageBlobGatherer) multiArchBlobs(ctx context.Context, in internalImage
 	}
 
 	return blobs, errors.Join(sigErrors...)
+}
+
+func (o *ImageBlobGatherer) archiveInstances(manifestList manifest.List, allowedPlatforms []string) ([]digest.Digest, error) {
+	digests := manifestList.Instances()
+	if len(allowedPlatforms) == 0 {
+		selected, err := mirror.AttestationExcludedInstances(manifestList)
+		if err != nil {
+			return nil, err
+		}
+		if len(selected) > 0 {
+			return selected, nil
+		}
+		return digests, nil
+	}
+	selected := make([]digest.Digest, 0, len(digests))
+	for _, instance := range digests {
+		if platform := platformForDigest(manifestList, instance); platform != "" && !slices.Contains(allowedPlatforms, platform) {
+			o.log.Debug("Skipping absent platform %q for digest %s (not in allowed platforms)", platform, instance.String())
+			continue
+		}
+		selected = append(selected, instance)
+	}
+	return selected, nil
 }
 
 // singleArchBlobs returns the blobs of single architecture (including signature blobs if they exists).
