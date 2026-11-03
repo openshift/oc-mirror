@@ -49,11 +49,11 @@ func (r *OperandResolver) IsOperand(ctx context.Context, origin string, bundles 
 				return false, nil
 			}
 			if parseErr != nil {
-				return false, parseErr
+				return false, fmt.Errorf("parse image reference %s: %w", origin, parseErr)
 			}
 			named, err := reference.ParseNormalizedNamed(controller)
 			if err != nil {
-				return false, err
+				return false, fmt.Errorf("parse controller reference %s: %w", controller, err)
 			}
 			if sameImage(reference.TagNameOnly(candidate), reference.TagNameOnly(named)) {
 				return false, nil
@@ -61,7 +61,7 @@ func (r *OperandResolver) IsOperand(ctx context.Context, origin string, bundles 
 		}
 	}
 	if parseErr != nil {
-		return false, parseErr
+		return false, fmt.Errorf("parse image reference %s: %w", origin, parseErr)
 	}
 	return true, nil
 }
@@ -86,7 +86,7 @@ func (r *OperandResolver) controllersOf(ctx context.Context, bundle string) (map
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if err := ctx.Err(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("read controller images from bundle %s: %w", bundle, err)
 	}
 	if images, ok := r.bundles[bundle]; ok {
 		return images, nil

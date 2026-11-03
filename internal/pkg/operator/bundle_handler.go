@@ -45,7 +45,7 @@ func (o BundleHandler) ControllerImages(ctx context.Context, bundleImage, bundle
 
 	images, err := csv.GetOperatorImages()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("read controller images from bundle %s: %w", bundleImage, err)
 	}
 	if len(images) == 0 {
 		return nil, fmt.Errorf("bundle %s has no deployment images; cannot identify operands", bundleImage)
@@ -151,5 +151,9 @@ func bundleManifestsSubdir(label string) (string, error) {
 }
 
 func findClusterServiceVersion(dir string) (*registry.ClusterServiceVersion, error) {
-	return registry.ReadCSVFromBundleDirectory(dir)
+	csv, err := registry.ReadCSVFromBundleDirectory(dir)
+	if err != nil {
+		return nil, fmt.Errorf("read bundle CSV from %s: %w", dir, err)
+	}
+	return csv, nil
 }

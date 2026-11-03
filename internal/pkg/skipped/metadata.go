@@ -17,14 +17,14 @@ import (
 // A present origin with no platforms means that the whole operand was skipped.
 func WriteOperandPlatforms(workingDir string, platforms map[string][]v2alpha1.InstancePlatformFilter) error {
 	if err := os.MkdirAll(filepath.Join(workingDir, config.InternalDir), 0o755); err != nil {
-		return err
+		return fmt.Errorf("create operand platform metadata directory: %w", err)
 	}
 	if platforms == nil {
 		platforms = map[string][]v2alpha1.InstancePlatformFilter{}
 	}
 	data, err := json.Marshal(platforms)
 	if err != nil {
-		return err
+		return fmt.Errorf("encode operand platform decisions: %w", err)
 	}
 	if err := os.WriteFile(filepath.Join(workingDir, config.SkippedImagesPath), data, 0o644); err != nil { // #nosec G306 -- non-secret metadata must remain readable across users during disk-to-mirror.
 		return fmt.Errorf("write operand platform decisions: %w", err)
