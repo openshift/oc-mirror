@@ -683,7 +683,11 @@ func (o LocalStorageCollector) handleGraphImage(ctx context.Context) (v2alpha1.C
 		// OCPBUGS-38037: this indicates that the official cincinnati API is not reacheable
 		// and that graph image cannot be rebuilt on top the complete graph in tar.gz format
 
-		graphImgRef := consts.DockerProtocol + GraphImageReference(o.destinationRegistry())
+		graphDestination, err := GraphImageDestination(o.destinationRegistry(), o.Opts)
+		if err != nil {
+			return v2alpha1.CopyImageSchema{}, err
+		}
+		graphImgRef := consts.DockerProtocol + graphDestination
 
 		// 1. check if graph image is already in cache
 		cachedImageRef := consts.DockerProtocol + GraphImageReference(o.LocalStorageFQDN)

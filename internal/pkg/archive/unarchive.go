@@ -133,11 +133,11 @@ func (o MirrorUnArchiver) unarchiveChunkTarFile(chunkPath string, bar *mpb.Bar) 
 
 		parentDir := ""
 		switch {
-		// case file belongs to working-dir
-		case strings.Contains(header.Name, workingDirectory):
+		// Match archive roots, not repository names containing "working-dir".
+		case strings.HasPrefix(header.Name, workingDirectory+"/"):
 			parentDir = workingDirParent
 		// case file belongs to the cache
-		case strings.Contains(header.Name, cacheFilePrefix):
+		case strings.HasPrefix(header.Name, cacheFilePrefix+"/"):
 			parentDir = o.cacheDir
 		default:
 			continue
