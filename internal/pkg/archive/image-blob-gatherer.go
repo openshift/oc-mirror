@@ -95,6 +95,15 @@ func (o *ImageBlobGatherer) multiArchBlobs(ctx context.Context, in internalImage
 	}
 
 	digests := manifestList.Instances()
+	if len(in.allowedPlatforms) == 0 {
+		selected, err := mirror.AttestationExcludedInstances(manifestList)
+		if err != nil {
+			return nil, err
+		}
+		if len(selected) > 0 {
+			digests = selected
+		}
+	}
 	for _, digest := range digests {
 		if platform := platformForDigest(manifestList, digest); len(in.allowedPlatforms) > 0 && platform != "" && !slices.Contains(in.allowedPlatforms, platform) {
 			// Platform was intentionally not mirrored (sparse manifest filtering).
