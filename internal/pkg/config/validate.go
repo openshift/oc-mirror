@@ -5,6 +5,7 @@ import (
 	"regexp"
 
 	"github.com/Masterminds/semver/v3"
+	"go.podman.io/image/v5/docker/reference"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 
@@ -159,8 +160,8 @@ func validateReleasePlatformFields(cfg *v2alpha1.ImageSetConfiguration) []error 
 }
 
 func validatePlatformTargetRepo(repo string) error {
-	if repo != "" && (len(repo) > 255 || !v2alpha1.IsValidPathComponent(repo)) {
-		return fmt.Errorf("platform.targetRepo %q must be a lowercase repository path of at most 255 characters without a transport, tag, or digest", repo)
+	if repo != "" && (len(repo) > reference.NameTotalLengthMax || !v2alpha1.IsValidPathComponent(repo)) {
+		return fmt.Errorf("platform.targetRepo %q must be a lowercase repository path of at most %d characters without a transport, tag, or digest", repo, reference.NameTotalLengthMax)
 	}
 	return nil
 }

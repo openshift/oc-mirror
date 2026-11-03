@@ -1180,13 +1180,9 @@ func (o *ExecutorSchema) validatePlatformDestination() error {
 // The graph image can be pushed during collection, before batch validation.
 // Reserve its repository so that it cannot overwrite release images.
 func (o *ExecutorSchema) validatePlatformGraphRepository(destination, releaseRepository string) error {
-	graphRef := consts.DockerProtocol + release.GraphImageReference(destination)
-	if !o.Opts.IsMirrorToDisk() && o.Opts.Global.MaxNestedPaths > 0 {
-		var err error
-		graphRef, err = image.WithMaxNestedPaths(graphRef, o.Opts.Global.MaxNestedPaths)
-		if err != nil {
-			return err
-		}
+	graphRef, err := release.GraphImageDestination(destination, *o.Opts)
+	if err != nil {
+		return err
 	}
 	graphSpec, err := image.ParseRef(graphRef)
 	if err != nil {
