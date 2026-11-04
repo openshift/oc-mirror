@@ -5,9 +5,12 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -21,6 +24,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"go.podman.io/image/v5/types"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/config"
@@ -1145,6 +1149,106 @@ func TestExecutorCheckRegistryAccess(t *testing.T) {
 		})
 		// TODO: add HTTPS and cert tests
 	})
+}
+
+func recordRegistryProbe(mu *sync.Mutex, seen *[]string) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		*seen = append(*seen, r.Method+" "+r.URL.Path)
+		mu.Unlock()
+		switch {
+		case r.URL.Path == "/v2/" || r.URL.Path == "/v2":
+			w.WriteHeader(http.StatusOK)
+		case r.Method == http.MethodHead && strings.Contains(r.URL.Path, "/blobs/"):
+			w.WriteHeader(http.StatusNotFound)
+		case r.Method == http.MethodPost && strings.Contains(r.URL.Path, "/blobs/uploads"):
+			w.Header().Set("Location", r.URL.Path+"/session")
+			w.WriteHeader(http.StatusAccepted)
+		case r.Method == http.MethodDelete && strings.Contains(r.URL.Path, "/blobs/uploads/"):
+			w.WriteHeader(http.StatusOK)
+		default:
+			w.WriteHeader(http.StatusOK)
+		}
+	})
+}
+
+func TestCheckRegistryPushAccess(t *testing.T) {
+	var (
+		mu   sync.Mutex
+		seen []string
+	)
+	ts := httptest.NewServer(recordRegistryProbe(&mu, &seen))
+	t.Cleanup(ts.Close)
+
+	host := strings.TrimPrefix(ts.URL, "http://")
+	global := &mirror.GlobalOptions{SecurePolicy: false, Force: true, WorkingDir: t.TempDir()}
+	_, sharedOpts := mirror.SharedImageFlags()
+	_, deprecatedTLSVerifyOpt := mirror.DeprecatedTLSVerifyFlags()
+	fsDest, destOpts := mirror.ImageDestFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "dest-", "dcreds")
+	assert.NoError(t, fsDest.Set("dest-tls-verify", "false"))
+
+	ex := &ExecutorSchema{
+		Log:  clog.New("debug"),
+		Opts: &mirror.CopyOptions{Global: global, DestImage: destOpts},
+	}
+
+	dest := host + "/mirror-dest"
+	err := ex.checkRegistryPushAccess(context.TODO(), types.DockerAuthConfig{}, dest, nil)
+	assert.NoError(t, err)
+	ts.Close()
+
+	mu.Lock()
+	joined := strings.Join(seen, "\n")
+	mu.Unlock()
+	assert.True(t, strings.Contains(joined, "HEAD ") || strings.Contains(joined, "POST "),
+		"push check should probe with HEAD or POST, got:\n%s", joined)
+	assert.Contains(t, joined, "/mirror-dest")
+}
+
+func TestPushAccessProbe(t *testing.T) {
+	_, ok := pushAccessProbe("registry.example.com")
+	assert.False(t, ok)
+	_, ok = pushAccessProbe("localhost:5000")
+	assert.False(t, ok)
+
+	got, ok := pushAccessProbe("registry.example.com/team")
+	assert.True(t, ok)
+	assert.Equal(t, "registry.example.com/team", got)
+
+	got, ok = pushAccessProbe("registry.example.com/team/mirrors")
+	assert.True(t, ok)
+	assert.Equal(t, "registry.example.com/team/mirrors", got)
+}
+
+func TestCheckRegistryPushAccessNamespaced(t *testing.T) {
+	var (
+		mu   sync.Mutex
+		seen []string
+	)
+	ts := httptest.NewServer(recordRegistryProbe(&mu, &seen))
+	t.Cleanup(ts.Close)
+
+	host := strings.TrimPrefix(ts.URL, "http://")
+	global := &mirror.GlobalOptions{SecurePolicy: false, Force: true, WorkingDir: t.TempDir()}
+	_, sharedOpts := mirror.SharedImageFlags()
+	_, deprecatedTLSVerifyOpt := mirror.DeprecatedTLSVerifyFlags()
+	fsDest, destOpts := mirror.ImageDestFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "dest-", "dcreds")
+	assert.NoError(t, fsDest.Set("dest-tls-verify", "false"))
+
+	ex := &ExecutorSchema{
+		Log:  clog.New("debug"),
+		Opts: &mirror.CopyOptions{Global: global, DestImage: destOpts},
+	}
+
+	dest := host + "/team"
+	err := ex.checkRegistryPushAccess(context.TODO(), types.DockerAuthConfig{}, dest, nil)
+	assert.NoError(t, err)
+
+	mu.Lock()
+	joined := strings.Join(seen, "\n")
+	mu.Unlock()
+	assert.Contains(t, joined, "/team/")
+	assert.NotContains(t, joined, "/oc-mirror")
 }
 
 // setup mocks
