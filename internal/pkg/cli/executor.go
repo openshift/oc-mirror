@@ -475,30 +475,30 @@ func (o *ExecutorSchema) checkRegistryAccess(ctx context.Context, registry strin
 	return nil
 }
 
-// pushAccessProbeRepo is a dummy single-path repository used only for
-// go-containerregistry CheckPushPermission. It is not created or mirrored.
-// A shallow probe distinguishes missing push auth from later unauthorized
-// errors on deep nested destination repositories.
-const pushAccessProbeRepo = "oc-mirror"
-
-func pushAccessProbe(dest string) string {
+// pushAccessProbe returns the destination the user configured when it includes
+// a repository path. Host-only destinations cannot be probed without inventing
+// a repository, and some registries grant push by repository rather than host.
+func pushAccessProbe(dest string) (string, bool) {
 	dest = strings.TrimSuffix(dest, "/")
-	host, rest, found := strings.Cut(dest, "/")
+	if dest == "" {
+		return "", false
+	}
+	_, rest, found := strings.Cut(dest, "/")
 	if !found || rest == "" {
-		return host + "/" + pushAccessProbeRepo
+		return "", false
 	}
-	ns, _, _ := strings.Cut(rest, "/")
-	if ns == "" {
-		return host + "/" + pushAccessProbeRepo
-	}
-	return host + "/" + ns + "/" + pushAccessProbeRepo
+	return dest, true
 }
 
 // checkRegistryPushAccess confirms destination push rights with a HEAD-based
-// probe on a shallow repository. If this succeeds, later unauthorized blob
-// uploads on deep repository paths are nested-path limits, not missing push auth.
+// probe on the user-configured repository. If this succeeds, later unauthorized
+// blob uploads on deeper nested paths are nested-path limits, not missing push auth.
 func (o *ExecutorSchema) checkRegistryPushAccess(ctx context.Context, authConfig types.DockerAuthConfig, dest string, sctx *types.SystemContext) error {
-	probe := pushAccessProbe(dest)
+	probe, ok := pushAccessProbe(dest)
+	if !ok {
+		o.Log.Debug("Skipping destination push probe for %q: destination has no repository path", dest)
+		return nil
+	}
 
 	var nameOpts []name.Option
 	insecure := o.Opts.DestImage != nil && !o.Opts.DestImage.TlsVerify
@@ -521,7 +521,7 @@ func (o *ExecutorSchema) checkRegistryPushAccess(ctx context.Context, authConfig
 		IdentityToken: authConfig.IdentityToken,
 	}}
 	if err := checkPushPermission(ctx, imgRef, kc, rt); err != nil {
-		return fmt.Errorf("failed to verify push access to %q: %w", probe, err)
+		return fmt.Errorf("failed to verify push access to %q: %w", dest, err)
 	}
 
 	o.Log.Info("Verified we can push to registry %q", dest)

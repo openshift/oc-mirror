@@ -1167,7 +1167,8 @@ func TestCheckRegistryPushAccess(t *testing.T) {
 		Opts: &mirror.CopyOptions{Global: global, DestImage: destOpts},
 	}
 
-	err := ex.checkRegistryPushAccess(context.TODO(), types.DockerAuthConfig{}, host, nil)
+	dest := host + "/mirror-dest"
+	err := ex.checkRegistryPushAccess(context.TODO(), types.DockerAuthConfig{}, dest, nil)
 	assert.NoError(t, err)
 	ts.Close()
 
@@ -1176,14 +1177,22 @@ func TestCheckRegistryPushAccess(t *testing.T) {
 	mu.Unlock()
 	assert.True(t, strings.Contains(joined, "HEAD ") || strings.Contains(joined, "POST "),
 		"push check should probe with HEAD or POST, got:\n%s", joined)
-	assert.Contains(t, joined, "/"+pushAccessProbeRepo)
+	assert.Contains(t, joined, "/mirror-dest")
 }
 
 func TestPushAccessProbe(t *testing.T) {
-	assert.Equal(t, "registry.example.com/oc-mirror", pushAccessProbe("registry.example.com"))
-	assert.Equal(t, "registry.example.com/team/oc-mirror", pushAccessProbe("registry.example.com/team"))
-	assert.Equal(t, "registry.example.com/team/oc-mirror", pushAccessProbe("registry.example.com/team/mirrors"))
-	assert.Equal(t, "localhost:5000/oc-mirror", pushAccessProbe("localhost:5000"))
+	_, ok := pushAccessProbe("registry.example.com")
+	assert.False(t, ok)
+	_, ok = pushAccessProbe("localhost:5000")
+	assert.False(t, ok)
+
+	got, ok := pushAccessProbe("registry.example.com/team")
+	assert.True(t, ok)
+	assert.Equal(t, "registry.example.com/team", got)
+
+	got, ok = pushAccessProbe("registry.example.com/team/mirrors")
+	assert.True(t, ok)
+	assert.Equal(t, "registry.example.com/team/mirrors", got)
 }
 
 func TestCheckRegistryPushAccessNamespaced(t *testing.T) {
@@ -1213,7 +1222,8 @@ func TestCheckRegistryPushAccessNamespaced(t *testing.T) {
 	mu.Lock()
 	joined := strings.Join(seen, "\n")
 	mu.Unlock()
-	assert.Contains(t, joined, "/team/"+pushAccessProbeRepo)
+	assert.Contains(t, joined, "/team/")
+	assert.NotContains(t, joined, "/oc-mirror")
 }
 
 // setup mocks
