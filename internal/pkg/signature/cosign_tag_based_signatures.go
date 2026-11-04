@@ -18,15 +18,6 @@ type SignatureHandler struct {
 	opts             *mirror.CopyOptions
 	log              clog.PluggableLoggerInterface
 	ocmirrormanifest ocmirrormanifest.ManifestInterface
-	destination      bool
-}
-
-// NewForDestination inspects mirrored images using destination credentials and
-// TLS settings, for example when generating deletion metadata after m2m.
-func NewForDestination(opts *mirror.CopyOptions, log clog.PluggableLoggerInterface) *SignatureHandler {
-	handler := New(opts, log)
-	handler.destination = true
-	return handler
 }
 
 func New(opts *mirror.CopyOptions, log clog.PluggableLoggerInterface) *SignatureHandler {
@@ -47,19 +38,11 @@ func SigstoreAttachmentTag(d digest.Digest) (string, error) {
 
 // GetSignatureTag returns the signature tag for the given image reference (single or multi arch).
 func (o *SignatureHandler) GetSignatureTag(ctx context.Context, imgRef string) ([]string, error) {
-	var sourceCtx *types.SystemContext
-	var err error
-	if o.destination {
-		sourceCtx, err = o.opts.DestImage.NewSystemContext()
-	} else {
-		sourceCtx, err = o.opts.SrcImage.NewSystemContext()
-	}
+	sourceCtx, err := o.opts.SrcImage.NewSystemContext()
 	if err != nil {
 		return nil, err
 	}
-	if !o.destination {
-		sourceCtx.DockerInsecureSkipTLSVerify = types.NewOptionalBool(true)
-	}
+	sourceCtx.DockerInsecureSkipTLSVerify = types.NewOptionalBool(true)
 
 	bytesManifest, mime, err := o.ocmirrormanifest.ImageManifest(ctx, sourceCtx, imgRef, nil)
 	if err != nil {

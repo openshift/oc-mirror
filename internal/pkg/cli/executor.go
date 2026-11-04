@@ -586,7 +586,7 @@ func (o *ExecutorSchema) Complete(args []string) error {
 	if o.isLocalStoragePortBound() {
 		return fmt.Errorf("%d is already bound and cannot be used", o.Opts.Global.Port)
 	}
-	o.Opts.LocalStorageFQDN = net.JoinHostPort(localStorageHost, strconv.Itoa(int(o.Opts.Global.Port)))
+	o.Opts.LocalStorageFQDN = localStorageHost + ":" + strconv.Itoa(int(o.Opts.Global.Port))
 
 	err = o.setupWorkingDir()
 	if err != nil {
