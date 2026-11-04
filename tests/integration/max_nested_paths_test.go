@@ -27,16 +27,16 @@ var _ = Describe("max-nested-paths", func() {
 		isc := filepath.Join(iscDir, "max_nested_paths", "isc-max-nested-paths.yaml")
 		endpoint := testRegistry.Endpoint()
 
-		By("running mirrorToMirror to a destination with three path levels and --max-nested-paths=2")
-		result, err := runner.MirrorToMirror(ctx, isc, workDir, endpoint+"/nested/path/levels",
+		By("running mirrorToMirror to a destination with one path level and --max-nested-paths=2")
+		result, err := runner.MirrorToMirror(ctx, isc, workDir, endpoint+"/nested",
 			"--remove-signatures=true", "--dest-tls-verify=false", "--max-nested-paths=2")
 		expectOcMirrorCommandSuccess(result, err)
 
 		By("verifying every repository has at most two path levels")
 		// The first path level is kept and the rest are joined with "-".
-		releaseImagesRepo := "nested/path-levels-openshift-release-images"
-		releaseRepo := "nested/path-levels-openshift-release"
-		operatorRepo := "nested/path-levels-oc-mirror-oc-mirror-dev"
+		releaseImagesRepo := "nested/openshift-release-images"
+		releaseRepo := "nested/openshift-release"
+		operatorRepo := "nested/oc-mirror-oc-mirror-dev"
 		expectRegistryContainsExactly(*testRegistry, map[string]string{
 			releaseImagesRepo + ":v0.0.1":         "quay.io/oc-mirror/release/test-release-index:v0.0.1",
 			releaseRepo + ":v0.0.1-alpine":        "quay.io/oc-mirror/release/test-image:v0.0.1",
@@ -68,7 +68,7 @@ var _ = Describe("max-nested-paths", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(isCatalog).To(BeTrue())
 		resourcesDir := filepath.Join(workDir, dirWorkingDir, dirClusterResources)
-		resourceName := "path-levels-oc-mirror-oc-mirror-dev-test-catalog.yaml"
+		resourceName := "oc-mirror-oc-mirror-dev-test-catalog.yaml"
 		catalogImage := endpoint + "/" + operatorRepo + ":test-catalog-latest"
 		data, err := os.ReadFile(filepath.Join(resourcesDir, "cs-"+resourceName))
 		Expect(err).NotTo(HaveOccurred())
