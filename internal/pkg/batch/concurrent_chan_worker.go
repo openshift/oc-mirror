@@ -485,10 +485,6 @@ func relatedImageFailureSkipsBundle(ctx context.Context, mirrorClient mirror.Mir
 	if mirrorErr.bundles == nil || !mirrorErr.bundles.Has(bundleImage) {
 		return false, nil
 	}
-	// Transient / retriable failures on related images must not cascade-skip the bundle.
-	if mirror.IsErrorRetryable(mirrorErr.err) {
-		return false, nil
-	}
 	if keepBundleDespiteRelatedImageFailure(ctx, mirrorClient, opts, mirrorErr) {
 		return false, nil
 	}

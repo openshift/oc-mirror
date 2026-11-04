@@ -560,32 +560,40 @@ func TestShouldSkipImage_OCPBUGS111614(t *testing.T) {
 		m.AssertExpectations(t)
 	})
 
-	t.Run("does not skip on retriable 429 even if destination check says missing", func(t *testing.T) {
+	t.Run("skips on retriable 429 when destination check says missing", func(t *testing.T) {
 		m := new(MirrorMock)
-		// Check must not be required: retriable filter short-circuits first.
+		m.On("Check", mock.Anything, relatedDest, mock.Anything, false).Return(false, nil)
+
 		skip, err := shouldSkipImage(context.Background(), m, bundle, opts, []mirrorErrorSchema{
 			relatedFail(docker.UnexpectedHTTPStatusError{StatusCode: http.StatusTooManyRequests}),
 		})
-		assert.False(t, skip)
-		assert.NoError(t, err)
+		assert.True(t, skip)
+		assert.ErrorContains(t, err, fmt.Sprintf(skippingMsg, bundleOrigin))
+		m.AssertExpectations(t)
 	})
 
-	t.Run("does not skip on retriable 503", func(t *testing.T) {
+	t.Run("does not skip on retriable 503 when destination already has the image", func(t *testing.T) {
 		m := new(MirrorMock)
+		m.On("Check", mock.Anything, relatedDest, mock.Anything, false).Return(true, nil)
+
 		skip, err := shouldSkipImage(context.Background(), m, bundle, opts, []mirrorErrorSchema{
 			relatedFail(docker.UnexpectedHTTPStatusError{StatusCode: http.StatusServiceUnavailable}),
 		})
 		assert.False(t, skip)
 		assert.NoError(t, err)
+		m.AssertExpectations(t)
 	})
 
-	t.Run("does not skip on context deadline exceeded", func(t *testing.T) {
+	t.Run("does not skip on context deadline exceeded when destination check errors", func(t *testing.T) {
 		m := new(MirrorMock)
+		m.On("Check", mock.Anything, relatedDest, mock.Anything, false).Return(false, errors.New("unauthorized: authentication required"))
+
 		skip, err := shouldSkipImage(context.Background(), m, bundle, opts, []mirrorErrorSchema{
 			relatedFail(context.DeadlineExceeded),
 		})
 		assert.False(t, skip)
 		assert.NoError(t, err)
+		m.AssertExpectations(t)
 	})
 
 	t.Run("skips when one related failure is permanent and missing among retriable ones", func(t *testing.T) {
