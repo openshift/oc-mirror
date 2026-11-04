@@ -38,7 +38,6 @@ type DeleteImages struct {
 	Config           v2alpha1.ImageSetConfiguration
 	Manifest         manifest.ManifestInterface
 	SigHandler       signature.SignatureInterface
-	DestSigHandler   signature.SignatureInterface
 	LocalStorageDisk string
 	LocalStorageFQDN string
 }
@@ -257,11 +256,6 @@ func (o DeleteImages) sigDeleteItems(ctx context.Context, img v2alpha1.CopyImage
 	}
 
 	sigs, err := o.SigHandler.GetSignatureTag(ctx, img.Source)
-	if err != nil && o.DestSigHandler != nil {
-		// m2m does not cache release images. Inspect the mirrored image so tagged
-		// payloads and components still have their signature tags discovered.
-		sigs, err = o.DestSigHandler.GetSignatureTag(ctx, img.Destination)
-	}
 	if err != nil {
 		item := o.getSignatureTagWithoutCache(img)
 		if item != nil {

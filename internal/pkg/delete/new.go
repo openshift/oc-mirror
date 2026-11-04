@@ -29,6 +29,5 @@ func New(log clog.PluggableLoggerInterface,
 		LocalStorageDisk: localStorageDisk,
 		LocalStorageFQDN: opts.LocalStorageFQDN,
 		SigHandler:       sigHandler,
-		DestSigHandler:   signature.NewForDestination(&opts, log),
 	}
 }

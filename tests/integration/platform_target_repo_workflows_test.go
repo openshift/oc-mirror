@@ -24,7 +24,7 @@ var _ = Describe("platform targetRepo workflow combinations", Label("platform-ta
 		cleanupWorkDir(workDir)
 	})
 
-	It("copies directly with signatures, repeats safely, and deletes without a populated image cache", func() {
+	It("copies directly with signatures and repeats safely", func() {
 		By("resolving a release channel through Cincinnati")
 		server := startReleaseChannelServer()
 		channelRunner := ocmirror.NewRunner(os.Getenv("OC_MIRROR_BINARY")).WithEnv([]string{"UPDATE_URL_OVERRIDE=" + server.URL})
@@ -40,16 +40,6 @@ var _ = Describe("platform targetRepo workflow combinations", Label("platform-ta
 			expectSignaturesInRegistry(*testRegistry)
 			expectSignatureConfigMapGenerated(workDir)
 		}
-
-		By("generating deletion without release images in the local registry cache")
-		Expect(localCacheHasTag(cacheDir, "openshift4/ocp-release", "v0.0.1")).To(BeFalse())
-		result, err := runner.DeletePhaseOne(ctx, filepath.Join(iscDir, "platform_target_repo", "disc.yaml"), workDir, "direct", testRegistry.Endpoint()+"/team",
-			"--cache-dir", filepath.Join(workDir, "cache"), "--dest-tls-verify=false", "--delete-signatures")
-		expectOcMirrorCommandSuccess(result, err)
-		result, err = runner.DeletePhaseTwo(ctx, filepath.Join(workDir, dirWorkingDir, "delete", "delete-images-direct.yaml"), testRegistry.Endpoint()+"/team",
-			"--cache-dir", filepath.Join(workDir, "cache"), "--dest-tls-verify=false")
-		expectOcMirrorCommandSuccess(result, err)
-		expectEmptyRegistry(*testRegistry)
 	})
 
 	It("preserves signatures through a fresh-cache archive round trip", func() {
