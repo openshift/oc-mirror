@@ -137,7 +137,8 @@ func (o *ChannelConcurrentBatch) Worker(ctx context.Context, collectorSchema v2a
 					default:
 						if !triggered {
 							triggered = true
-							timeoutCtx, _ := opts.Global.CommandTimeoutContext()
+							timeoutCtx, cancelTimeout := opts.Global.CommandTimeoutContext(cancelCtx)
+							defer cancelTimeout()
 
 							options := opts
 							if img.Type.IsOperatorCatalog() && img.RebuiltTag != "" {
