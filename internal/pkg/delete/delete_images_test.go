@@ -495,6 +495,145 @@ func TestDeleteImagesWithTargetRepoAndTag(t *testing.T) {
 			assert.NoError(t, err)
 		})
 	}
+
+	releasePathTests := []struct {
+		name      string
+		imageRef  string
+		imageType v2alpha1.ImageType
+		wantErr   bool
+	}{
+		{
+			name:      "release content canonical",
+			imageRef:  "docker://localhost:5000/myregistry/openshift/release:4.15.12-x86_64-tools",
+			imageType: v2alpha1.TypeOCPReleaseContent,
+		},
+		{
+			name:      "release content flattened max-nested-paths 2",
+			imageRef:  "docker://localhost:5000/myregistry/openshift-release:4.15.12-x86_64-tools",
+			imageType: v2alpha1.TypeOCPReleaseContent,
+		},
+		{
+			name:      "release images canonical",
+			imageRef:  "docker://localhost:5000/myregistry/openshift/release-images:4.15.12-x86_64",
+			imageType: v2alpha1.TypeOCPRelease,
+		},
+		{
+			name:      "release images flattened max-nested-paths 2",
+			imageRef:  "docker://localhost:5000/myregistry/openshift-release-images:4.15.12-x86_64",
+			imageType: v2alpha1.TypeOCPRelease,
+		},
+		{
+			name:      "release content wrong repo rejected",
+			imageRef:  "docker://localhost:5000/myregistry/other/release:4.15.12-x86_64-tools",
+			imageType: v2alpha1.TypeOCPReleaseContent,
+			wantErr:   true,
+		},
+	}
+	for _, tt := range releasePathTests {
+		t.Run("DeleteRegistryImages "+tt.name, func(t *testing.T) {
+			err := di.DeleteRegistryImages(v2alpha1.DeleteImageList{
+				Items: []v2alpha1.DeleteItem{
+					{
+						ImageName:      "quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:c8636a92b5665988f030ed0948225276fea7428f2fe1f227142c988dc409a515",
+						ImageReference: tt.imageRef,
+						Type:           tt.imageType,
+					},
+				},
+			})
+			if tt.wantErr {
+				assert.Error(t, err)
+				return
+			}
+			assert.NoError(t, err)
+		})
+	}
+}
+
+func TestMatchesExpectedReleaseRepo(t *testing.T) {
+	base := "localhost:5000/myregistry"
+	assert.True(t, matchesExpectedReleaseRepo(base+"/openshift/release", base, releaseContentPathComponents))
+	assert.True(t, matchesExpectedReleaseRepo(base+"/openshift-release", base, releaseContentPathComponents))
+	assert.True(t, matchesExpectedReleaseRepo(base+"/openshift/release-images", base, releaseImagePathComponents))
+	assert.True(t, matchesExpectedReleaseRepo(base+"/openshift-release-images", base, releaseImagePathComponents))
+	assert.False(t, matchesExpectedReleaseRepo(base+"/other/release", base, releaseContentPathComponents))
+}
+
+func TestMatchesUnderDeleteDestination(t *testing.T) {
+	base := "localhost:5000/test/72942"
+	assert.True(t, matchesUnderDeleteDestination(base+"/compliance/op", base, 0, ""))
+	assert.True(t, matchesUnderDeleteDestination(base+"-compliance-op", base, 2, ""))
+	assert.False(t, matchesUnderDeleteDestination("localhost:5000/other/72942-compliance-op", base, 2, ""))
+	assert.False(t, matchesUnderDeleteDestination(base+"-compliance-op", base, 0, ""))
+
+	unflat := consts.DockerProtocol + base + "/compliance/openshift-file-integrity-rhel8-operator:tag"
+	assert.True(t, matchesUnderDeleteDestination(
+		base+"-compliance-openshift-file-integrity-rhel8-operator",
+		base,
+		0,
+		unflat,
+	))
+}
+
+func TestWriteDeleteMetaDataMaxNestedPathsRecordsUnflattened(t *testing.T) {
+	log := clog.New("trace")
+	tempDir := t.TempDir()
+	global := &mirror.GlobalOptions{
+		WorkingDir:     tempDir,
+		MaxNestedPaths: 2,
+	}
+	opts := mirror.CopyOptions{Global: global, LocalStorageFQDN: "localhost:8888"}
+	di := New(log, opts, &mockBatch{}, &mockBlobs{}, v2alpha1.ImageSetConfiguration{}, &mockManifest{}, "/tmp", &mockSignatureHandler{})
+
+	unflat := consts.DockerProtocol + "localhost:5000/test/72942/compliance/op:v1"
+	err := di.WriteDeleteMetaData(context.Background(), []v2alpha1.CopyImageSchema{
+		{
+			Origin:      "registry.example.com/compliance/op:v1",
+			Destination: unflat,
+			Type:        v2alpha1.TypeGeneric,
+		},
+	})
+	assert.NoError(t, err)
+
+	data, err := di.ReadDeleteMetaData()
+	assert.NoError(t, err)
+	assert.Len(t, data.Items, 1)
+	assert.Equal(t, consts.DockerProtocol+"localhost:5000/test/72942-compliance-op:v1", data.Items[0].ImageReference)
+	assert.Equal(t, unflat, data.Items[0].UnflattenedImageReference)
+}
+
+func TestDeleteRegistryImagesForceCacheUsesUnflattened(t *testing.T) {
+	log := clog.New("trace")
+	global := &mirror.GlobalOptions{
+		DeleteDestination: consts.DockerProtocol + "localhost:5000/test/72942",
+		ForceCacheDelete:  true,
+		MaxNestedPaths:    2,
+		WorkingDir:        t.TempDir(),
+	}
+	opts := mirror.CopyOptions{
+		Global:           global,
+		LocalStorageFQDN: "localhost:8888",
+		Mode:             mirror.DiskToMirror,
+	}
+	var captured v2alpha1.CollectorSchema
+	mb := &mockBatch{capturedSchema: &captured}
+	di := New(log, opts, mb, &mockBlobs{}, v2alpha1.ImageSetConfiguration{}, &mockManifest{}, "/tmp", &mockSignatureHandler{})
+
+	err := di.DeleteRegistryImages(v2alpha1.DeleteImageList{
+		Items: []v2alpha1.DeleteItem{
+			{
+				ImageName:                 "registry.example.com/compliance/op:v1",
+				ImageReference:            consts.DockerProtocol + "localhost:5000/test/72942-compliance-op:v1",
+				UnflattenedImageReference: consts.DockerProtocol + "localhost:5000/test/72942/compliance/op:v1",
+				Type:                      v2alpha1.TypeGeneric,
+			},
+		},
+	})
+	assert.NoError(t, err)
+	assert.Len(t, captured.AllImages, 2)
+	assert.Equal(t, consts.DockerProtocol+"localhost:5000/test/72942-compliance-op:v1", captured.AllImages[0].Destination)
+	// ReplaceAll(unflat, deleteDest, local) → local + remainder under dest (not the mangled flat form).
+	assert.Equal(t, consts.DockerProtocol+"localhost:8888/compliance/op:v1", captured.AllImages[1].Destination)
+	assert.NotContains(t, captured.AllImages[1].Destination, "72942-compliance")
 }
 
 // OCPBUGS-105878: for a tag+digest image, --force-cache-delete must target the cache

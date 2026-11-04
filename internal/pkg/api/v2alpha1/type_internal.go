@@ -240,9 +240,13 @@ type DeleteImageList struct {
 }
 
 type DeleteItem struct {
-	ImageName      string    `json:"imageName"`
-	ImageReference string    `json:"imageReference"`
-	Type           ImageType `json:"type"`
+	ImageName      string `json:"imageName"`
+	ImageReference string `json:"imageReference"`
+	// UnflattenedImageReference is the destination before --max-nested-paths
+	// flattening. Used by --force-cache-delete because the local cache stores
+	// unflattened paths. Omitted when max-nested-paths is unset.
+	UnflattenedImageReference string    `json:"unflattenedImageReference,omitempty"`
+	Type                      ImageType `json:"type"`
 }
 
 type CatalogFilterResult struct {

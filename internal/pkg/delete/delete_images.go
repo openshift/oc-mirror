@@ -112,15 +112,30 @@ func (o DeleteImages) processDeleteItems(ctx context.Context, images []v2alpha1.
 	duplicates := []string{}
 	items := make([]v2alpha1.DeleteItem, 0, len(images)*2)
 	for _, img := range images {
-		if slices.Contains(duplicates, img.Destination) {
-			o.Log.Debug("duplicate image found %s", img.Destination)
+		unflatDest := img.Destination
+		flatDest := unflatDest
+		unflatField := ""
+		if o.Opts.Global.MaxNestedPaths > 0 {
+			var err error
+			flatDest, err = image.WithMaxNestedPaths(unflatDest, o.Opts.Global.MaxNestedPaths)
+			if err != nil {
+				o.Log.Error("max-nested-paths flatten %q: %v", unflatDest, err)
+				continue
+			}
+			if flatDest != unflatDest {
+				unflatField = unflatDest
+			}
+		}
+		if slices.Contains(duplicates, flatDest) {
+			o.Log.Debug("duplicate image found %s", flatDest)
 			continue
 		}
-		duplicates = append(duplicates, img.Destination)
+		duplicates = append(duplicates, flatDest)
 		item := v2alpha1.DeleteItem{
-			ImageName:      img.Origin,
-			ImageReference: img.Destination,
-			Type:           img.Type,
+			ImageName:                 img.Origin,
+			ImageReference:            flatDest,
+			UnflattenedImageReference: unflatField,
+			Type:                      img.Type,
 		}
 		items = append(items, item)
 
@@ -128,7 +143,19 @@ func (o DeleteImages) processDeleteItems(ctx context.Context, images []v2alpha1.
 			continue
 		}
 
-		sigs := o.sigDeleteItems(ctx, img)
+		imgFlat := img
+		imgFlat.Destination = flatDest
+		sigs := o.sigDeleteItems(ctx, imgFlat)
+		if unflatField != "" {
+			imgUnflat := img
+			imgUnflat.Destination = unflatDest
+			unflatSigs := o.sigDeleteItems(ctx, imgUnflat)
+			for i := range sigs {
+				if i < len(unflatSigs) {
+					sigs[i].UnflattenedImageReference = unflatSigs[i].ImageReference
+				}
+			}
+		}
 		items = append(items, sigs...)
 	}
 	return items
@@ -176,18 +203,18 @@ func (o DeleteImages) DeleteRegistryImages(deleteImageList v2alpha1.DeleteImageL
 		switch img.Type {
 		case v2alpha1.TypeOCPReleaseContent:
 			expectedPath := deleteDestBase + "/" + releaseContentPathComponents
-			if imgSpecRef.Name != expectedPath {
+			if !matchesExpectedReleaseRepo(imgSpecRef.Name, deleteDestBase, releaseContentPathComponents) {
 				allErrs = append(allErrs, fmt.Errorf("delete destination %s does not match values found in the delete-images yaml file (expected release content at %s, got %s)", o.Opts.Global.DeleteDestination, expectedPath, imgSpecRef.Name))
 				continue
 			}
 		case v2alpha1.TypeOCPRelease:
 			expectedPath := deleteDestBase + "/" + releaseImagePathComponents
-			if imgSpecRef.Name != expectedPath {
+			if !matchesExpectedReleaseRepo(imgSpecRef.Name, deleteDestBase, releaseImagePathComponents) {
 				allErrs = append(allErrs, fmt.Errorf("delete destination %s does not match values found in the delete-images yaml file (expected release at %s, got %s)", o.Opts.Global.DeleteDestination, expectedPath, imgSpecRef.Name))
 				continue
 			}
 		default:
-			if !strings.HasPrefix(imgSpecRef.Name, deleteDestBase+"/") {
+			if !matchesUnderDeleteDestination(imgSpecRef.Name, deleteDestBase, o.Opts.Global.MaxNestedPaths, img.UnflattenedImageReference) {
 				allErrs = append(allErrs, fmt.Errorf("delete destination %s does not match values found in the delete-images yaml file (expected prefix %s/, got %s)", o.Opts.Global.DeleteDestination, deleteDestBase, imgSpecRef.Name))
 				continue
 			}
@@ -201,11 +228,21 @@ func (o DeleteImages) DeleteRegistryImages(deleteImageList v2alpha1.DeleteImageL
 		collectorSchema.AllImages = append(collectorSchema.AllImages, cis)
 
 		if o.Opts.Global.ForceCacheDelete {
-			cacheDestination := img.ImageReference
+			// Prefer unflattened ref: local cache stores pre-max-nested-paths paths.
+			cacheRef := img.ImageReference
+			if img.UnflattenedImageReference != "" {
+				cacheRef = img.UnflattenedImageReference
+			}
+			cacheSpec, err := image.ParseRef(cacheRef)
+			if err != nil {
+				allErrs = append(allErrs, fmt.Errorf("parse cache image ref %q: %w", cacheRef, err))
+				continue
+			}
+			cacheDestination := cacheRef
 			// OCPBUGS-105878 - tag+digest images are cached under the digest key, not the
 			// human tag at the destination; rebuild it from the validated reference.
 			if originSpec.IsImageByTagAndDigest() {
-				cacheDestination = fmt.Sprintf("%s%s:%s", imgSpecRef.Transport, imgSpecRef.Name, originSpec.CacheTag())
+				cacheDestination = fmt.Sprintf("%s%s:%s", cacheSpec.Transport, cacheSpec.Name, originSpec.CacheTag())
 			}
 			cacheDestination = strings.ReplaceAll(cacheDestination, o.Opts.Global.DeleteDestination, consts.DockerProtocol+o.LocalStorageFQDN)
 			cis := v2alpha1.CopyImageSchema{
@@ -238,6 +275,139 @@ func (o DeleteImages) DeleteRegistryImages(deleteImageList v2alpha1.DeleteImageL
 	}
 
 	return errors.Join(allErrs...)
+}
+
+// matchesUnderDeleteDestination reports whether gotName is under deleteDestBase
+// (unflattened prefix) or a valid --max-nested-paths flattening of a path under
+// that destination. When unflattenedRef is set (from delete YAML), also accept
+// gotName if it is a flattening of that unflattened reference.
+func matchesUnderDeleteDestination(gotName, deleteDestBase string, maxNestedPaths int, unflattenedRef string) bool {
+	if gotName == deleteDestBase || strings.HasPrefix(gotName, deleteDestBase+"/") {
+		return true
+	}
+	if maxNestedPaths > 0 && matchesFlattenedUnderDeleteDest(gotName, deleteDestBase, maxNestedPaths) {
+		return true
+	}
+	return matchesAnyFlatteningOfUnflat(gotName, deleteDestBase, unflattenedRef)
+}
+
+// matchesAnyFlatteningOfUnflat reports whether gotName equals unflattenedRef's
+// repository name or any WithMaxNestedPaths flattening of that reference, and
+// that the unflattened name is under deleteDestBase.
+func matchesAnyFlatteningOfUnflat(gotName, deleteDestBase, unflattenedRef string) bool {
+	if unflattenedRef == "" {
+		return false
+	}
+	unflatSpec, err := image.ParseRef(unflattenedRef)
+	if err != nil {
+		return false
+	}
+	if unflatSpec.Name != deleteDestBase && !strings.HasPrefix(unflatSpec.Name, deleteDestBase+"/") {
+		return false
+	}
+	if gotName == unflatSpec.Name {
+		return true
+	}
+	return gotNameMatchesAnyMaxNestedFlattening(gotName, unflattenedRef)
+}
+
+// matchesFlattenedUnderDeleteDest accepts names produced when WithMaxNestedPaths
+// absorbs trailing destination path components into a dash-joined segment
+// (e.g. dest test/72942 + max=2 → test/72942-compliance-op).
+func matchesFlattenedUnderDeleteDest(gotName, deleteDestBase string, maxNestedPaths int) bool {
+	if maxNestedPaths <= 0 {
+		return false
+	}
+	destSpec, gotSpec, ok := parsePathCheckNamePair(deleteDestBase, gotName)
+	if !ok {
+		return false
+	}
+	if domainsConflict(destSpec.Domain, gotSpec.Domain) {
+		return false
+	}
+	// maxNestedPaths > 0, so keep is never negative.
+	keep := maxNestedPaths - 1
+	destComps := splitPathComponent(destSpec.PathComponent)
+	if len(destComps) <= keep {
+		return strings.HasPrefix(gotName, deleteDestBase+"/")
+	}
+	prefixName := joinRegistryName(gotSpec.Domain, flatDestPathPrefix(destComps, keep))
+	return gotName == prefixName || strings.HasPrefix(gotName, prefixName+"-")
+}
+
+func parsePathCheckNamePair(deleteDestBase, gotName string) (destSpec, gotSpec image.ImageSpec, ok bool) {
+	destSpec, err := image.ParseRef(consts.DockerProtocol + deleteDestBase + ":oc-mirror-path-check")
+	if err != nil {
+		return image.ImageSpec{}, image.ImageSpec{}, false
+	}
+	gotSpec, err = image.ParseRef(consts.DockerProtocol + gotName + ":oc-mirror-path-check")
+	if err != nil {
+		return image.ImageSpec{}, image.ImageSpec{}, false
+	}
+	return destSpec, gotSpec, true
+}
+
+func domainsConflict(destDomain, gotDomain string) bool {
+	return destDomain != "" && gotDomain != "" && destDomain != gotDomain
+}
+
+func splitPathComponent(pathComponent string) []string {
+	if pathComponent == "" {
+		return nil
+	}
+	return strings.Split(pathComponent, "/")
+}
+
+func flatDestPathPrefix(destComps []string, keep int) string {
+	kept := strings.Join(destComps[:keep], "/")
+	joined := strings.Join(destComps[keep:], "-")
+	if kept == "" {
+		return joined
+	}
+	return kept + "/" + joined
+}
+
+func joinRegistryName(domain, pathPrefix string) string {
+	if domain == "" {
+		return pathPrefix
+	}
+	return domain + "/" + pathPrefix
+}
+
+// matchesExpectedReleaseRepo reports whether gotName is the canonical release
+// repository under deleteDestBase, or a valid WithMaxNestedPaths flattening of it.
+func matchesExpectedReleaseRepo(gotName, deleteDestBase, releasePathComponents string) bool {
+	expected := deleteDestBase + "/" + releasePathComponents
+	if gotName == expected {
+		return true
+	}
+	// ParseRef requires a tag or digest; use a placeholder for path-only matching.
+	ref := consts.DockerProtocol + expected + ":oc-mirror-path-check"
+	return gotNameMatchesAnyMaxNestedFlattening(gotName, ref)
+}
+
+// gotNameMatchesAnyMaxNestedFlattening reports whether gotName equals the
+// repository Name of imageRef after applying WithMaxNestedPaths for any valid n.
+func gotNameMatchesAnyMaxNestedFlattening(gotName, imageRef string) bool {
+	spec, err := image.ParseRef(imageRef)
+	if err != nil {
+		return false
+	}
+	comps := strings.Split(spec.PathComponent, "/")
+	for n := 1; n < len(comps); n++ {
+		flat, err := image.WithMaxNestedPaths(imageRef, n)
+		if err != nil {
+			continue
+		}
+		flatSpec, err := image.ParseRef(flat)
+		if err != nil {
+			continue
+		}
+		if gotName == flatSpec.Name {
+			return true
+		}
+	}
+	return false
 }
 
 // ReadDeleteMetaData - read the list of images to delete

@@ -32,11 +32,6 @@ These are black-box tests that do not have direct access to the `oc-mirror` inte
 
 All the images used in these tests are built by us, in order to control their content and size.
 
-Project-owned fixture images use immutable, checked-in version tags containing
-the UTC publishing date and source commit. See the
-[integration image guide](../../tests/integration/image-builders/README.md) for
-publishing and updating fixtures without affecting other PRs.
-
 In these tests we assert the tangible outputs of `oc-mirror`: archive contents, mirrored images present on the target registry, etc.
 
 > **Example:** Execute the oc-mirror CLI command to successfully copy one image from a source registry to a target registry, and then verify the image exists in the target registry.

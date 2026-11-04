@@ -12,11 +12,9 @@ Convert a manual test case description into a Ginkgo v2 integration test for the
 
 These are minimal images we generated and host ourselves to keep tests fast and self-contained, avoiding dependencies on external images that might change frequently.
 
-- Catalog: `quay.io/oc-mirror/oc-mirror-dev:test-catalog-20261103-2e526488d`
+- Catalog: `quay.io/oc-mirror/oc-mirror-dev:test-catalog-latest`
 - Release: `quay.io/oc-mirror/release/test-release-index:v0.0.1`
 - Additional: `quay.io/openshifttest/hello-openshift@sha256:61b8f5...`
-
-Reuse the pinned image tags in existing test data. See `tests/integration/image-builders/README.md` before publishing a new fixture version.
 
 ## Step-by-step process
 

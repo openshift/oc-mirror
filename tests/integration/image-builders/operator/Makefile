@@ -1,14 +1,11 @@
 REGISTRY ?= quay.io/oc-mirror/oc-mirror-dev
-IMAGE_VERSION ?= $(shell date -u +%Y%m%d)-$(shell git rev-parse --short HEAD)
 RUNTIME ?= podman
 OUTPUT = _output
 COSIGN_KEY ?= ../../testdata/keys/cosign.key
 
-# The multi-architecture catalog is built by push-multi.
-CATALOGDIRS := $(foreach DIR,$(shell find catalogs -maxdepth 1 -mindepth 1 -type d ! -name test-catalog-multi),$(subst catalogs/,,$(DIR)))
+CATALOGDIRS := $(foreach DIR,$(shell find catalogs -maxdepth 1 -mindepth 1 -type d),$(subst catalogs/,,$(DIR)))
 CATALOG_TARGETS := $(addprefix build-catalog.,$(CATALOGDIRS))
 CATALOG_PUSH_TARGETS := $(addprefix push-catalog.,$(CATALOGDIRS))
-CATALOG_TAG = $(patsubst %-latest,%,$*)-$(IMAGE_VERSION)
 
 all: build
 .PHONY: all
@@ -16,16 +13,16 @@ all: build
 build: $(CATALOG_TARGETS)
 $(CATALOG_TARGETS): build-catalog.%:
 	@echo "Building catalog $*"
-	cd "catalogs" && $(RUNTIME) build --format=docker -f "./catalog.Dockerfile" --build-arg "CATALOG=$*" -t "$(REGISTRY):$(CATALOG_TAG)" .
+	cd "catalogs" && $(RUNTIME) build --format=docker -f "./catalog.Dockerfile" --build-arg "CATALOG=$*" -t "$(REGISTRY):$*" .
 
 .PHONY: build
 
-push: push-catalogs
+push: push-bundles push-related push-catalogs
 .PHONY: push
 
 push-bundles:
 	@for dir in bundles/*/*-bundle-v*/; do \
-		tag=$$(basename "$$dir")-$(IMAGE_VERSION); \
+		tag=$$(basename "$$dir"); \
 		echo "Pushing bundle $$tag"; \
 		$(RUNTIME) build --format=docker -t "$(REGISTRY):$$tag" "$$dir"; \
 		$(RUNTIME) push --format=docker "$(REGISTRY):$$tag"; \
@@ -34,7 +31,7 @@ push-bundles:
 
 push-related: push-bundles
 	@for dir in bundles/*/*-bundle-v*/; do \
-		bundle_tag=$$(basename "$$dir")-$(IMAGE_VERSION); \
+		bundle_tag=$$(basename "$$dir"); \
 		tag=$$(echo "$$bundle_tag" | sed 's/-bundle//'); \
 		echo "Pushing related image $$tag"; \
 		$(RUNTIME) build --no-cache --format=docker \
@@ -47,15 +44,15 @@ push-related: push-bundles
 push-catalogs: $(CATALOG_PUSH_TARGETS)
 $(CATALOG_PUSH_TARGETS): push-catalog.%:
 	@echo "Pushing catalog $*"
-	$(RUNTIME) push --format=docker "$(REGISTRY):$(CATALOG_TAG)"
+	$(RUNTIME) push --format=docker "$(REGISTRY):$*"
 .PHONY: push-catalogs
 
-sign: sign-catalogs
+sign: sign-bundles sign-related sign-catalogs
 .PHONY: sign
 
 sign-bundles:
 	@for dir in bundles/*/*-bundle-v*/; do \
-		tag=$$(basename "$$dir")-$(IMAGE_VERSION); \
+		tag=$$(basename "$$dir"); \
 		echo "Signing bundle $$tag"; \
 		COSIGN_PASSWORD="" cosign sign --key $(COSIGN_KEY) --tlog-upload=false "$(REGISTRY):$$tag"; \
 	done
@@ -63,7 +60,7 @@ sign-bundles:
 
 sign-related:
 	@for dir in bundles/*/*-bundle-v*/; do \
-		bundle_tag=$$(basename "$$dir")-$(IMAGE_VERSION); \
+		bundle_tag=$$(basename "$$dir"); \
 		tag=$$(echo "$$bundle_tag" | sed 's/-bundle//'); \
 		echo "Signing related image $$tag"; \
 		COSIGN_PASSWORD="" cosign sign --key $(COSIGN_KEY) --tlog-upload=false "$(REGISTRY):$$tag"; \
@@ -73,17 +70,13 @@ sign-related:
 sign-catalogs: $(addprefix sign-catalog.,$(CATALOGDIRS))
 $(addprefix sign-catalog.,$(CATALOGDIRS)): sign-catalog.%:
 	@echo "Signing catalog $*"
-	COSIGN_PASSWORD="" cosign sign --key $(COSIGN_KEY) --tlog-upload=false "$(REGISTRY):$(CATALOG_TAG)"
+	COSIGN_PASSWORD="" cosign sign --key $(COSIGN_KEY) --tlog-upload=false "$(REGISTRY):$*"
 .PHONY: sign-catalogs
-
-push-multi:
-	IMAGE_VERSION="$(IMAGE_VERSION)" ./create-multi.sh
-.PHONY: push-multi
 
 sign-multi:
 	@for tag in foo-bundle-v0.3.1-multi foo-v0.3.1-multi bar-bundle-v1.0.0-multi bar-v1.0.0-multi test-catalog-multi; do \
 		echo "Signing $$tag"; \
-		COSIGN_PASSWORD="" cosign sign --recursive --key $(COSIGN_KEY) --tlog-upload=false "$(REGISTRY):$$tag-$(IMAGE_VERSION)"; \
+		COSIGN_PASSWORD="" cosign sign --recursive --key $(COSIGN_KEY) --tlog-upload=false "$(REGISTRY):$$tag"; \
 	done
 .PHONY: sign-multi
 

@@ -100,6 +100,8 @@ func NewDeleteCommand(log clog.PluggableLoggerInterface, opts *mirror.CopyOption
 	cmd.Flags().BoolVar(&opts.Global.DeleteGenerate, "generate", false, "Used to generate the delete yaml for the list of manifests and blobs , used in the step to actually delete from local cache and remote registry")
 	cmd.Flags().BoolVar(&opts.Global.DeleteSignatures, "delete-signatures", false, "Used to delete the container image signatures, for multi arch images, it deletes only the manifest list signature")
 	cmd.Flags().BoolVar(&ex.V1Tags, "delete-v1-images", false, "Used during the migration, along with --generate, in order to target images previously mirrored with oc-mirror v1")
+	// Same Global.MaxNestedPaths as the root mirror command (not PersistentFlags, so list/version do not inherit it).
+	cmd.Flags().IntVar(&opts.Global.MaxNestedPaths, "max-nested-paths", 0, "Number of nested paths, for destination registries that limit nested paths")
 
 	// hide flags
 	HideFlags(cmd)
@@ -294,6 +296,8 @@ func (o *DeleteSchema) RunDelete(cmd *cobra.Command) error {
 	return nil
 }
 
+// generateDeleteFile collects images and writes delete-images.yaml,
+// applying --max-nested-paths flattening when configured.
 func (o *DeleteSchema) generateDeleteFile(ctx context.Context) error {
 	collectorSchema, collectErr := o.CollectAll(ctx)
 
@@ -302,6 +306,8 @@ func (o *DeleteSchema) generateDeleteFile(ctx context.Context) error {
 	// collected, we want to generate a delete file so those images can be deleted
 	var writeErr error
 	if len(collectorSchema.AllImages) > 0 {
+		// Flattening (and unflattenedImageReference for force-cache-delete) is applied
+		// inside WriteDeleteMetaData / processDeleteItems using Opts.Global.MaxNestedPaths.
 		writeErr = o.Delete.WriteDeleteMetaData(ctx, collectorSchema.AllImages)
 		if collectErr != nil && writeErr == nil {
 			o.Log.Warn("image discovery finished with errors: the delete file might not be complete")

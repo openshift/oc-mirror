@@ -38,11 +38,11 @@ var _ = Describe("max-nested-paths", func() {
 		releaseRepo := "nested/path-levels-openshift-release"
 		operatorRepo := "nested/path-levels-oc-mirror-oc-mirror-dev"
 		expectRegistryContainsExactly(*testRegistry, map[string]string{
-			releaseImagesRepo + ":v0.0.1":       "quay.io/oc-mirror/release/test-release-index:v0.0.1",
-			releaseRepo + ":v0.0.1-alpine":      "quay.io/oc-mirror/release/test-image:v0.0.1",
-			operatorRepo + ":" + testCatalogTag: "",
-			operatorRepo + ":baz-bundle-v1.1.0": "quay.io/oc-mirror/oc-mirror-dev:baz-bundle-v1.1.0",
-			operatorRepo + ":foo-bundle-v0.2.0": "quay.io/oc-mirror/oc-mirror-dev:foo-bundle-v0.2.0",
+			releaseImagesRepo + ":v0.0.1":         "quay.io/oc-mirror/release/test-release-index:v0.0.1",
+			releaseRepo + ":v0.0.1-alpine":        "quay.io/oc-mirror/release/test-image:v0.0.1",
+			operatorRepo + ":test-catalog-latest": "",
+			operatorRepo + ":baz-bundle-v1.1.0":   "quay.io/oc-mirror/oc-mirror-dev:baz-bundle-v1.1.0",
+			operatorRepo + ":foo-bundle-v0.2.0":   "quay.io/oc-mirror/oc-mirror-dev:foo-bundle-v0.2.0",
 			operatorRepo + ":sha256-1ce8c0187c8fe6b4be327dc848b8baf062ce1baa5096b4f5d955893d126d5b58": operandImage,
 		})
 		repos, err := testRegistry.ListRepositories(ctx)
@@ -64,12 +64,12 @@ var _ = Describe("max-nested-paths", func() {
 			})
 
 		By("verifying CatalogSource and ClusterCatalog reference the flattened catalog repository")
-		isCatalog, err := testRegistry.IsCatalog(ctx, operatorRepo, testCatalogTag)
+		isCatalog, err := testRegistry.IsCatalog(ctx, operatorRepo, "test-catalog-latest")
 		Expect(err).NotTo(HaveOccurred())
 		Expect(isCatalog).To(BeTrue())
 		resourcesDir := filepath.Join(workDir, dirWorkingDir, dirClusterResources)
 		resourceName := "path-levels-oc-mirror-oc-mirror-dev-test-catalog.yaml"
-		catalogImage := endpoint + "/" + operatorRepo + ":" + testCatalogTag
+		catalogImage := endpoint + "/" + operatorRepo + ":test-catalog-latest"
 		data, err := os.ReadFile(filepath.Join(resourcesDir, "cs-"+resourceName))
 		Expect(err).NotTo(HaveOccurred())
 		var catalogSource operatorv1alpha1.CatalogSource
@@ -84,5 +84,75 @@ var _ = Describe("max-nested-paths", func() {
 		Expect(clusterCatalog.Kind).To(Equal("ClusterCatalog"))
 		Expect(clusterCatalog.Spec.Source.Image).NotTo(BeNil())
 		Expect(clusterCatalog.Spec.Source.Image.Ref).To(Equal(catalogImage))
+	})
+
+	It("should delete after mirror when --max-nested-paths flattened the destinations", func() {
+		isc := filepath.Join(iscDir, "max_nested_paths", "isc-max-nested-paths.yaml")
+		disc := filepath.Join(iscDir, "max_nested_paths", "disc-max-nested-paths.yaml")
+		endpoint := testRegistry.Endpoint()
+		dest := endpoint + "/nested/path/levels"
+		deleteId := "mnp-delete"
+		deleteYaml := filepath.Join(workDir, dirWorkingDir, "delete", "delete-images-"+deleteId+".yaml")
+
+		releaseImagesRepo := "nested/path-levels-openshift-release-images"
+		releaseRepo := "nested/path-levels-openshift-release"
+		operatorRepo := "nested/path-levels-oc-mirror-oc-mirror-dev"
+
+		// Use m2d→d2m so delete --generate can collect the operator catalog from
+		// local cache (same pattern as delete_test.go). Flattening is applied on d2m.
+		By("mirroring to disk")
+		result, err := runner.MirrorToDisk(ctx, isc, workDir, "--remove-signatures=true")
+		expectOcMirrorCommandSuccess(result, err)
+
+		By("pushing to registry with --max-nested-paths=2")
+		result, err = runner.DiskToMirror(ctx, isc, workDir, dest,
+			"--remove-signatures=true", "--dest-tls-verify=false", "--max-nested-paths=2")
+		expectOcMirrorCommandSuccess(result, err)
+
+		By("generating delete YAML with the same --max-nested-paths")
+		result, err = runner.DeletePhaseOne(ctx, disc, workDir, deleteId, dest,
+			"--max-nested-paths=2")
+		expectOcMirrorCommandSuccess(result, err)
+
+		By("verifying delete YAML uses flattened imageReferences and records unflattenedImageReference")
+		data, err := os.ReadFile(deleteYaml)
+		Expect(err).NotTo(HaveOccurred())
+		var deleteList struct {
+			Items []struct {
+				ImageReference            string `json:"imageReference"`
+				UnflattenedImageReference string `json:"unflattenedImageReference"`
+			} `json:"items"`
+		}
+		Expect(yaml.Unmarshal(data, &deleteList)).To(Succeed())
+		Expect(deleteList.Items).NotTo(BeEmpty())
+		var sawFlattened, sawUnflattened bool
+		for _, item := range deleteList.Items {
+			ref := item.ImageReference
+			if strings.Contains(ref, releaseImagesRepo) || strings.Contains(ref, releaseRepo) || strings.Contains(ref, operatorRepo) {
+				sawFlattened = true
+			}
+			Expect(ref).NotTo(ContainSubstring("/nested/path/levels/"),
+				"imageReference should be flattened, got %s", ref)
+			if item.UnflattenedImageReference != "" {
+				sawUnflattened = true
+				Expect(item.UnflattenedImageReference).To(ContainSubstring("/nested/path/levels/"))
+			}
+		}
+		Expect(sawFlattened).To(BeTrue(), "expected flattened release/operator refs in delete YAML")
+		Expect(sawUnflattened).To(BeTrue(), "expected unflattenedImageReference when max-nested-paths is set")
+
+		By("running delete phase 2")
+		result, err = runner.DeletePhaseTwo(ctx, deleteYaml, dest,
+			"--dest-tls-verify=false", "--max-nested-paths=2")
+		expectOcMirrorCommandSuccess(result, err)
+
+		By("verifying flattened repositories were removed from the registry")
+		repos, err := testRegistry.ListRepositories(ctx)
+		Expect(err).NotTo(HaveOccurred())
+		for _, repo := range repos {
+			Expect(repo).NotTo(Equal(releaseImagesRepo))
+			Expect(repo).NotTo(Equal(releaseRepo))
+			Expect(repo).NotTo(Equal(operatorRepo))
+		}
 	})
 })

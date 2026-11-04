@@ -4,4 +4,4 @@ apiVersion: mirror.openshift.io/v2alpha1
 kind: ImageSetConfiguration
 mirror:
   additionalImages:
-    - name: quay.io/oc-mirror/oc-mirror-dev:multilayers-20261103-2e526488d
+    - name: quay.io/oc-mirror/oc-mirror-dev:multilayers-latest

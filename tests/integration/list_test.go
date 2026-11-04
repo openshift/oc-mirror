@@ -19,6 +19,8 @@ import (
 	"github.com/openshift/oc-mirror/tests/integration/pkg/proxy"
 )
 
+const testCatalog string = "quay.io/oc-mirror/oc-mirror-dev:test-catalog-latest"
+
 var _ = Describe("oc-mirror list operators", Ordered, func() {
 	BeforeAll(func() {
 		if skipListTest() {
@@ -26,7 +28,7 @@ var _ = Describe("oc-mirror list operators", Ordered, func() {
 		}
 	})
 	It("should list operators of a specific catalog", func() {
-		result, err := runner.ListOperators(ctx, "--catalog", happyPathCatalog)
+		result, err := runner.ListOperators(ctx, "--catalog", testCatalog)
 		expectOcMirrorCommandSuccess(result, err)
 		// FIXME: consider getting this information dynamically once our test catalog gets more complex.
 		expected := [][]string{
@@ -38,7 +40,7 @@ var _ = Describe("oc-mirror list operators", Ordered, func() {
 		compareTableOutput(header, result.Stdout, expected)
 	})
 	It("should list channels of a specific operator", func() {
-		result, err := runner.ListOperators(ctx, "--catalog", happyPathCatalog, "--package", "foo")
+		result, err := runner.ListOperators(ctx, "--catalog", testCatalog, "--package", "foo")
 		expectOcMirrorCommandSuccess(result, err)
 		lines := slices.Collect(strings.Lines(result.Stdout))
 
@@ -53,14 +55,14 @@ var _ = Describe("oc-mirror list operators", Ordered, func() {
 		compareTableOutput(header, chanResult, [][]string{{"foo", "beta", "foo.v0.3.1"}})
 	})
 	It("should list versions of a specific channel", func() {
-		result, err := runner.ListOperators(ctx, "--catalog", happyPathCatalog, "--package", "foo", "--channel", "beta")
+		result, err := runner.ListOperators(ctx, "--catalog", testCatalog, "--package", "foo", "--channel", "beta")
 		expectOcMirrorCommandSuccess(result, err)
 		expected := []string{"0.1.0", "0.2.0", "0.3.0", "0.3.1"}
 		const headerCount int = 1 // VERSIONS\n
 		compareLineOutput(result.Stdout, headerCount, expected)
 	})
 	It("lists both channels and the default channel of a multi-channel package", func() {
-		result, err := runner.ListOperators(ctx, "--catalog", happyPathCatalog, "--package", "bar")
+		result, err := runner.ListOperators(ctx, "--catalog", testCatalog, "--package", "bar")
 		expectOcMirrorCommandSuccess(result, err)
 		sections := strings.SplitN(result.Stdout, "\n\n", 2)
 		Expect(sections).To(HaveLen(2))

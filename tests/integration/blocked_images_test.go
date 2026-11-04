@@ -25,9 +25,9 @@ var blockedImages = map[string]string{
 // allowedImages maps every image that isc-blocked-images.yaml still mirrors, as repository:tag at
 // the destination, to its source reference. The operator catalog is rebuilt, so it has no source.
 var allowedImages = map[string]string{
-	"openshift/release-images:v0.0.1":           "quay.io/oc-mirror/release/test-release-index:v0.0.1",
-	testCatalogRepo + ":" + testCatalogTag:      "",
-	"oc-mirror/oc-mirror-dev:baz-bundle-v1.1.0": "quay.io/oc-mirror/oc-mirror-dev:baz-bundle-v1.1.0",
+	"openshift/release-images:v0.0.1":                                                                 "quay.io/oc-mirror/release/test-release-index:v0.0.1",
+	"oc-mirror/oc-mirror-dev:test-catalog-latest":                                                     "",
+	"oc-mirror/oc-mirror-dev:baz-bundle-v1.1.0":                                                       "quay.io/oc-mirror/oc-mirror-dev:baz-bundle-v1.1.0",
 	"oc-mirror/oc-mirror-dev:sha256-1ce8c0187c8fe6b4be327dc848b8baf062ce1baa5096b4f5d955893d126d5b58": operandImage,
 	"oc-mirror/oc-mirror-dev:foo-bundle-v0.2.0":                                                       "quay.io/oc-mirror/oc-mirror-dev:foo-bundle-v0.2.0",
 	"oc-mirror/oc-mirror-dev:foo-bundle-v0.3.2":                                                       "quay.io/oc-mirror/oc-mirror-dev:foo-bundle-v0.3.2",
@@ -72,7 +72,7 @@ var _ = Describe("blocked images", func() {
 			}
 		}
 		mappings = append(mappings, "docker://quay.io/"+testCatalogRepo+"@"+remoteDigest(happyPathCatalog)+
-			"=docker://"+localCacheHost+"/"+testCatalogRepo+":"+testCatalogTag)
+			"=docker://"+localCacheHost+"/"+testCatalogRepo+":test-catalog-latest")
 		expectDryRunFile(workDir, mappingFileName, mappings)
 
 		By("running mirrorToDisk")
@@ -81,7 +81,7 @@ var _ = Describe("blocked images", func() {
 
 		By("verifying the archive contains the allowed images only")
 		cachedImages := maps.Clone(allowedImages)
-		cachedImages[testCatalogRepo+":"+testCatalogTag] = happyPathCatalog
+		cachedImages[testCatalogRepo+":test-catalog-latest"] = happyPathCatalog
 		expectArchiveContainsExactly(workDir, cachedImages, testCatalogRepo)
 
 		By("running diskToMirror")

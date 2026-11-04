@@ -1,25 +1,23 @@
 #!/bin/bash
 # Builds multi-arch versions of the operator bundle, related image, and catalog images.
-# Appends IMAGE_VERSION (UTC date + source commit) to every new image tag.
+# Creates new *-multi tagged images alongside the existing single-arch images.
 #
 # New images:
-#   quay.io/oc-mirror/oc-mirror-dev:foo-bundle-v0.3.1-multi-${IMAGE_VERSION}
-#   quay.io/oc-mirror/oc-mirror-dev:foo-v0.3.1-multi-${IMAGE_VERSION}
-#   quay.io/oc-mirror/oc-mirror-dev:bar-bundle-v1.0.0-multi-${IMAGE_VERSION}
-#   quay.io/oc-mirror/oc-mirror-dev:bar-v1.0.0-multi-${IMAGE_VERSION}
-#   quay.io/oc-mirror/oc-mirror-dev:test-catalog-multi-${IMAGE_VERSION}
+#   quay.io/oc-mirror/oc-mirror-dev:foo-bundle-v0.3.1-multi  (amd64 + arm64)
+#   quay.io/oc-mirror/oc-mirror-dev:foo-v0.3.1-multi         (amd64 + arm64)
+#   quay.io/oc-mirror/oc-mirror-dev:bar-bundle-v1.0.0-multi  (amd64 + arm64)
+#   quay.io/oc-mirror/oc-mirror-dev:bar-v1.0.0-multi         (amd64 + arm64)
+#   quay.io/oc-mirror/oc-mirror-dev:test-catalog-multi       (amd64 + arm64)
 #
-# Prerequisites: podman (with --platform support via QEMU or native), cosign
-# Run with make push-multi from the image-builders/operator/ directory.
+# Prerequisites: podman (with --platform support via QEMU or native), skopeo, cosign
+# Run from the image-builders/operator/ directory.
 #
 # After a successful run:
-#   make sign-multi IMAGE_VERSION=<the same version used here>
+#   make sign-multi
 
 set -ex
 
 REGISTRY="quay.io/oc-mirror/oc-mirror-dev"
-IMAGE_VERSION="${IMAGE_VERSION:-$(date -u +%Y%m%d)-$(git rev-parse --short HEAD)}"
-CATALOG_TAG="test-catalog-multi-${IMAGE_VERSION}"
 
 push_manifest_list() {
     local TAG="${1}"
@@ -35,12 +33,13 @@ push_manifest_list() {
 
 # ─── Bundle images (FROM scratch — platform is only in the config blob) ────────
 
-for BASE_TAG in foo-bundle-v0.3.1 bar-bundle-v1.0.0; do
-    BUNDLE_TAG="${BASE_TAG}-multi-${IMAGE_VERSION}"
-    # Source directories retain the operator version, without the image revision.
-    if [[ "${BASE_TAG}" == foo-* ]]; then
+for BUNDLE_TAG in foo-bundle-v0.3.1-multi bar-bundle-v1.0.0-multi; do
+    # Determine source Dockerfile path from tag
+    if [[ "${BUNDLE_TAG}" == foo-* ]]; then
+        BASE_TAG="${BUNDLE_TAG%-multi}"     # foo-bundle-v0.3.1
         SRC_DIR="bundles/foo/${BASE_TAG}"
     else
+        BASE_TAG="${BUNDLE_TAG%-multi}"     # bar-bundle-v1.0.0
         SRC_DIR="bundles/bar/${BASE_TAG}"
     fi
 
@@ -59,9 +58,9 @@ done
 
 DISTROLESS_ML="gcr.io/distroless/static@sha256:9197324ba51d9cd071af8505989365c006adf9d6d2067eada25aef00abbb5278"
 
-for BASE_TAG in foo-v0.3.1 bar-v1.0.0; do
-    RELATED_TAG="${BASE_TAG}-multi-${IMAGE_VERSION}"
-    BUNDLE_TAG="${BASE_TAG/-v/-bundle-v}-multi-${IMAGE_VERSION}"
+for RELATED_TAG in foo-v0.3.1-multi bar-v1.0.0-multi; do
+    BUNDLE_TAG="${RELATED_TAG/v0.3.1-multi/bundle-v0.3.1-multi}"
+    BUNDLE_TAG="${BUNDLE_TAG/v1.0.0-multi/bundle-v1.0.0-multi}"
     BUNDLE_FULL="${REGISTRY}:${BUNDLE_TAG}"
 
     for ARCH in amd64 arm64; do
@@ -88,14 +87,20 @@ done
 rm -rf catalogs/test-catalog-multi
 cp -r catalogs/test-catalog-latest catalogs/test-catalog-multi
 
+# Get manifest list digests for the new bundles (for relatedImages in catalog FBC)
+FOO_BUNDLE_DIGEST=$(skopeo inspect --raw "docker://${REGISTRY}:foo-bundle-v0.3.1-multi" | sha256sum | cut -d ' ' -f 1)
+BAR_BUNDLE_DIGEST=$(skopeo inspect --raw "docker://${REGISTRY}:bar-bundle-v1.0.0-multi" | sha256sum | cut -d ' ' -f 1)
+FOO_RELATED_DIGEST=$(skopeo inspect --raw "docker://${REGISTRY}:foo-v0.3.1-multi" | sha256sum | cut -d ' ' -f 1)
+BAR_RELATED_DIGEST=$(skopeo inspect --raw "docker://${REGISTRY}:bar-v1.0.0-multi" | sha256sum | cut -d ' ' -f 1)
+
 # Update foo bundles.yaml — replace channel-head (v0.3.1) references
-sed -E -i \
-    -e "s|${REGISTRY}:foo-bundle-v0\.3\.1(-[[:alnum:]_.-]+)?\b|${REGISTRY}:foo-bundle-v0.3.1-multi-${IMAGE_VERSION}|g" \
+sed -i \
+    -e "s|${REGISTRY}:foo-bundle-v0.3.1\b|${REGISTRY}:foo-bundle-v0.3.1-multi|g" \
     catalogs/test-catalog-multi/foo/bundles.yaml
 
 # Update bar bundles.yaml — replace channel-head (v1.0.0) references
-sed -E -i \
-    -e "s|${REGISTRY}:bar-bundle-v1\.0\.0(-[[:alnum:]_.-]+)?\b|${REGISTRY}:bar-bundle-v1.0.0-multi-${IMAGE_VERSION}|g" \
+sed -i \
+    -e "s|${REGISTRY}:bar-bundle-v1.0.0\b|${REGISTRY}:bar-bundle-v1.0.0-multi|g" \
     catalogs/test-catalog-multi/bar/bundles.yaml
 
 # ─── Catalog image: test-catalog-multi ────────────────────────────────────────
@@ -105,18 +110,18 @@ for ARCH in amd64 arm64; do
     podman build --platform "linux/${ARCH}" \
         -f catalogs/catalog.Dockerfile \
         --build-arg "CATALOG=test-catalog-multi" \
-        -t "${REGISTRY}:${CATALOG_TAG}-${ARCH}" \
+        -t "${REGISTRY}:test-catalog-multi-${ARCH}" \
         catalogs/
-    podman push --remove-signatures "${REGISTRY}:${CATALOG_TAG}-${ARCH}"
+    podman push --remove-signatures "${REGISTRY}:test-catalog-multi-${ARCH}"
 done
-push_manifest_list "${CATALOG_TAG}"
+push_manifest_list "test-catalog-multi"
 
 echo ""
 echo "Successfully built and pushed all multi-arch operator images:"
-echo "  ${REGISTRY}:foo-bundle-v0.3.1-multi-${IMAGE_VERSION}"
-echo "  ${REGISTRY}:foo-v0.3.1-multi-${IMAGE_VERSION}"
-echo "  ${REGISTRY}:bar-bundle-v1.0.0-multi-${IMAGE_VERSION}"
-echo "  ${REGISTRY}:bar-v1.0.0-multi-${IMAGE_VERSION}"
-echo "  ${REGISTRY}:${CATALOG_TAG}"
+echo "  ${REGISTRY}:foo-bundle-v0.3.1-multi"
+echo "  ${REGISTRY}:foo-v0.3.1-multi"
+echo "  ${REGISTRY}:bar-bundle-v1.0.0-multi"
+echo "  ${REGISTRY}:bar-v1.0.0-multi"
+echo "  ${REGISTRY}:test-catalog-multi"
 echo ""
-echo "Next step:  make sign-multi IMAGE_VERSION=${IMAGE_VERSION}"
+echo "Next step:  make sign-multi"
