@@ -52,6 +52,19 @@ that all the relevant filtering and validation are done correctly, without havin
 The "delete" entry is the main entry, it contains the "platform", "operators" and "additionalImages" entries, these are used to filter the images
 to intentionally delete these images.
 
+`blockedImages` uses the same regular-expression matching as mirror configurations. Images matching a blocked pattern are excluded from the generated delete list. Use the same patterns as in your mirror `ImageSetConfiguration` when cloud-provider or other release images were not mirrored.
+
+```yaml
+delete:
+  platform:
+    channels:
+      - name: stable-4.13
+        minVersion: 4.13.3
+        maxVersion: 4.13.3
+  blockedImages:
+    - name: "(aws|gcp|azure|ibm|openstack)"
+```
+
 ### Command line examples
 
 ```bash

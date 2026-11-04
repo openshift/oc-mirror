@@ -387,3 +387,50 @@ func TestValidate(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateDelete(t *testing.T) {
+	type spec struct {
+		name     string
+		config   *v2alpha1.DeleteImageSetConfiguration
+		expError string
+	}
+
+	cases := []spec{
+		{
+			name: "Valid/BlockedImagesWithValidRegex",
+			config: &v2alpha1.DeleteImageSetConfiguration{
+				DeleteImageSetConfigurationSpec: v2alpha1.DeleteImageSetConfigurationSpec{
+					Delete: v2alpha1.Delete{
+						BlockedImages: []v2alpha1.BlockedImage{
+							{Name: "(aws|gcp|azure|ibm|openstack)"},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "Invalid/BlockedImageWithMalformedRegex",
+			config: &v2alpha1.DeleteImageSetConfiguration{
+				DeleteImageSetConfigurationSpec: v2alpha1.DeleteImageSetConfigurationSpec{
+					Delete: v2alpha1.Delete{
+						BlockedImages: []v2alpha1.BlockedImage{
+							{Name: "[invalid"},
+						},
+					},
+				},
+			},
+			expError: `invalid configuration: blocked image "[invalid": invalid regular expression: error parsing regexp: missing closing ]: ` + "`[invalid`",
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			err := ValidateDelete(c.config)
+			if c.expError != "" {
+				require.EqualError(t, err, c.expError)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
