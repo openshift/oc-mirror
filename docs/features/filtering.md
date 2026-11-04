@@ -184,6 +184,52 @@ mirror:
     - catalog: oci:///path/to/local/catalog
 ```
 
+### Architecture selection for operators
+
+Restrict an operator catalog to specific platforms with the `platforms` field:
+
+```yaml
+mirror:
+  operators:
+    - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.22
+      packages:
+        - name: kubevirt-hyperconverged
+          channels:
+            - name: stable
+      platforms:
+        - os: linux
+          architecture: amd64
+```
+
+A bundle's `relatedImages` holds both the images the operator runs and the
+**operands** it deploys. They are treated differently, because the catalog
+chooses that list, not you:
+
+| image missing a requested platform | result |
+|---|---|
+| one the operator runs | mirroring fails: `operator "kubevirt-hyperconverged" does not support linux/ppc64le` |
+| an operand | available requested platforms are mirrored; missing platforms are skipped with a warning. The whole operand is skipped only when none of the requested platforms are available |
+| one you named in `additionalImages` or a release | mirroring fails: the platform is missing from your configuration |
+
+Telling the two apart means reading the bundle's ClusterServiceVersion, so
+oc-mirror does it only after a copy has already failed on a platform mismatch,
+and caches the answer per bundle. A catalog whose images all mirror cleanly
+pulls no bundles. Nothing is skipped unless it is proven to be an operand.
+
+For example, when requesting `linux/amd64` and `linux/arm64`, an operand
+manifest list containing only `linux/amd64` is still mirrored for `linux/amd64`.
+The missing `linux/arm64` is skipped without pulling unrequested architectures.
+Bundles and images the operator runs are never skipped this way: a missing
+requested platform remains an error.
+
+OLM's `operatorframework.io/arch.<arch>` labels are deliberately not used:
+setting them is optional, so their absence proves nothing and a stale value
+would block a mirror that works.
+
+In mirror-to-disk, skipped operands and partially mirrored operands' available
+platforms are recorded in the archive so disk-to-mirror makes the same decision
+without accessing the source registry.
+
 ## Additional images
 
 Individual container images can be mirrored by specifying their full reference. If no tag is specified, `latest` is assumed:

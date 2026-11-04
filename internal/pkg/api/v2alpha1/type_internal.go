@@ -195,6 +195,10 @@ type CollectorSchema struct {
 	// PlatformFilters maps image origin to its platform filter list.
 	// Populated by collectors; consumed by the batch worker to set InstancePlatforms per image.
 	PlatformFilters map[string][]InstancePlatformFilter
+	// OperandPlatforms records only platform-mismatch exceptions, keyed by origin.
+	// Empty platforms mean the operand was wholly skipped; otherwise these are
+	// the selected platforms. Persisted for disk-to-mirror's offline replay.
+	OperandPlatforms map[string][]InstancePlatformFilter
 }
 
 type CopyImageSchemaMap struct {

@@ -4,9 +4,12 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"maps"
 	"net/url"
 	"os"
 	"path"
+	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -22,7 +25,8 @@ import (
 )
 
 const (
-	skippingMsg = "skipping operator bundle %s because one of its related images failed to mirror"
+	skippingMsg              = "skipping operator bundle %s because one of its related images failed to mirror"
+	noMatchingPlatformReason = "no instance for the requested platform(s)"
 
 	errMsgHeader = "%ssome errors occurred during the mirroring"
 	errMsg       = errMsgHeader + ".\n" +
@@ -39,12 +43,15 @@ type ChannelConcurrentBatch struct {
 	Mirror           mirror.MirrorInterface
 	MaxGoroutines    uint
 	SynchedTimeStamp string
+	OperandResolver  OperandResolver
 }
 
 type GoroutineResult struct {
-	err     *mirrorErrorSchema
-	imgType v2alpha1.ImageType
-	img     v2alpha1.CopyImageSchema
+	err       *mirrorErrorSchema
+	imgType   v2alpha1.ImageType
+	img       v2alpha1.CopyImageSchema
+	skipped   bool                              // Intentionally omitted, not copied or failed.
+	platforms []v2alpha1.InstancePlatformFilter // Non-empty after a partial copy.
 }
 
 // Worker - the main batch processor
@@ -53,10 +60,11 @@ func (o *ChannelConcurrentBatch) Worker(ctx context.Context, collectorSchema v2a
 
 	copiedImages := v2alpha1.CollectorSchema{
 		AllImages:       []v2alpha1.CopyImageSchema{},
-		PlatformFilters: collectorSchema.PlatformFilters,
+		PlatformFilters: maps.Clone(collectorSchema.PlatformFilters),
 	}
 
 	var errArray []mirrorErrorSchema
+	skippedCount := 0
 
 	var m sync.RWMutex
 	var wg sync.WaitGroup
@@ -157,14 +165,11 @@ func (o *ChannelConcurrentBatch) Worker(ctx context.Context, collectorSchema v2a
 							err = o.Mirror.Run(timeoutCtx, img.Source, img.Destination, mirror.Mode(opts.Function), &options) //nolint:contextcheck
 
 							// "no instances found for platform" is only emitted by the copy library
-							// for manifest lists (multi-arch indexes) when none of the instances
-							// match the requested InstancePlatforms. The error itself confirms the
-							// source is a manifest list, so retrying without the filter would mirror
-							// all platforms and contradict the user's configuration. Return the
-							// original error so the user can correct their ImageSetConfiguration.
+							// for manifest lists when any requested platform is absent. Only a
+							// proven operand may retry with that platform removed; never remove
+							// the filter entirely, which would copy unrequested platforms.
 							if err != nil && len(options.InstancePlatforms) > 0 && strings.Contains(err.Error(), "no instances found for platform") {
-								o.Log.Warn("Requested platform(s) not found in source manifest list for %s; verify the platforms field in your ISC", img.Origin)
-								// err stays as "no instances found for platform"; do not retry.
+								result.platforms, result.skipped, err = o.retryOperandCopy(timeoutCtx, img, collectorSchema, options, err) //nolint:contextcheck
 							}
 
 							switch {
@@ -195,14 +200,30 @@ func (o *ChannelConcurrentBatch) Worker(ctx context.Context, collectorSchema v2a
 	go runOverallProgress(overallProgress, cancelCtx, progressCh)
 
 	completed := 0
+collect:
 	for completed < len(collectorSchema.AllImages) {
 		res := <-results
 		err := res.err
-		if err == nil {
+		if res.skipped || len(res.platforms) > 0 {
+			if copiedImages.OperandPlatforms == nil {
+				copiedImages.OperandPlatforms = make(map[string][]v2alpha1.InstancePlatformFilter)
+			}
+			copiedImages.OperandPlatforms[res.img.Origin] = res.platforms
+			if !res.skipped {
+				if copiedImages.PlatformFilters == nil {
+					copiedImages.PlatformFilters = make(map[string][]v2alpha1.InstancePlatformFilter)
+				}
+				copiedImages.PlatformFilters[res.img.Origin] = res.platforms
+			}
+		}
+		switch {
+		case res.skipped:
+			skippedCount++
+		case err == nil:
 			logImageSuccess(o.Log, &res.img, &opts)
 			copiedImages.AllImages = append(copiedImages.AllImages, res.img)
 			incrementTotals(res.imgType, &copiedImages)
-		} else {
+		default:
 			m.Lock()
 			errArray = append(errArray, *err)
 			m.Unlock()
@@ -210,7 +231,8 @@ func (o *ChannelConcurrentBatch) Worker(ctx context.Context, collectorSchema v2a
 			logImageError(o.Log, &res.img, &opts)
 			if res.imgType.IsRelease() {
 				cancel()
-				break
+				// Labelled: plain break would leave only the switch.
+				break collect
 			}
 		}
 
@@ -221,12 +243,12 @@ func (o *ChannelConcurrentBatch) Worker(ctx context.Context, collectorSchema v2a
 
 	p.Wait()
 
-	logResults(o.Log, opts.Function, &copiedImages, &collectorSchema)
+	logResults(o.Log, opts.Function, &copiedImages, &collectorSchema, skippedCount)
 
 	if len(errArray) > 0 {
 		batchErr := &BatchError{
 			releaseCountDiff:       collectorSchema.TotalReleaseImages - copiedImages.TotalReleaseImages,
-			operatorCountDiff:      collectorSchema.TotalOperatorImages - copiedImages.TotalOperatorImages,
+			operatorCountDiff:      collectorSchema.TotalOperatorImages - copiedImages.TotalOperatorImages - skippedCount,
 			additionalImgCountDiff: collectorSchema.TotalAdditionalImages - copiedImages.TotalAdditionalImages,
 			helmCountDiff:          collectorSchema.TotalHelmImages - copiedImages.TotalHelmImages,
 		}
@@ -240,6 +262,19 @@ func (o *ChannelConcurrentBatch) Worker(ctx context.Context, collectorSchema v2a
 	}
 	o.Log.Debug("concurrent channel worker time     : %v", time.Since(startTime))
 	return copiedImages, nil
+}
+
+// operatorNames renders an image's operators, sorted so the message is stable.
+func operatorNames(operators map[string]struct{}) string {
+	if len(operators) == 0 {
+		return ""
+	}
+	names := make([]string, 0, len(operators))
+	for name := range operators {
+		names = append(names, strconv.Quote(name))
+	}
+	sort.Strings(names)
+	return strings.Join(names, ", ")
 }
 
 func hostNamespace(input string) string {
@@ -262,7 +297,7 @@ func hostNamespace(input string) string {
 	}
 }
 
-func logResults(log clog.PluggableLoggerInterface, copyMode string, copiedImages, collectorSchema *v2alpha1.CollectorSchema) {
+func logResults(log clog.PluggableLoggerInterface, copyMode string, copiedImages, collectorSchema *v2alpha1.CollectorSchema, skipped int) {
 	log.Info("=== Results ===")
 
 	var copyModeMsg string
@@ -272,19 +307,25 @@ func logResults(log clog.PluggableLoggerInterface, copyMode string, copiedImages
 		copyModeMsg = "deleted"
 	}
 
-	logResult(log, copyModeMsg, "release", copiedImages.TotalReleaseImages, collectorSchema.TotalReleaseImages)
-	logResult(log, copyModeMsg, "operator", copiedImages.TotalOperatorImages, collectorSchema.TotalOperatorImages)
-	logResult(log, copyModeMsg, "additional", copiedImages.TotalAdditionalImages, collectorSchema.TotalAdditionalImages)
-	logResult(log, copyModeMsg, "helm", copiedImages.TotalHelmImages, collectorSchema.TotalHelmImages)
+	// Skipped images are only ever operands, counted in the operator totals.
+	logResult(log, copyModeMsg, "release", copiedImages.TotalReleaseImages, collectorSchema.TotalReleaseImages, 0)
+	logResult(log, copyModeMsg, "operator", copiedImages.TotalOperatorImages, collectorSchema.TotalOperatorImages, skipped)
+	logResult(log, copyModeMsg, "additional", copiedImages.TotalAdditionalImages, collectorSchema.TotalAdditionalImages, 0)
+	logResult(log, copyModeMsg, "helm", copiedImages.TotalHelmImages, collectorSchema.TotalHelmImages, 0)
 }
 
-func logResult(log clog.PluggableLoggerInterface, copyMode, imageType string, copied, total int) {
-	if total != 0 {
-		if copied == total {
-			log.Info(emoji.SpinnerCheckMark+" %d / %d %s images %s successfully", copied, total, imageType, copyMode)
-		} else {
-			log.Info(emoji.SpinnerCrossMark+" %d / %d %s images %s: Some %s images failed to be %s - please check the logs", copied, total, imageType, copyMode, imageType, copyMode)
-		}
+func logResult(log clog.PluggableLoggerInterface, copyMode, imageType string, copied, total, skipped int) {
+	if total == 0 {
+		return
+	}
+	switch {
+	case copied == total:
+		log.Info(emoji.SpinnerCheckMark+" %d / %d %s images %s successfully", copied, total, imageType, copyMode)
+	case copied+skipped == total:
+		// Nothing failed: the remainder was intentionally skipped.
+		log.Info(emoji.SpinnerCheckMark+" %d / %d %s images %s successfully (%d skipped)", copied, total, imageType, copyMode, skipped)
+	default:
+		log.Info(emoji.SpinnerCrossMark+" %d / %d %s images %s: Some %s images failed to be %s - please check the logs", copied, total, imageType, copyMode, imageType, copyMode)
 	}
 }
 
