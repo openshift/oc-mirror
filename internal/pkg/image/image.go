@@ -195,11 +195,17 @@ func (i ImageSpec) ComponentName() string {
 	}
 }
 
+// SetTag sets the tag then rebuilds the reference and reference with transport.
 func (i ImageSpec) SetTag(tag string) ImageSpec {
-	oldTag := i.Tag
 	i.Tag = tag
-	i.Reference = strings.Replace(i.Reference, oldTag, tag, 1)
-	i.ReferenceWithTransport = strings.Replace(i.ReferenceWithTransport, oldTag, tag, 1)
+	i.Reference = i.Name
+	if tag != "" {
+		i.Reference += ":" + tag
+	}
+	if i.Digest != "" {
+		i.Reference += "@" + i.Algorithm + ":" + i.Digest
+	}
+	i.ReferenceWithTransport = i.Transport + i.Reference
 	return i
 }
 
