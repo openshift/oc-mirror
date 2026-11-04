@@ -63,8 +63,20 @@ func filterAttestationInstances(ctx context.Context, srcRef types.ImageReference
 // realInstances returns a filter selecting every non-attestation entry in list,
 // or (nil, nil) when list holds no attestation entries at all.
 func realInstances(list manifest.List) (*attestationFilter, error) {
+	digests, err := AttestationExcludedInstances(list)
+	if err != nil || digests == nil {
+		return nil, err
+	}
+	return &attestationFilter{digests: digests}, nil
+}
+
+// AttestationExcludedInstances returns non-attestation instance digests when the
+// list contains annotated attestations, or nil when no exclusion is needed.
+// An empty non-nil selection means every instance is an attestation; callers
+// must retain their original traversal when no non-attestation instance remains.
+func AttestationExcludedInstances(list manifest.List) ([]digest.Digest, error) {
 	hasAttestation := false
-	filter := &attestationFilter{}
+	digests := make([]digest.Digest, 0, len(list.Instances()))
 
 	for _, d := range list.Instances() {
 		info, err := list.Instance(d)
@@ -79,14 +91,14 @@ func realInstances(list manifest.List) (*attestationFilter, error) {
 			continue
 		}
 
-		filter.digests = append(filter.digests, d)
+		digests = append(digests, d)
 	}
 
 	if !hasAttestation {
 		return nil, nil
 	}
 
-	return filter, nil
+	return digests, nil
 }
 
 // isAttestationManifest returns true if a manifest list entry is an attestation
