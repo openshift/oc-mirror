@@ -18,7 +18,7 @@ mirror:
           architecture: arm64
     - name: quay.io/rh_ee_aguidi/empty-image:latest
   operators:
-    - catalog: quay.io/oc-mirror/oc-mirror-dev:test-catalog-multi
+    - catalog: quay.io/oc-mirror/oc-mirror-dev:test-catalog-multi-20261103-2e526488d
       packages:
         - name: foo
         - name: bar

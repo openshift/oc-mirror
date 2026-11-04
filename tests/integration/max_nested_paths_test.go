@@ -38,11 +38,11 @@ var _ = Describe("max-nested-paths", func() {
 		releaseRepo := "nested/path-levels-openshift-release"
 		operatorRepo := "nested/path-levels-oc-mirror-oc-mirror-dev"
 		expectRegistryContainsExactly(*testRegistry, map[string]string{
-			releaseImagesRepo + ":v0.0.1":         "quay.io/oc-mirror/release/test-release-index:v0.0.1",
-			releaseRepo + ":v0.0.1-alpine":        "quay.io/oc-mirror/release/test-image:v0.0.1",
-			operatorRepo + ":test-catalog-latest": "",
-			operatorRepo + ":baz-bundle-v1.1.0":   "quay.io/oc-mirror/oc-mirror-dev:baz-bundle-v1.1.0",
-			operatorRepo + ":foo-bundle-v0.2.0":   "quay.io/oc-mirror/oc-mirror-dev:foo-bundle-v0.2.0",
+			releaseImagesRepo + ":v0.0.1":       "quay.io/oc-mirror/release/test-release-index:v0.0.1",
+			releaseRepo + ":v0.0.1-alpine":      "quay.io/oc-mirror/release/test-image:v0.0.1",
+			operatorRepo + ":" + testCatalogTag: "",
+			operatorRepo + ":baz-bundle-v1.1.0": "quay.io/oc-mirror/oc-mirror-dev:baz-bundle-v1.1.0",
+			operatorRepo + ":foo-bundle-v0.2.0": "quay.io/oc-mirror/oc-mirror-dev:foo-bundle-v0.2.0",
 			operatorRepo + ":sha256-1ce8c0187c8fe6b4be327dc848b8baf062ce1baa5096b4f5d955893d126d5b58": operandImage,
 		})
 		repos, err := testRegistry.ListRepositories(ctx)
@@ -64,12 +64,12 @@ var _ = Describe("max-nested-paths", func() {
 			})
 
 		By("verifying CatalogSource and ClusterCatalog reference the flattened catalog repository")
-		isCatalog, err := testRegistry.IsCatalog(ctx, operatorRepo, "test-catalog-latest")
+		isCatalog, err := testRegistry.IsCatalog(ctx, operatorRepo, testCatalogTag)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(isCatalog).To(BeTrue())
 		resourcesDir := filepath.Join(workDir, dirWorkingDir, dirClusterResources)
 		resourceName := "path-levels-oc-mirror-oc-mirror-dev-test-catalog.yaml"
-		catalogImage := endpoint + "/" + operatorRepo + ":test-catalog-latest"
+		catalogImage := endpoint + "/" + operatorRepo + ":" + testCatalogTag
 		data, err := os.ReadFile(filepath.Join(resourcesDir, "cs-"+resourceName))
 		Expect(err).NotTo(HaveOccurred())
 		var catalogSource operatorv1alpha1.CatalogSource

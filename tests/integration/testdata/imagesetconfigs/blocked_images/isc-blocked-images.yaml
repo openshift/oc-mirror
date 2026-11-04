@@ -13,7 +13,7 @@ mirror:
     graph: false
     release: quay.io/oc-mirror/release/test-release-index:v0.0.1
   operators:
-  - catalog: quay.io/oc-mirror/oc-mirror-dev:test-catalog-latest
+  - catalog: quay.io/oc-mirror/oc-mirror-dev:test-catalog-20261103-2e526488d
     packages:
     - name: bar
     - name: baz

@@ -15,6 +15,11 @@ import (
 	"github.com/openshift/oc-mirror/tests/integration/pkg/registry"
 )
 
+const (
+	fooMultiBundleTag = "foo-bundle-v0.3.1-multi-20261103-2e526488d"
+	barMultiBundleTag = "bar-bundle-v1.0.0-multi-20261103-2e526488d"
+)
+
 var _ = Describe("sparse manifest platform filtering", Label("sparse-manifest"), func() {
 	var workDir string
 
@@ -70,17 +75,17 @@ var _ = Describe("sparse manifest platform filtering", Label("sparse-manifest"),
 
 				By("verifying operator catalog has only amd64 blobs")
 				expectOnlyPlatformBlobsPresent(ctx, sparseRegistry,
-					"oc-mirror/oc-mirror-dev", "test-catalog-multi",
+					testCatalogRepo, multiCatalogTag,
 					[]string{"linux/amd64"})
 
 				By("verifying foo operator bundle has only amd64 blobs")
 				expectOnlyPlatformBlobsPresent(ctx, sparseRegistry,
-					"oc-mirror/oc-mirror-dev", "foo-bundle-v0.3.1-multi",
+					testCatalogRepo, fooMultiBundleTag,
 					[]string{"linux/amd64"})
 
 				By("verifying bar operator bundle has only amd64 blobs")
 				expectOnlyPlatformBlobsPresent(ctx, sparseRegistry,
-					"oc-mirror/oc-mirror-dev", "bar-bundle-v1.0.0-multi",
+					testCatalogRepo, barMultiBundleTag,
 					[]string{"linux/amd64"})
 
 				By("verifying helm chart image has only amd64 blobs")
@@ -156,17 +161,17 @@ var _ = Describe("sparse manifest platform filtering", Label("sparse-manifest"),
 
 				By("verifying operator catalog has only amd64 blobs")
 				expectOnlyPlatformBlobsPresent(ctx, sparseRegistry,
-					"oc-mirror/oc-mirror-dev", "test-catalog-multi",
+					testCatalogRepo, multiCatalogTag,
 					[]string{"linux/amd64"})
 
 				By("verifying foo operator bundle has only amd64 blobs")
 				expectOnlyPlatformBlobsPresent(ctx, sparseRegistry,
-					"oc-mirror/oc-mirror-dev", "foo-bundle-v0.3.1-multi",
+					testCatalogRepo, fooMultiBundleTag,
 					[]string{"linux/amd64"})
 
 				By("verifying bar operator bundle has only amd64 blobs")
 				expectOnlyPlatformBlobsPresent(ctx, sparseRegistry,
-					"oc-mirror/oc-mirror-dev", "bar-bundle-v1.0.0-multi",
+					testCatalogRepo, barMultiBundleTag,
 					[]string{"linux/amd64"})
 
 				By("verifying helm chart image has only amd64 blobs")

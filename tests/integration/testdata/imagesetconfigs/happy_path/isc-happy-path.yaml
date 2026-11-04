@@ -16,7 +16,7 @@ mirror:
   additionalImages:
   - name: quay.io/openshifttest/hello-openshift@sha256:61b8f5e1a3b5dbd9e2c35fd448dc5106337d7a299873dd3a6f0cd8d4891ecc27
   operators:
-  - catalog: quay.io/oc-mirror/oc-mirror-dev:test-catalog-latest
+  - catalog: quay.io/oc-mirror/oc-mirror-dev:test-catalog-20261103-2e526488d
     packages:
     - name: foo
     - name: bar

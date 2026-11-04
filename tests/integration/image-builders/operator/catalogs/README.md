@@ -2,6 +2,11 @@
 
 Mock catalogs to be used in tests.
 
+Published image tags include a UTC date and source commit; directory names below
+remain unchanged. See [image versioning and publishing](../../README.md).
+The creation examples reuse existing bundle tags. If a bundle is rebuilt, use
+its new version-suffixed tag when rendering the catalog instead.
+
 ## test-catalog-latest
 
 ### Contents
@@ -39,14 +44,18 @@ Run from the repository root with Quay credentials and `opm`, Podman, and Cosign
 available. Use Cosign v2 for the signature tags expected by the tests:
 
 ```bash
+export IMAGE_VERSION="$(date -u +%Y%m%d)-$(git rev-parse --short HEAD)"
 opm validate tests/integration/image-builders/operator/catalogs/test-catalog-latest
 make -C tests/integration/image-builders/operator build-catalog.test-catalog-latest
 make -C tests/integration/image-builders/operator push-catalog.test-catalog-latest
 make -C tests/integration/image-builders/operator sign-catalog.test-catalog-latest
 ```
 
-After republishing, update the digest in
+This publishes `test-catalog-${IMAGE_VERSION}`, not `test-catalog-latest`.
+Update the affected ISC/DISC tags and Go expectations in the same PR. If the
+digest-pinned test should adopt this version too, update
 `tests/integration/testdata/imagesetconfigs/operators/isc-operator-catalog-digest.yaml`.
+Never overwrite the old tag.
 
 
 ## test-catalog-diff
@@ -225,9 +234,14 @@ existing digests (`skopeo manifest-digest`) and update both the FBC and
 
 ## Catalog building
 ```bash
-make build # for all catalogs
+export IMAGE_VERSION="$(date -u +%Y%m%d)-$(git rev-parse --short HEAD)"
+make build # for all single-architecture catalogs
 make build-catalog.<catalog-name> # for specific catalog
 ```
+
+Build, publish, and sign the multi-architecture catalog with
+`make push-multi sign-multi` from the operator directory, using the same exported
+`IMAGE_VERSION`.
 
 ## Catalog validation
 ```bash

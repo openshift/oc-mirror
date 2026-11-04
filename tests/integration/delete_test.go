@@ -95,7 +95,7 @@ var _ = Describe("delete", func() {
 			By("verifying non-catalog images were also removed from the local cache")
 			expectRepositoriesAbsentFromLocalCache(cacheDir, nonCatalogRepos)
 			expectLocalCacheContainsExactly(cacheDir, map[string]string{
-				"oc-mirror/oc-mirror-dev:test-catalog-latest": happyPathCatalog,
+				testCatalogRepo + ":" + testCatalogTag: happyPathCatalog,
 			}, testCatalogRepo)
 		})
 	})

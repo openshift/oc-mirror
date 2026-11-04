@@ -17,7 +17,7 @@ import (
 )
 
 // fooOperandDigest is the foo operand, a related image of the foo.v0.3.1 bundle
-// in test-catalog-latest. It has no stable tag, so its digest is pinned here.
+// in happyPathCatalog. It has no stable tag, so its digest is pinned here.
 const fooOperandDigest = "sha256:1ce8c0187c8fe6b4be327dc848b8baf062ce1baa5096b4f5d955893d126d5b58"
 
 var _ = Describe("cache and workspace configuration", func() {
@@ -70,7 +70,7 @@ var _ = Describe("cache and workspace configuration", func() {
 		expectOcMirrorCommandSuccess(result, err)
 
 		By("verifying cached manifest bytes and the mirrored catalog, bundle, and related image")
-		cacheDigest := localCacheTagDigest(effectiveCache, repo, "test-catalog-latest")
+		cacheDigest := localCacheTagDigest(effectiveCache, repo, testCatalogTag)
 		expectImageInLocalCache(effectiveCache, ref.Context().Digest(cacheDigest))
 		expectCatalogBundlesMatchISC(specCtx, *testRegistry, operatorISC, map[string][]string{"foo": {"foo.v0.3.1"}})
 		expectCatalogContainsOnlyExpectedPackages(specCtx, *testRegistry, operatorISC)
@@ -109,7 +109,7 @@ var _ = Describe("cache and workspace configuration", func() {
 		logOcMirrorResult("custom cache m2d", result)
 		expectOcMirrorCommandSuccess(result, err)
 		cachedImages := map[string]string{
-			"oc-mirror/oc-mirror-dev:test-catalog-latest":                                                     happyPathCatalog,
+			testCatalogRepo + ":" + testCatalogTag:                                                            happyPathCatalog,
 			"oc-mirror/oc-mirror-dev:foo-bundle-v0.3.1":                                                       "quay.io/oc-mirror/oc-mirror-dev:foo-bundle-v0.3.1",
 			"oc-mirror/oc-mirror-dev:sha256-1ce8c0187c8fe6b4be327dc848b8baf062ce1baa5096b4f5d955893d126d5b58": operandImage,
 		}
