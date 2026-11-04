@@ -1086,3 +1086,56 @@ func TestBuildReleasePlatformFilters(t *testing.T) {
 	_, graphPresent := filters["docker://registry/graph:latest"]
 	assert.False(t, graphPresent, "TypeCincinnatiGraph images must not appear in platform filters")
 }
+
+// TestReleaseImageCollectorRepoOverrides runs mirrorToDisk and diskToMirror with
+// the same releaseImageRepo/releaseComponentRepo and checks that release images
+// land at the configured paths, and that diskToMirror reads back from the cache
+// exactly what mirrorToDisk wrote to it.
+func TestReleaseImageCollectorRepoOverrides(t *testing.T) {
+	log := clog.New("trace")
+	const (
+		releaseTag   = "4.13.10-x86_64"
+		componentTag = releaseTag + "-agent-installer-api-server"
+	)
+	fixture := filepath.Join(consts.TestFolder, "working-dir-fake", "hold-release", "ocp-release", "4.14.1-x86_64")
+
+	tests := []struct {
+		name, imageRepo, componentRepo, wantImageRepo, wantComponentRepo string
+	}{
+		{name: "defaults", wantImageRepo: "openshift/release-images", wantComponentRepo: "openshift/release"},
+		{name: "release image override", imageRepo: "okd/scos-release", wantImageRepo: "okd/scos-release", wantComponentRepo: "openshift/release"},
+		{name: "release component override", componentRepo: "okd/scos-content", wantImageRepo: "openshift/release-images", wantComponentRepo: "okd/scos-content"},
+		{name: "both overrides", imageRepo: "okd/scos-release", componentRepo: "okd/scos-content", wantImageRepo: "okd/scos-release", wantComponentRepo: "okd/scos-content"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			collect := func(ex *LocalStorageCollector) []v2alpha1.CopyImageSchema {
+				ex.Config.Mirror.Platform.ReleaseImageRepo = tt.imageRepo
+				ex.Config.Mirror.Platform.ReleaseComponentRepo = tt.componentRepo
+				err := copy.Copy(fixture, filepath.Join(ex.Opts.Global.WorkingDir, releaseImageExtractDir, "ocp-release", releaseTag))
+				assert.NoError(t, err)
+				res, err := ex.ReleaseImageCollector(context.Background())
+				assert.NoError(t, err)
+				return res.AllImages
+			}
+			m2dImages := collect(setupCollector_MirrorToDisk(t.TempDir(), log, &MockManifest{Log: log}))
+			d2mImages := collect(setupCollector_DiskToMirror(t.TempDir(), log))
+
+			var cached, readBack, mirrored []string
+			for _, img := range m2dImages {
+				cached = append(cached, img.Destination)
+			}
+			for _, img := range d2mImages {
+				readBack = append(readBack, img.Source)
+				mirrored = append(mirrored, img.Destination)
+			}
+			assert.ElementsMatch(t, cached, readBack)
+
+			assert.Contains(t, cached, "docker://localhost:9999/"+tt.wantImageRepo+":"+releaseTag)
+			assert.Contains(t, cached, "docker://localhost:9999/"+tt.wantComponentRepo+":"+componentTag)
+			assert.Contains(t, mirrored, "docker://localhost:5000/test/"+tt.wantImageRepo+":"+releaseTag)
+			assert.Contains(t, mirrored, "docker://localhost:5000/test/"+tt.wantComponentRepo+":"+componentTag)
+			assert.Contains(t, mirrored, "docker://localhost:5000/test/openshift/graph-image:latest")
+		})
+	}
+}

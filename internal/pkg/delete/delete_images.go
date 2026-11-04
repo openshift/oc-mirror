@@ -169,28 +169,12 @@ func (o DeleteImages) DeleteRegistryImages(deleteImageList v2alpha1.DeleteImageL
 			continue
 		}
 		deleteDestBase := name[1]
-		// Release content is always mirrored to standardized paths and Platform type does not support targetRepo/tag.
-		// For these types, we use strict equality checking with the expected paths.
-		// For other types that support targetRepo/targetTag, we only verify the image is under the correct
-		// registry tree for flexibility needed with targetRepo/targetTag.
-		switch img.Type {
-		case v2alpha1.TypeOCPReleaseContent:
-			expectedPath := deleteDestBase + "/" + releaseContentPathComponents
-			if imgSpecRef.Name != expectedPath {
-				allErrs = append(allErrs, fmt.Errorf("delete destination %s does not match values found in the delete-images yaml file (expected release content at %s, got %s)", o.Opts.Global.DeleteDestination, expectedPath, imgSpecRef.Name))
-				continue
-			}
-		case v2alpha1.TypeOCPRelease:
-			expectedPath := deleteDestBase + "/" + releaseImagePathComponents
-			if imgSpecRef.Name != expectedPath {
-				allErrs = append(allErrs, fmt.Errorf("delete destination %s does not match values found in the delete-images yaml file (expected release at %s, got %s)", o.Opts.Global.DeleteDestination, expectedPath, imgSpecRef.Name))
-				continue
-			}
-		default:
-			if !strings.HasPrefix(imgSpecRef.Name, deleteDestBase+"/") {
-				allErrs = append(allErrs, fmt.Errorf("delete destination %s does not match values found in the delete-images yaml file (expected prefix %s/, got %s)", o.Opts.Global.DeleteDestination, deleteDestBase, imgSpecRef.Name))
-				continue
-			}
+		// Every image type can be mirrored to a configurable destination path
+		// (targetRepo/targetTag, or releaseImageRepo/releaseComponentRepo for release
+		// content), so we only verify the image is under the correct registry tree.
+		if !strings.HasPrefix(imgSpecRef.Name, deleteDestBase+"/") {
+			allErrs = append(allErrs, fmt.Errorf("delete destination %s does not match values found in the delete-images yaml file (expected prefix %s/, got %s)", o.Opts.Global.DeleteDestination, deleteDestBase, imgSpecRef.Name))
+			continue
 		}
 		cis := v2alpha1.CopyImageSchema{
 			Origin:      img.ImageName,

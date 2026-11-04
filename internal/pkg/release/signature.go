@@ -64,7 +64,7 @@ func NewSignatureClient(log clog.PluggableLoggerInterface, config v2alpha1.Image
 // GenerateReleaseSignatures
 func (o SignatureSchema) GenerateReleaseSignatures(ctx context.Context, images []v2alpha1.CopyImageSchema) ([]v2alpha1.CopyImageSchema, error) {
 	// OCPBUGS-56009
-	if o.Opts.Global.IgnoreReleaseSignature && len(o.Config.Mirror.Platform.Release) > 0 {
+	if o.Opts.Global.IgnoreReleaseSignature {
 		return images, nil
 	}
 
