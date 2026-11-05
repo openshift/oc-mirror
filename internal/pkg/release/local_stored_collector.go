@@ -1,6 +1,7 @@
 package release
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"io"
@@ -752,26 +753,26 @@ func compareByOriginSourceDest(a, b v2alpha1.CopyImageSchema) int {
 	return strings.Compare(a.Destination, b.Destination)
 }
 
-// releasePathComponents applies the platform override to payloads and components,
+// releasePathComponents applies the independent payload and component overrides,
 // including kubevirt images, while preserving the separate graph repository.
 func (o LocalStorageCollector) releasePathComponents(imgSpec image.ImageSpec, imgType v2alpha1.ImageType, imgName string) string {
-	if repo := o.Config.Mirror.Platform.TargetRepo; repo != "" &&
-		(imgType == v2alpha1.TypeOCPRelease || imgType == v2alpha1.TypeOCPReleaseContent) {
-		return repo
-	}
-	pathComponents := ""
 	switch {
 	case imgType == v2alpha1.TypeOCPRelease:
-		pathComponents = releaseImagePathComponents
+		return cmp.Or(o.Config.Mirror.Platform.TargetImageRepo, releaseImagePathComponents)
+	case imgType == v2alpha1.TypeOCPReleaseContent:
+		if repo := o.Config.Mirror.Platform.TargetComponentRepo; repo != "" {
+			return repo
+		}
+		if imgName != "" {
+			return releaseComponentPathComponents
+		}
 	case imgType == v2alpha1.TypeCincinnatiGraph:
-		pathComponents = imgSpec.PathComponent
-	case imgType == v2alpha1.TypeOCPReleaseContent && imgName != "":
-		pathComponents = releaseComponentPathComponents
-	case imgSpec.IsImageByDigestOnly():
-		pathComponents = imgSpec.PathComponent
+		return imgSpec.PathComponent
 	}
-
-	return pathComponents
+	if imgSpec.IsImageByDigestOnly() {
+		return imgSpec.PathComponent
+	}
+	return ""
 }
 
 func prepareTag(imgSpec image.ImageSpec, imgType v2alpha1.ImageType, releaseTag, imgName string) string {

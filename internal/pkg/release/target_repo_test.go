@@ -44,10 +44,17 @@ func TestReleaseTargetRepoMappings(t *testing.T) {
 	for i, tc := range cases {
 		images[i] = tc.image
 	}
-	for _, repo := range []string{"", "openshift4/ocp-release"} {
-		t.Run("repo="+repo, func(t *testing.T) {
+	for _, target := range []struct{ name, imageRepo, componentRepo string }{
+		{"defaults", "", ""},
+		{"payload only", "openshift4/ocp-release", ""},
+		{"components only", "", "openshift4/components"},
+		{"separate repositories", "openshift-release-dev/ocp-release", "openshift-release-dev/ocp-v4.0-art-dev"},
+		{"shared repository", "openshift4/ocp-release", "openshift4/ocp-release"},
+	} {
+		t.Run(target.name, func(t *testing.T) {
 			o := LocalStorageCollector{Log: clog.New("error"), LocalStorageFQDN: "localhost:55000"}
-			o.Config.Mirror.Platform.TargetRepo = repo
+			o.Config.Mirror.Platform.TargetImageRepo = target.imageRepo
+			o.Config.Mirror.Platform.TargetComponentRepo = target.componentRepo
 			o.Opts = mirror.CopyOptions{Mode: mirror.MirrorToDisk, Destination: "file:///tmp/archive"}
 			cached, err := o.prepareM2DCopyBatch(images, releaseTag)
 			require.NoError(t, err)
@@ -64,8 +71,11 @@ func TestReleaseTargetRepoMappings(t *testing.T) {
 			for i, tc := range cases {
 				t.Run(tc.name, func(t *testing.T) {
 					path := tc.defaultRepo
-					if repo != "" && tc.image.Type != v2alpha1.TypeCincinnatiGraph {
-						path = repo
+					if tc.image.Type == v2alpha1.TypeOCPRelease && target.imageRepo != "" {
+						path = target.imageRepo
+					}
+					if tc.image.Type == v2alpha1.TypeOCPReleaseContent && target.componentRepo != "" {
+						path = target.componentRepo
 					}
 					require.Equal(t, "docker://localhost:55000/"+path+":"+tc.tag, cached[i].Destination)
 					require.Equal(t, cached[i].Destination, restored[i].Source, "diskToMirror must pull the cached reference")
@@ -86,7 +96,7 @@ func TestReleaseTargetRepoMappings(t *testing.T) {
 func TestReleaseTargetRepoDigestPayload(t *testing.T) {
 	digest := strings.Repeat("b", 64)
 	o := LocalStorageCollector{Log: clog.New("error"), LocalStorageFQDN: "localhost:55000"}
-	o.Config.Mirror.Platform.TargetRepo = "openshift4/ocp-release"
+	o.Config.Mirror.Platform.TargetImageRepo = "openshift4/ocp-release"
 	o.Opts.Mode = mirror.DiskToMirror
 	o.Opts.Destination = "docker://mirror.example.com"
 	batches, err := o.prepareMonoReleaseBatch(v2alpha1.RelatedImage{Image: "quay.io/release/payload@sha256:" + digest, Type: v2alpha1.TypeOCPRelease})

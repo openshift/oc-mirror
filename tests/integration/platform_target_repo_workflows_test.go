@@ -12,7 +12,7 @@ import (
 	"github.com/openshift/oc-mirror/tests/integration/pkg/registry"
 )
 
-var _ = Describe("platform targetRepo workflow combinations", Label("platform-target-repo"), func() {
+var _ = Describe("platform target repository workflow combinations", Label("platform-target-repo"), func() {
 	var workDir string
 
 	BeforeEach(func() {
