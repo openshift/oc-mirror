@@ -9,7 +9,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-var _ = Describe("platform targetRepo", Label("platform-target-repo"), func() {
+var _ = Describe("platform target repositories", Label("platform-target-repo"), func() {
 	var workDir string
 
 	BeforeEach(func() {
@@ -96,7 +96,8 @@ var _ = Describe("platform targetRepo", Label("platform-target-repo"), func() {
 		))
 		savedConfig, err := os.ReadFile(filepath.Join(workDir, dirWorkingDir, "delete", "delete-imageset-config.yaml"))
 		Expect(err).NotTo(HaveOccurred())
-		Expect(string(savedConfig)).To(ContainSubstring("targetRepo: " + repo))
+		Expect(string(savedConfig)).To(ContainSubstring("targetImageRepo: " + repo))
+		Expect(string(savedConfig)).To(ContainSubstring("targetComponentRepo: " + repo))
 
 		By("deleting release payload and components from the registry and local cache")
 		result, err = runner.DeletePhaseTwo(ctx, deleteYaml, testRegistry.Endpoint()+"/team",

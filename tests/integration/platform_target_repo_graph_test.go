@@ -15,7 +15,7 @@ import (
 	"github.com/openshift/oc-mirror/tests/integration/pkg/ocmirror"
 )
 
-var _ = Describe("platform targetRepo with graph data", Label("platform-target-repo"), func() {
+var _ = Describe("platform target repositories with graph data", Label("platform-target-repo"), func() {
 	var workDir string
 
 	BeforeEach(func() {
@@ -83,10 +83,13 @@ var _ = Describe("platform targetRepo with graph data", Label("platform-target-r
 		By("checking that payloads, components, and graph images exist at the generated paths")
 		repositories, err := testRegistry.ListRepositories(ctx)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(repositories).To(ConsistOf("team/releases", "team/openshift-graph-image"))
+		Expect(repositories).To(ConsistOf("team/releases", "team/components", "team/openshift-graph-image"))
 		tags, err := testRegistry.ListTags(ctx, "team/releases")
 		Expect(err).NotTo(HaveOccurred())
-		Expect(tags).To(ConsistOf("v0.0.1", "v0.0.1-alpine"))
+		Expect(tags).To(ConsistOf("v0.0.1"))
+		componentTags, err := testRegistry.ListTags(ctx, "team/components")
+		Expect(err).NotTo(HaveOccurred(), "list independently mirrored release components")
+		Expect(componentTags).To(ConsistOf("v0.0.1-alpine"), "components must not be placed in the payload repository")
 		graphRef := destination + "/openshift-graph-image:latest"
 		Expect(registryImageDigest(graphRef)).NotTo(BeEmpty())
 

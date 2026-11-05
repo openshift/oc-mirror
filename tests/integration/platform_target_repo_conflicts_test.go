@@ -9,7 +9,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ = Describe("platform targetRepo destination conflicts", Label("platform-target-repo"), func() {
+var _ = Describe("platform target repository destination conflicts", Label("platform-target-repo"), func() {
 	var workDir string
 
 	BeforeEach(func() {
@@ -29,28 +29,30 @@ var _ = Describe("platform targetRepo destination conflicts", Label("platform-ta
 		expectEmptyRegistry(*testRegistry)
 	})
 
-	It("rejects a destination namespace that would cause targetRepo to be flattened", func() {
+	It("rejects a destination namespace that would flatten a target repository", func() {
 		result, err := runner.MirrorToMirror(ctx, filepath.Join(iscDir, "platform_target_repo", "isc.yaml"), workDir, testRegistry.Endpoint()+"/team",
 			"--cache-dir", filepath.Join(workDir, "cache"), "--dest-tls-verify=false", "--max-nested-paths=2")
-		expectOcMirrorExitCode(result, err, 1, "platform.targetRepo", "exceeds --max-nested-paths=2")
+		expectOcMirrorExitCode(result, err, 1, "platform.targetImageRepo", "exceeds --max-nested-paths=2")
 		expectEmptyRegistry(*testRegistry)
 	})
 
-	DescribeTable("reserves the graph repository before collection can push it", func(repo string, limit int) {
+	DescribeTable("reserves the graph repository before collection can push it", func(field, repo string, limit int) {
 		isc := filepath.Join(workDir, "graph-conflict.yaml")
 		Expect(os.WriteFile(isc, fmt.Appendf(nil, `kind: ImageSetConfiguration
 apiVersion: mirror.openshift.io/v2alpha1
 mirror:
   platform:
-    targetRepo: %s
+    %s: %s
     graph: true
-`, repo), 0600)).To(Succeed())
+`, field, repo), 0600)).To(Succeed())
 		result, err := runner.MirrorToMirror(ctx, isc, workDir, testRegistry.Endpoint()+"/team",
 			"--cache-dir", filepath.Join(workDir, "cache"), "--dest-tls-verify=false", fmt.Sprintf("--max-nested-paths=%d", limit))
 		expectOcMirrorExitCode(result, err, 1, "conflicts with the Cincinnati graph repository")
 		expectEmptyRegistry(*testRegistry)
 	},
-		Entry("original path", "openshift/graph-image", 0),
-		Entry("flattened path", "openshift-graph-image", 2),
+		Entry("payload original path", "targetImageRepo", "openshift/graph-image", 0),
+		Entry("payload flattened path", "targetImageRepo", "openshift-graph-image", 2),
+		Entry("component original path", "targetComponentRepo", "openshift/graph-image", 0),
+		Entry("component flattened path", "targetComponentRepo", "openshift-graph-image", 2),
 	)
 })

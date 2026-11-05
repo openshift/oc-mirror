@@ -143,31 +143,42 @@ func validatePackageChannel(ctlgName string, pkg *v2alpha1.IncludePackage, ch *v
 	return nil
 }
 
-// validateReleasePlatformFields validates the destination repository and ensures
+// validateReleasePlatformFields validates the destination repositories and ensures
 // that platform.platforms and platform.architectures are mutually exclusive.
 func validateReleasePlatformFields(cfg *v2alpha1.ImageSetConfiguration) []error {
-	if err := validatePlatformTargetRepo(cfg.Mirror.Platform.TargetRepo); err != nil {
-		return []error{err}
-	}
+	errs := validatePlatformTargetRepos(cfg.Mirror.Platform)
 	//nolint:staticcheck // SA1019: Architectures is deprecated but we check it for mutual exclusivity
 	if len(cfg.Mirror.Platform.Platforms) > 0 && len(cfg.Mirror.Platform.Architectures) > 0 {
-		return []error{fmt.Errorf(
-			"platform.platforms and platform.architectures cannot be used together; " +
+		errs = append(errs, fmt.Errorf(
+			"platform.platforms and platform.architectures cannot be used together; "+
 				"use platform.platforms for sparse manifest filtering (requires disabling manifest list blob checks on container registry side), or platform.architectures (deprecated) for OCP multi payload or single arch payloads",
-		)}
+		))
+	}
+	return errs
+}
+
+func validatePlatformTargetRepo(field, repo string) error {
+	if repo != "" && (len(repo) > reference.NameTotalLengthMax || !v2alpha1.IsValidPathComponent(repo)) {
+		return fmt.Errorf("platform.%s %q must be a lowercase repository path of at most %d characters without a transport, tag, or digest", field, repo, reference.NameTotalLengthMax)
 	}
 	return nil
 }
 
-func validatePlatformTargetRepo(repo string) error {
-	if repo != "" && (len(repo) > reference.NameTotalLengthMax || !v2alpha1.IsValidPathComponent(repo)) {
-		return fmt.Errorf("platform.targetRepo %q must be a lowercase repository path of at most %d characters without a transport, tag, or digest", repo, reference.NameTotalLengthMax)
+func validatePlatformTargetRepos(platform v2alpha1.Platform) []error {
+	var errs []error
+	for _, target := range []struct{ field, repo string }{
+		{"targetImageRepo", platform.TargetImageRepo},
+		{"targetComponentRepo", platform.TargetComponentRepo},
+	} {
+		if err := validatePlatformTargetRepo(target.field, target.repo); err != nil {
+			errs = append(errs, err)
+		}
 	}
-	return nil
+	return errs
 }
 
 func validateReleaseTargetRepoDelete(cfg *v2alpha1.DeleteImageSetConfiguration) error {
-	return validatePlatformTargetRepo(cfg.Delete.Platform.TargetRepo)
+	return utilerrors.NewAggregate(validatePlatformTargetRepos(cfg.Delete.Platform))
 }
 
 func validateReleaseChannels(cfg *v2alpha1.ImageSetConfiguration) []error {

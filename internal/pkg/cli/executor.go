@@ -1152,11 +1152,10 @@ func (o *ExecutorSchema) generateUpdateServiceResource(images []v2alpha1.CopyIma
 	return o.ClusterResources.UpdateServiceGenerator(graphImage, releaseImage)
 }
 
-// validatePlatformDestination validates the complete repository name and preserves
-// the requested path when a registry nesting limit is set.
+// validatePlatformDestination validates both complete repository names and preserves
+// each requested path when a registry nesting limit is set.
 func (o *ExecutorSchema) validatePlatformDestination() error {
-	repo := o.Config.Mirror.Platform.TargetRepo
-	if repo == "" {
+	if o.Config.Mirror.Platform.TargetImageRepo == "" && o.Config.Mirror.Platform.TargetComponentRepo == "" {
 		return nil
 	}
 	destination := strings.TrimPrefix(o.Opts.Destination, consts.DockerProtocol)
@@ -1164,22 +1163,32 @@ func (o *ExecutorSchema) validatePlatformDestination() error {
 		// The final registry namespace is not known until diskToMirror.
 		destination = net.JoinHostPort(localStorageHost, strconv.Itoa(int(o.Opts.Global.Port)))
 	}
-	ref, err := reference.WithName(destination + "/" + repo)
-	if err != nil {
-		return fmt.Errorf("platform.targetRepo %q with destination %q is invalid: %w", repo, destination, err)
-	}
-	if limit := o.Opts.Global.MaxNestedPaths; limit > 0 && strings.Count(reference.Path(ref), "/")+1 > limit {
-		return fmt.Errorf("platform.targetRepo %q with destination %q exceeds --max-nested-paths=%d; choose a repository and destination namespace that fit the limit", repo, o.Opts.Destination, limit)
-	}
-	if o.Config.Mirror.Platform.Graph {
-		return o.validatePlatformGraphRepository(destination, ref.Name())
+	for _, target := range []struct{ field, repo string }{
+		{"targetImageRepo", o.Config.Mirror.Platform.TargetImageRepo},
+		{"targetComponentRepo", o.Config.Mirror.Platform.TargetComponentRepo},
+	} {
+		if target.repo == "" {
+			continue
+		}
+		ref, err := reference.WithName(destination + "/" + target.repo)
+		if err != nil {
+			return fmt.Errorf("platform.%s %q with destination %q is invalid: %w", target.field, target.repo, destination, err)
+		}
+		if limit := o.Opts.Global.MaxNestedPaths; limit > 0 && strings.Count(reference.Path(ref), "/")+1 > limit {
+			return fmt.Errorf("platform.%s %q with destination %q exceeds --max-nested-paths=%d; choose a repository and destination namespace that fit the limit", target.field, target.repo, o.Opts.Destination, limit)
+		}
+		if o.Config.Mirror.Platform.Graph {
+			if err := o.validatePlatformGraphRepository(destination, ref.Name(), target.field); err != nil {
+				return err
+			}
+		}
 	}
 	return nil
 }
 
 // The graph image can be pushed during collection, before batch validation.
 // Reserve its repository so that it cannot overwrite release images.
-func (o *ExecutorSchema) validatePlatformGraphRepository(destination, releaseRepository string) error {
+func (o *ExecutorSchema) validatePlatformGraphRepository(destination, targetRepository, field string) error {
 	graphRef, err := release.GraphImageDestination(destination, *o.Opts)
 	if err != nil {
 		return err
@@ -1188,8 +1197,8 @@ func (o *ExecutorSchema) validatePlatformGraphRepository(destination, releaseRep
 	if err != nil {
 		return err
 	}
-	if releaseRepository == graphSpec.Name {
-		return fmt.Errorf("platform.targetRepo %q conflicts with the Cincinnati graph repository %q", o.Config.Mirror.Platform.TargetRepo, graphSpec.Name)
+	if targetRepository == graphSpec.Name {
+		return fmt.Errorf("platform.%s repository %q conflicts with the Cincinnati graph repository %q", field, targetRepository, graphSpec.Name)
 	}
 	return nil
 }
@@ -1197,7 +1206,7 @@ func (o *ExecutorSchema) validatePlatformGraphRepository(destination, releaseRep
 // validatePlatformImageDestinations prevents repository overrides from assigning
 // different images to the same tag. Identical digest-pinned images may share it.
 func (o *ExecutorSchema) validatePlatformImageDestinations(images []v2alpha1.CopyImageSchema) error {
-	if o.Config.Mirror.Platform.TargetRepo == "" {
+	if o.Config.Mirror.Platform.TargetImageRepo == "" && o.Config.Mirror.Platform.TargetComponentRepo == "" {
 		return nil
 	}
 	origins := make(map[string]string, len(images))
@@ -1211,7 +1220,7 @@ func (o *ExecutorSchema) validatePlatformImageDestinations(images []v2alpha1.Cop
 				previousSpec.Digest == currentSpec.Digest && previousSpec.Algorithm == currentSpec.Algorithm {
 				continue
 			}
-			return fmt.Errorf("platform.targetRepo %q produces conflicting destination %q for %q and %q", o.Config.Mirror.Platform.TargetRepo, img.Destination, previous, origin)
+			return fmt.Errorf("platform.targetImageRepo %q and platform.targetComponentRepo %q produce conflicting destination %q for %q and %q", o.Config.Mirror.Platform.TargetImageRepo, o.Config.Mirror.Platform.TargetComponentRepo, img.Destination, previous, origin)
 		}
 		origins[img.Destination] = origin
 	}

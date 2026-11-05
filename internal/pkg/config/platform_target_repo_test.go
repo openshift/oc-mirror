@@ -35,12 +35,14 @@ func TestValidatePlatformTargetRepo(t *testing.T) {
 		{"too long", strings.Repeat("a", 256), false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			err := validatePlatformTargetRepo(tc.repo)
-			if !tc.valid {
-				require.ErrorContains(t, err, "platform.targetRepo")
-				return
+			for _, field := range []string{"targetImageRepo", "targetComponentRepo"} {
+				err := validatePlatformTargetRepo(field, tc.repo)
+				if !tc.valid {
+					require.ErrorContains(t, err, "platform."+field)
+					continue
+				}
+				require.NoError(t, err)
 			}
-			require.NoError(t, err)
 		})
 	}
 }
@@ -53,20 +55,28 @@ func TestPlatformTargetRepoConfig(t *testing.T) {
 				stanza = "delete"
 			}
 			for _, tc := range []struct {
-				repo  string
-				valid bool
+				imageRepo, componentRepo string
+				errorFields              []string
 			}{
-				{"", true},
-				{"openshift4/ocp-release", true},
-				{"repo:tag", false},
+				{"", "", nil},
+				{"openshift4/ocp-release", "", nil},
+				{"", "openshift4/components", nil},
+				{"openshift4/ocp-release", "openshift4/components", nil},
+				{"repo:tag", "", []string{"targetImageRepo"}},
+				{"", "repo:tag", []string{"targetComponentRepo"}},
+				{"repo:tag", "UPPER", []string{"targetImageRepo", "targetComponentRepo"}},
+				{"openshift4/ocp-release", "repo:tag", []string{"targetComponentRepo"}},
+				{"repo:tag", "openshift4/components", []string{"targetImageRepo"}},
 			} {
-				t.Run(tc.repo, func(t *testing.T) {
-					data := fmt.Sprintf("kind: %s\napiVersion: mirror.openshift.io/v2alpha1\n%s:\n  platform:\n    targetRepo: %q\n", kind, stanza, tc.repo)
+				t.Run(tc.imageRepo+"/"+tc.componentRepo, func(t *testing.T) {
+					data := fmt.Sprintf("kind: %s\napiVersion: mirror.openshift.io/v2alpha1\n%s:\n  platform:\n    targetImageRepo: %q\n    targetComponentRepo: %q\n", kind, stanza, tc.imageRepo, tc.componentRepo)
 					path := filepath.Join(t.TempDir(), "isc.yaml")
 					require.NoError(t, os.WriteFile(path, []byte(data), 0600))
 					cfg, err := ReadConfig(path, kind)
-					if !tc.valid {
-						require.ErrorContains(t, err, "platform.targetRepo")
+					if len(tc.errorFields) > 0 {
+						for _, field := range tc.errorFields {
+							require.ErrorContains(t, err, "platform."+field)
+						}
 						return
 					}
 					require.NoError(t, err)
@@ -79,9 +89,27 @@ func TestPlatformTargetRepoConfig(t *testing.T) {
 					default:
 						t.Fatalf("unexpected configuration type %T", cfg)
 					}
-					require.Equal(t, tc.repo, platform.TargetRepo)
+					require.Equal(t, tc.imageRepo, platform.TargetImageRepo)
+					require.Equal(t, tc.componentRepo, platform.TargetComponentRepo)
 				})
 			}
+		})
+	}
+}
+
+func TestPlatformTargetRepoRejectsOldField(t *testing.T) {
+	for _, kind := range []string{v2alpha1.ImageSetConfigurationKind, v2alpha1.DeleteImageSetConfigurationKind} {
+		t.Run(kind, func(t *testing.T) {
+			stanza := "mirror"
+			if kind == v2alpha1.DeleteImageSetConfigurationKind {
+				stanza = "delete"
+			}
+			data := fmt.Sprintf("kind: %s\napiVersion: mirror.openshift.io/v2alpha1\n%s:\n  platform:\n    targetRepo: releases\n", kind, stanza)
+			path := filepath.Join(t.TempDir(), "isc.yaml")
+			require.NoError(t, os.WriteFile(path, []byte(data), 0600))
+			_, err := ReadConfig(path, kind)
+			require.ErrorContains(t, err, "unknown field")
+			require.ErrorContains(t, err, "targetRepo")
 		})
 	}
 }

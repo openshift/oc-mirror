@@ -74,3 +74,27 @@ func TestReleaseCustomRepositorySuffixMirrors(t *testing.T) {
 		})
 	}
 }
+
+func TestReleaseSeparateRepositoriesPreserveNamespaceMirrors(t *testing.T) {
+	const sourceNamespace = "quay.io/openshift-release-dev"
+	const destinationNamespace = "mirror.example.com/mirrors/quay.io/openshift-release-dev"
+	images := []v2alpha1.CopyImageSchema{
+		{
+			Origin: sourceNamespace + "/ocp-release:4.20.8-x86_64", Type: v2alpha1.TypeOCPRelease,
+			Destination: "docker://" + destinationNamespace + "/ocp-release:4.20.8-x86_64",
+		},
+		{
+			Origin: sourceNamespace + "/ocp-v4.0-art-dev@sha256:" + strings.Repeat("a", 64), Type: v2alpha1.TypeOCPReleaseContent,
+			Destination: "docker://" + destinationNamespace + "/ocp-v4.0-art-dev:4.20.8-x86_64-api-server",
+		},
+	}
+	cr := ClusterResourcesGenerator{}
+	mirrors, err := cr.generateImageMirrors(images, DigestsOnlyMode, false)
+	require.NoError(t, err)
+	idms, err := cr.generateIDMS(mirrors)
+	require.NoError(t, err)
+	require.Len(t, idms, 1)
+	require.Equal(t, []confv1.ImageDigestMirrors{
+		{Source: sourceNamespace, Mirrors: []confv1.ImageMirror{destinationNamespace}},
+	}, idms[0].Spec.ImageDigestMirrors, "preserved source paths must share the correct namespace mapping")
+}

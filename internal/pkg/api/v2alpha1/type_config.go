@@ -85,12 +85,16 @@ type Delete struct {
 
 // Platform defines the configuration for OpenShift and OKD platform types.
 type Platform struct {
-	// TargetRepo replaces the destination repository for release payload and component
-	// images. It is relative to the destination registry (and optional namespace),
-	// and must not contain a transport, tag, or digest. Existing tags are preserved.
-	// If empty, the default release repositories are used. Use the same value
-	// for mirrorToDisk and diskToMirror because it also controls the cache path.
-	TargetRepo string `json:"targetRepo,omitempty"`
+	// TargetImageRepo overrides the release payload repository, relative to the
+	// destination registry and optional namespace (default: openshift/release-images).
+	// It must not contain a transport, tag, or digest. Existing tags are preserved.
+	// Use the same value for mirrorToDisk and diskToMirror because it also controls
+	// the cache path.
+	TargetImageRepo string `json:"targetImageRepo,omitempty"`
+	// TargetComponentRepo overrides the repository for release component images,
+	// including kubevirt images (default: openshift/release). It follows the same
+	// path and cache rules as TargetImageRepo. Neither override affects graph images.
+	TargetComponentRepo string `json:"targetComponentRepo,omitempty"`
 	// Graph defines whether Cincinnati graph data will
 	// downloaded and publish
 	Graph bool `json:"graph,omitempty"`
@@ -122,10 +126,7 @@ type Platform struct {
 }
 
 func (p Platform) DeepCopy() Platform {
-	platformCopy := Platform{
-		Graph:      p.Graph,
-		TargetRepo: p.TargetRepo,
-	}
+	platformCopy := p
 
 	platformCopy.Channels = make([]ReleaseChannel, len(p.Channels))
 	copy(platformCopy.Channels, p.Channels)

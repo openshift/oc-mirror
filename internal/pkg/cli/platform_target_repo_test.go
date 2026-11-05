@@ -15,73 +15,88 @@ import (
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 )
 
+func platformWithTargetRepo(field, repo string) v2alpha1.Platform {
+	if field == "targetImageRepo" {
+		return v2alpha1.Platform{TargetImageRepo: repo}
+	}
+	return v2alpha1.Platform{TargetComponentRepo: repo}
+}
+
 func TestPlatformTargetRepoNestingLimit(t *testing.T) {
-	for _, tc := range []struct {
-		name, repo, destination string
-		limit                   int
-		disk, invalid           bool
-	}{
-		{"unlimited", "a/b/c", "docker://mirror.example.com/team", 0, false, false},
-		{"fits", "a/b", "docker://mirror.example.com", 2, false, false},
-		{"too deep", "a/b/c", "docker://mirror.example.com", 2, false, true},
-		{"namespace counts", "a/b", "docker://mirror.example.com/team", 2, false, true},
-		{"single path", "release", "docker://mirror.example.com", 1, false, false},
-		{"default can flatten", "", "docker://mirror.example.com/team", 2, false, false},
-		{"disk fits", "a/b", "file:///tmp/archive", 2, true, false},
-		{"disk too deep", "a/b/c", "file:///tmp/archive", 2, true, true},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			ex := ExecutorSchema{Opts: &mirror.CopyOptions{
-				Destination: tc.destination,
-				Mode:        mirror.MirrorToMirror,
-				Global:      &mirror.GlobalOptions{MaxNestedPaths: tc.limit},
-			}}
-			if tc.disk {
-				ex.Opts.Mode = mirror.MirrorToDisk
+	for _, field := range []string{"targetImageRepo", "targetComponentRepo"} {
+		t.Run(field, func(t *testing.T) {
+			for _, tc := range []struct {
+				name, repo, destination string
+				limit                   int
+				disk, invalid           bool
+			}{
+				{"unlimited", "a/b/c", "docker://mirror.example.com/team", 0, false, false},
+				{"fits", "a/b", "docker://mirror.example.com", 2, false, false},
+				{"too deep", "a/b/c", "docker://mirror.example.com", 2, false, true},
+				{"namespace counts", "a/b", "docker://mirror.example.com/team", 2, false, true},
+				{"single path", "release", "docker://mirror.example.com", 1, false, false},
+				{"default can flatten", "", "docker://mirror.example.com/team", 2, false, false},
+				{"disk fits", "a/b", "file:///tmp/archive", 2, true, false},
+				{"disk too deep", "a/b/c", "file:///tmp/archive", 2, true, true},
+			} {
+				t.Run(tc.name, func(t *testing.T) {
+					ex := ExecutorSchema{Opts: &mirror.CopyOptions{
+						Destination: tc.destination,
+						Mode:        mirror.MirrorToMirror,
+						Global:      &mirror.GlobalOptions{MaxNestedPaths: tc.limit},
+					}}
+					if tc.disk {
+						ex.Opts.Mode = mirror.MirrorToDisk
+					}
+					ex.Config.Mirror.Platform = platformWithTargetRepo(field, tc.repo)
+					err := ex.validatePlatformDestination()
+					if tc.invalid {
+						require.ErrorContains(t, err, "exceeds --max-nested-paths")
+						return
+					}
+					require.NoError(t, err)
+				})
 			}
-			ex.Config.Mirror.Platform.TargetRepo = tc.repo
-			err := ex.validatePlatformDestination()
-			if tc.invalid {
-				require.ErrorContains(t, err, "exceeds --max-nested-paths")
-				return
-			}
-			require.NoError(t, err)
 		})
 	}
 }
 
 func TestPlatformTargetRepoDestinationValidation(t *testing.T) {
 	const registry = "mirror.example.com"
-	for _, tc := range []struct {
-		name, destination string
-		repoLength, limit int
-		disk, invalid     bool
-	}{
-		{"complete name fits", "docker://" + registry, reference.NameTotalLengthMax - len(registry) - 1, 0, false, false},
-		{"registry makes name too long", "docker://" + registry, reference.NameTotalLengthMax, 0, false, true},
-		{"too long with nesting limit", "docker://" + registry, reference.NameTotalLengthMax, 1, false, true},
-		{"namespace fits", "docker://" + registry + "/team", reference.NameTotalLengthMax - len(registry+"/team") - 1, 0, false, false},
-		{"namespace makes name too long", "docker://" + registry + "/team", reference.NameTotalLengthMax - len(registry) - 1, 0, false, true},
-		{"invalid namespace", "docker://" + registry + "/UPPER", 1, 0, false, true},
-		{"cache name fits", "file:///tmp/archive", reference.NameTotalLengthMax - len("localhost:55000/"), 0, true, false},
-		{"cache port makes name too long", "file:///tmp/archive", reference.NameTotalLengthMax - len("localhost/"), 0, true, true},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			ex := ExecutorSchema{Opts: &mirror.CopyOptions{
-				Destination: tc.destination, Mode: mirror.MirrorToMirror,
-				Global: &mirror.GlobalOptions{MaxNestedPaths: tc.limit, Port: 55000},
-			}}
-			if tc.disk {
-				ex.Opts.Mode = mirror.MirrorToDisk
+	for _, field := range []string{"targetImageRepo", "targetComponentRepo"} {
+		t.Run(field, func(t *testing.T) {
+			for _, tc := range []struct {
+				name, destination string
+				repoLength, limit int
+				disk, invalid     bool
+			}{
+				{"complete name fits", "docker://" + registry, reference.NameTotalLengthMax - len(registry) - 1, 0, false, false},
+				{"registry makes name too long", "docker://" + registry, reference.NameTotalLengthMax, 0, false, true},
+				{"too long with nesting limit", "docker://" + registry, reference.NameTotalLengthMax, 1, false, true},
+				{"namespace fits", "docker://" + registry + "/team", reference.NameTotalLengthMax - len(registry+"/team") - 1, 0, false, false},
+				{"namespace makes name too long", "docker://" + registry + "/team", reference.NameTotalLengthMax - len(registry) - 1, 0, false, true},
+				{"invalid namespace", "docker://" + registry + "/UPPER", 1, 0, false, true},
+				{"cache name fits", "file:///tmp/archive", reference.NameTotalLengthMax - len("localhost:55000/"), 0, true, false},
+				{"cache port makes name too long", "file:///tmp/archive", reference.NameTotalLengthMax - len("localhost/"), 0, true, true},
+			} {
+				t.Run(tc.name, func(t *testing.T) {
+					ex := ExecutorSchema{Opts: &mirror.CopyOptions{
+						Destination: tc.destination, Mode: mirror.MirrorToMirror,
+						Global: &mirror.GlobalOptions{MaxNestedPaths: tc.limit, Port: 55000},
+					}}
+					if tc.disk {
+						ex.Opts.Mode = mirror.MirrorToDisk
+					}
+					ex.Config.Mirror.Platform = platformWithTargetRepo(field, strings.Repeat("a", tc.repoLength))
+					err := ex.validatePlatformDestination()
+					if tc.invalid {
+						require.ErrorContains(t, err, "platform."+field)
+						require.ErrorContains(t, err, "is invalid")
+						return
+					}
+					require.NoError(t, err)
+				})
 			}
-			ex.Config.Mirror.Platform.TargetRepo = strings.Repeat("a", tc.repoLength)
-			err := ex.validatePlatformDestination()
-			if tc.invalid {
-				require.ErrorContains(t, err, "platform.targetRepo")
-				require.ErrorContains(t, err, "is invalid")
-				return
-			}
-			require.NoError(t, err)
 		})
 	}
 }
@@ -185,54 +200,62 @@ func TestUpdateServicePreservesBatchError(t *testing.T) {
 }
 
 func TestPlatformTargetRepoSingleLabelRegistry(t *testing.T) {
-	for _, tc := range []struct {
-		destination string
-		limit       int
-	}{
-		{"docker://registry", 1},
-		{"docker://registry/team", 2},
-	} {
-		t.Run(tc.destination, func(t *testing.T) {
-			ex := ExecutorSchema{Opts: &mirror.CopyOptions{
-				Destination: tc.destination, Mode: mirror.MirrorToMirror,
-				Global: &mirror.GlobalOptions{MaxNestedPaths: tc.limit},
-			}}
-			ex.Config.Mirror.Platform.TargetRepo = "releases"
-			require.NoError(t, ex.validatePlatformDestination())
-			ex.Config.Mirror.Platform.TargetRepo = "team/releases"
-			require.ErrorContains(t, ex.validatePlatformDestination(), "exceeds --max-nested-paths")
+	for _, field := range []string{"targetImageRepo", "targetComponentRepo"} {
+		t.Run(field, func(t *testing.T) {
+			for _, tc := range []struct {
+				destination string
+				limit       int
+			}{
+				{"docker://registry", 1},
+				{"docker://registry/team", 2},
+			} {
+				t.Run(tc.destination, func(t *testing.T) {
+					ex := ExecutorSchema{Opts: &mirror.CopyOptions{
+						Destination: tc.destination, Mode: mirror.MirrorToMirror,
+						Global: &mirror.GlobalOptions{MaxNestedPaths: tc.limit},
+					}}
+					ex.Config.Mirror.Platform = platformWithTargetRepo(field, "releases")
+					require.NoError(t, ex.validatePlatformDestination())
+					ex.Config.Mirror.Platform = platformWithTargetRepo(field, "team/releases")
+					require.ErrorContains(t, ex.validatePlatformDestination(), "exceeds --max-nested-paths")
+				})
+			}
 		})
 	}
 }
 
 func TestPlatformTargetRepoGraphRepositoryConflict(t *testing.T) {
-	for _, tc := range []struct {
-		name, repo string
-		mode       string
-		limit      int
-		conflict   bool
-	}{
-		{"direct", "openshift/graph-image", mirror.MirrorToMirror, 0, true},
-		{"archive", "openshift/graph-image", mirror.MirrorToDisk, 0, true},
-		{"restore", "openshift/graph-image", mirror.DiskToMirror, 0, true},
-		{"flattened graph", "openshift-graph-image", mirror.MirrorToMirror, 1, true},
-		{"unflattened cache", "openshift-graph-image", mirror.MirrorToDisk, 1, false},
-		{"separate repositories", "releases", mirror.MirrorToMirror, 1, false},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			ex := ExecutorSchema{Opts: &mirror.CopyOptions{
-				Destination: "docker://mirror.example.com", Mode: tc.mode,
-				Global: &mirror.GlobalOptions{Port: 55000, MaxNestedPaths: tc.limit},
-			}}
-			ex.Config.Mirror.Platform.TargetRepo = tc.repo
-			ex.Config.Mirror.Platform.Graph = true
-			if tc.conflict {
-				require.ErrorContains(t, ex.validatePlatformDestination(), "conflicts with the Cincinnati graph repository")
-			} else {
-				require.NoError(t, ex.validatePlatformDestination())
+	for _, field := range []string{"targetImageRepo", "targetComponentRepo"} {
+		t.Run(field, func(t *testing.T) {
+			for _, tc := range []struct {
+				name, repo string
+				mode       string
+				limit      int
+				conflict   bool
+			}{
+				{"direct", "openshift/graph-image", mirror.MirrorToMirror, 0, true},
+				{"archive", "openshift/graph-image", mirror.MirrorToDisk, 0, true},
+				{"restore", "openshift/graph-image", mirror.DiskToMirror, 0, true},
+				{"flattened graph", "openshift-graph-image", mirror.MirrorToMirror, 1, true},
+				{"unflattened cache", "openshift-graph-image", mirror.MirrorToDisk, 1, false},
+				{"separate repositories", "releases", mirror.MirrorToMirror, 1, false},
+			} {
+				t.Run(tc.name, func(t *testing.T) {
+					ex := ExecutorSchema{Opts: &mirror.CopyOptions{
+						Destination: "docker://mirror.example.com", Mode: tc.mode,
+						Global: &mirror.GlobalOptions{Port: 55000, MaxNestedPaths: tc.limit},
+					}}
+					ex.Config.Mirror.Platform = platformWithTargetRepo(field, tc.repo)
+					ex.Config.Mirror.Platform.Graph = true
+					if tc.conflict {
+						require.ErrorContains(t, ex.validatePlatformDestination(), "conflicts with the Cincinnati graph repository")
+					} else {
+						require.NoError(t, ex.validatePlatformDestination())
+					}
+					ex.Config.Mirror.Platform.Graph = false
+					require.NoError(t, ex.validatePlatformDestination())
+				})
 			}
-			ex.Config.Mirror.Platform.Graph = false
-			require.NoError(t, ex.validatePlatformDestination())
 		})
 	}
 }
@@ -253,7 +276,8 @@ func TestPlatformTargetRepoImageDestinationConflicts(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			ex := ExecutorSchema{}
-			ex.Config.Mirror.Platform.TargetRepo = "releases"
+			ex.Config.Mirror.Platform.TargetImageRepo = "releases"
+			ex.Config.Mirror.Platform.TargetComponentRepo = "releases"
 			images := []v2alpha1.CopyImageSchema{
 				{Origin: tc.first, Destination: target, Type: v2alpha1.TypeOCPRelease},
 				{Origin: tc.second, Destination: target, Type: v2alpha1.TypeOCPReleaseContent},
@@ -268,4 +292,47 @@ func TestPlatformTargetRepoImageDestinationConflicts(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestPlatformTargetRepositoriesValidatedIndependently(t *testing.T) {
+	for _, tc := range []struct {
+		name, imageRepo, componentRepo, errorField string
+		limit                                      int
+		graph                                      bool
+	}{
+		{"separate repositories", "releases", "components", "", 2, true},
+		{"shared repository", "releases", "releases", "", 2, true},
+		{"component too deep", "releases", "team/components", "targetComponentRepo", 2, false},
+		{"payload too deep", "team/releases", "components", "targetImageRepo", 2, false},
+		{"component too long", "releases", strings.Repeat("a", reference.NameTotalLengthMax), "targetComponentRepo", 0, false},
+		{"component graph conflict", "releases", "openshift/graph-image", "targetComponentRepo", 0, true},
+		{"flattened component graph conflict", "releases", "openshift-graph-image", "targetComponentRepo", 2, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ex := ExecutorSchema{Opts: &mirror.CopyOptions{
+				Destination: "docker://mirror.example.com/team", Mode: mirror.MirrorToMirror,
+				Global: &mirror.GlobalOptions{MaxNestedPaths: tc.limit},
+			}}
+			ex.Config.Mirror.Platform = v2alpha1.Platform{
+				TargetImageRepo: tc.imageRepo, TargetComponentRepo: tc.componentRepo, Graph: tc.graph,
+			}
+			err := ex.validatePlatformDestination()
+			if tc.errorField != "" {
+				require.ErrorContains(t, err, "platform."+tc.errorField)
+				return
+			}
+			require.NoError(t, err)
+		})
+	}
+}
+
+func TestPlatformComponentOnlyDestinationConflict(t *testing.T) {
+	ex := ExecutorSchema{}
+	ex.Config.Mirror.Platform.TargetComponentRepo = "openshift/release-images"
+	const destination = "docker://mirror.example.com/openshift/release-images:v1-component"
+	images := []v2alpha1.CopyImageSchema{
+		{Origin: "quay.io/release/payload:v1-component", Destination: destination, Type: v2alpha1.TypeOCPRelease},
+		{Origin: "quay.io/release/components@sha256:" + strings.Repeat("a", 64), Destination: destination, Type: v2alpha1.TypeOCPReleaseContent},
+	}
+	require.ErrorContains(t, ex.validatePlatformImageDestinations(images), "conflicting destination")
 }
