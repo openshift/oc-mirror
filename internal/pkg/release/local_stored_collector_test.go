@@ -773,6 +773,10 @@ func (o MockManifest) GetManifestListDigests(ctx context.Context, sourceCtx *typ
 	return nil, nil
 }
 
+func (o MockManifest) ImageBlobSizes(ctx context.Context, sourceCtx *types.SystemContext, imgRef string, platformFilters []v2alpha1.InstancePlatformFilter) ([]v2alpha1.BlobSizeInfo, error) {
+	return nil, nil
+}
+
 func (o MockCincinnati) GetReleaseReferenceImages(ctx context.Context) ([]v2alpha1.CopyImageSchema, error) {
 	var res []v2alpha1.CopyImageSchema
 	res = append(res, v2alpha1.CopyImageSchema{Type: v2alpha1.TypeOCPRelease, Source: "quay.io/openshift-release-dev/ocp-release:4.13.10-x86_64", Origin: "quay.io/openshift-release-dev/ocp-release:4.13.10-x86_64"})
@@ -847,6 +851,10 @@ func (o *ManifestMock) ImageManifest(ctx context.Context, sourceCtx *types.Syste
 }
 
 func (o *ManifestMock) GetManifestListDigests(ctx context.Context, sourceCtx *types.SystemContext, source string) ([]string, error) {
+	return nil, nil
+}
+
+func (o *ManifestMock) ImageBlobSizes(ctx context.Context, sourceCtx *types.SystemContext, imgRef string, platformFilters []v2alpha1.InstancePlatformFilter) ([]v2alpha1.BlobSizeInfo, error) {
 	return nil, nil
 }
 

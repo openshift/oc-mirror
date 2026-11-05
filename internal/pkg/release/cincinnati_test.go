@@ -260,3 +260,7 @@ func (o mockManifest) ImageManifest(ctx context.Context, sourceCtx *types.System
 func (o mockManifest) GetManifestListDigests(ctx context.Context, sourceCtx *types.SystemContext, source string) ([]string, error) {
 	return nil, nil
 }
+
+func (o mockManifest) ImageBlobSizes(ctx context.Context, sourceCtx *types.SystemContext, imgRef string, platformFilters []v2alpha1.InstancePlatformFilter) ([]v2alpha1.BlobSizeInfo, error) {
+	return nil, nil
+}

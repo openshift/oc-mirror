@@ -4,18 +4,27 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 
+	"github.com/docker/go-units"
 	"go.podman.io/image/v5/types"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/emoji"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 )
+
+type manifestFetchCacher interface {
+	BeginManifestCache()
+	EndManifestCache()
+}
 
 func (o *ExecutorSchema) DryRun(ctx context.Context, allImages []v2alpha1.CopyImageSchema) error {
 	outDir := filepath.Join(o.Opts.Global.WorkingDir, dryRunOutDir)
@@ -25,6 +34,12 @@ func (o *ExecutorSchema) DryRun(ctx context.Context, allImages []v2alpha1.CopyIm
 	if err != nil {
 		o.Log.Error(" %v ", err)
 		return err
+	}
+
+	// Reuse top-level manifests between list inspection and size estimation.
+	if cacher, ok := o.Manifest.(manifestFetchCacher); ok {
+		cacher.BeginManifestCache()
+		defer cacher.EndManifestCache()
 	}
 
 	var manifestListDigests map[string][]string
@@ -74,7 +89,39 @@ func (o *ExecutorSchema) DryRun(ctx context.Context, allImages []v2alpha1.CopyIm
 		}
 	}
 
+	// Size estimation (appended AFTER existing output for backward compatibility)
+	if o.Manifest != nil {
+		o.logSizeReport(o.estimateDryRunSize(ctx, allImages))
+	}
+
 	return nil
+}
+
+// estimateDryRunSize builds the dry-run size report for the current workflow mode.
+func (o *ExecutorSchema) estimateDryRunSize(ctx context.Context, allImages []v2alpha1.CopyImageSchema) v2alpha1.DryRunSizeReport {
+	o.Log.Info(emoji.LeftPointingMagnifyingGlass + " estimating image sizes...")
+	if o.Opts.IsDiskToMirror() {
+		// d2m: all Sources are local-cache; size comes from archive tarballs on disk.
+		report := v2alpha1.DryRunSizeReport{ImageCount: len(allImages)}
+		tarballSize, tarballErr := computeTarballFilesSize(o.Opts.Global.From)
+		if tarballErr != nil {
+			o.Log.Warn("unable to read archive for size estimate; tarball size excluded")
+			report.SizeUnavailable = true
+			return report
+		}
+		if o.Opts.Global.From != "" && tarballSize == 0 {
+			o.Log.Warn("no archive tar files found; size estimate does not include tarball")
+		}
+		report.TotalSize = tarballSize
+		return report
+	}
+
+	// m2m/m2d: size from remote manifests (skip local-cache Sources).
+	sizingImages := dedupeImagesBySource(filterLocalCacheSourceImages(allImages, o.Opts.LocalStorageFQDN))
+	sizeResults := o.estimateImageSizes(ctx, sizingImages, o.DryRunPlatformFilters)
+	report := computeSizeReport(sizeResults)
+	report.TotalSize = adjustSizeForWorkflow(report.TotalSize, o.Opts.Mode, sizeResults, sizingImages, 0)
+	return report
 }
 
 func (o *ExecutorSchema) writeMissingImagesFile(outDir string, data []byte, nbMissing, total int) error {
@@ -199,8 +246,252 @@ func (o *ExecutorSchema) newSystemContextForSource(source string) (*types.System
 	if err != nil {
 		return nil, fmt.Errorf("error creating system context: %w", err)
 	}
-	if o.Opts.LocalStorageFQDN != "" && strings.Contains(source, o.Opts.LocalStorageFQDN) {
+	if isLocalCacheSource(source, o.Opts.LocalStorageFQDN) {
 		sysCtx.DockerInsecureSkipTLSVerify = types.OptionalBoolTrue
 	}
 	return sysCtx, nil
+}
+
+// estimateImageSizes concurrently fetches blob sizes for all images.
+// Errors are captured per-image.
+func (o *ExecutorSchema) estimateImageSizes(ctx context.Context, images []v2alpha1.CopyImageSchema, platformFilters map[string][]v2alpha1.InstancePlatformFilter) []v2alpha1.ImageSizeResult {
+	results := make([]v2alpha1.ImageSizeResult, len(images))
+	var wg sync.WaitGroup
+
+	parallelism := o.Opts.ParallelImages
+	if parallelism == 0 {
+		parallelism = maxParallelImageDownloads
+	}
+	semaphore := make(chan struct{}, parallelism)
+
+	cancelCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	for i, img := range images {
+		if cancelCtx.Err() != nil {
+			break
+		}
+
+		semaphore <- struct{}{}
+
+		wg.Add(1)
+		go func(idx int, source, origin string) {
+			defer wg.Done()
+			defer func() { <-semaphore }()
+
+			result := v2alpha1.ImageSizeResult{Source: source}
+
+			sysCtx, err := o.newSystemContextForSource(source)
+			if err != nil {
+				result.Error = fmt.Sprintf("error creating system context: %v", err)
+				results[idx] = result
+				return
+			}
+
+			// Platform filters are keyed by Origin, not Source (Source may be a local-cache ref).
+			blobs, err := o.Manifest.ImageBlobSizes(cancelCtx, sysCtx, source, platformFilters[origin])
+			if err != nil {
+				result.Error = fmt.Sprintf("error fetching blob sizes: %v", err)
+				results[idx] = result
+				return
+			}
+
+			result.Blobs = blobs
+			results[idx] = result
+		}(i, img.Source, img.Origin)
+	}
+	wg.Wait()
+	return results
+}
+
+// computeSizeReport deduplicates blobs globally and computes the total unique
+// compressed content size. Errored images are recorded
+func computeSizeReport(results []v2alpha1.ImageSizeResult) v2alpha1.DryRunSizeReport {
+	var report v2alpha1.DryRunSizeReport
+	blobSeen := make(map[string]int64)
+	for _, r := range results {
+		if r.Source == "" {
+			continue // unprocessed slot (e.g., context cancelled before goroutine ran)
+		}
+		if r.Error != "" {
+			report.Errors = append(report.Errors, v2alpha1.SizeReportError{
+				Image: r.Source,
+				Error: r.Error,
+			})
+			continue
+		}
+		report.ImageCount++
+		for _, blob := range r.Blobs {
+			blobSeen[blob.Digest] = blob.Size
+		}
+	}
+	report.TotalSize = sumMapValues(blobSeen)
+	return report
+}
+
+// logSizeReport prints the size estimation summary (aggregates only).
+func (o *ExecutorSchema) logSizeReport(report v2alpha1.DryRunSizeReport) {
+	o.Log.Info("📊 Dry-run size estimate:")
+	switch {
+	case report.SizeUnavailable:
+		o.Log.Info("Total estimated size: unavailable")
+	case len(report.Errors) > 0:
+		// Partial total is a lower bound — do not present it as a complete estimate.
+		totalHuman := units.HumanSize(float64(report.TotalSize))
+		o.Log.Info("Total estimated size: %s (%d bytes; incomplete)", totalHuman, report.TotalSize)
+	default:
+		totalHuman := units.HumanSize(float64(report.TotalSize))
+		o.Log.Info("Total estimated size: %s (%d bytes)", totalHuman, report.TotalSize)
+	}
+	o.Log.Info("Images: %d", report.ImageCount)
+	if len(report.Errors) > 0 {
+		o.Log.Warn("%d image(s) could not be sized", len(report.Errors))
+	}
+}
+
+// isLocalCacheSource reports whether source's registry authority equals localStorageFQDN.
+// Substring checks on the full reference are unsafe: a remote host like
+// "notmirror.local:55000" contains "mirror.local:55000".
+func isLocalCacheSource(source, localStorageFQDN string) bool {
+	if localStorageFQDN == "" {
+		return false
+	}
+	spec, err := image.ParseRef(source)
+	if err != nil {
+		return false
+	}
+	return spec.Domain == localStorageFQDN
+}
+
+// filterLocalCacheSourceImages drops images sourced from the local cache
+// (e.g. rebuilt catalogs in m2m) so dry-run does not try to size them remotely.
+func filterLocalCacheSourceImages(images []v2alpha1.CopyImageSchema, localStorageFQDN string) []v2alpha1.CopyImageSchema {
+	if localStorageFQDN == "" {
+		return images
+	}
+	filtered := make([]v2alpha1.CopyImageSchema, 0, len(images))
+	for _, img := range images {
+		if !isLocalCacheSource(img.Source, localStorageFQDN) {
+			filtered = append(filtered, img)
+		}
+	}
+	return filtered
+}
+
+// dedupeImagesBySource keeps one sizing row per Source so m2m dual catalog copies
+// (cache dest + registry dest) are not fetched/counted twice.
+func dedupeImagesBySource(images []v2alpha1.CopyImageSchema) []v2alpha1.CopyImageSchema {
+	seen := make(map[string]int, len(images))
+	out := make([]v2alpha1.CopyImageSchema, 0, len(images))
+	for _, img := range images {
+		if idx, ok := seen[img.Source]; ok {
+			if out[idx].Origin == "" && img.Origin != "" {
+				out[idx].Origin = img.Origin
+			}
+			if img.Type.IsOperatorCatalog() {
+				out[idx].Type = img.Type
+			}
+			continue
+		}
+		seen[img.Source] = len(out)
+		out = append(out, img)
+	}
+	return out
+}
+
+// adjustSizeForWorkflow adjusts the raw unique blob size based on workflow:
+//
+//   - m2m: image content + local cache (operator catalogs only)
+//   - m2d: image content × 2 (cache + tarball coexist on disk)
+//   - d2m: exact tarball size (all Sources are local-cache-based and filtered
+//     out, so blob-level estimation is not done; the tarball is measured from disk)
+func adjustSizeForWorkflow(rawSize int64, mode string, results []v2alpha1.ImageSizeResult, images []v2alpha1.CopyImageSchema, tarballSize int64) int64 {
+	switch mode {
+	case mirror.MirrorToMirror:
+		return saturatingAdd(rawSize, computeOperatorCatalogCacheSize(results, images))
+	case mirror.MirrorToDisk:
+		return saturatingAdd(rawSize, rawSize)
+	case mirror.DiskToMirror:
+		return tarballSize
+	default:
+		return rawSize
+	}
+}
+
+// computeOperatorCatalogCacheSize returns the deduplicated blob size of operator catalog images only.
+// In m2m, catalogs are cached locally for the rebuild/delete workflow in addition to being pushed to the target registry.
+// Matching is done by Source key to avoid fragile index-based correlation.
+func computeOperatorCatalogCacheSize(results []v2alpha1.ImageSizeResult, images []v2alpha1.CopyImageSchema) int64 {
+	catalogSources := make(map[string]bool, len(images))
+	for _, img := range images {
+		if img.Type.IsOperatorCatalog() {
+			catalogSources[img.Source] = true
+		}
+	}
+	blobSeen := make(map[string]int64)
+	for _, r := range results {
+		if r.Source == "" || r.Error != "" {
+			continue
+		}
+		if catalogSources[r.Source] {
+			for _, blob := range r.Blobs {
+				blobSeen[blob.Digest] = blob.Size
+			}
+		}
+	}
+	return sumMapValues(blobSeen)
+}
+
+func sumMapValues(m map[string]int64) int64 {
+	var total int64
+	for _, v := range m {
+		total = saturatingAdd(total, v)
+	}
+	return total
+}
+
+// saturatingAdd adds sizes without wrapping past MaxInt64.
+func saturatingAdd(a, b int64) int64 {
+	if a < 0 {
+		a = 0
+	}
+	if b < 0 {
+		b = 0
+	}
+	if a > math.MaxInt64-b {
+		return math.MaxInt64
+	}
+	return a + b
+}
+
+var mirrorTarPattern = regexp.MustCompile(`^mirror_[0-9]{6}\.tar$`)
+
+// computeTarballFilesSize measures the total size of existing mirror_NNNNNN.tar files in the given directory.
+// Used for d2m to get the exact tarball size.
+func computeTarballFilesSize(fromDir string) (int64, error) {
+	if fromDir == "" {
+		return 0, nil
+	}
+	dir := strings.TrimPrefix(fromDir, consts.FileProtocol)
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return 0, fmt.Errorf("unable to read archive directory %s: %w", dir, err)
+	}
+	var total int64
+	for _, e := range entries {
+		if e.IsDir() || !mirrorTarPattern.MatchString(e.Name()) {
+			continue
+		}
+		// os.Stat follows symlinks so a mirror_NNNNNN.tar link contributes the
+		// target tarball size (matches how the archive reader opens the path).
+		info, err := os.Stat(filepath.Join(dir, e.Name()))
+		if err != nil {
+			return 0, fmt.Errorf("unable to stat archive file: %w", err)
+		}
+		if info.IsDir() {
+			continue
+		}
+		total = saturatingAdd(total, info.Size())
+	}
+	return total, nil
 }

@@ -111,6 +111,10 @@ func (m *mockManifest) GetManifestListDigests(ctx context.Context, sourceCtx *ty
 	return nil, nil
 }
 
+func (m *mockManifest) ImageBlobSizes(ctx context.Context, sourceCtx *types.SystemContext, imgRef string, platformFilters []v2alpha1.InstancePlatformFilter) ([]v2alpha1.BlobSizeInfo, error) {
+	return nil, nil
+}
+
 func TestSigstoreAttachmentTag(t *testing.T) {
 	tests := []struct {
 		name        string

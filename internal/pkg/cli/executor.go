@@ -133,31 +133,32 @@ var (
 )
 
 type ExecutorSchema struct {
-	Log                  clog.PluggableLoggerInterface
-	LogsDir              string
-	logFile              *os.File
-	registryLogFile      *os.File
-	Config               v2alpha1.ImageSetConfiguration
-	Opts                 *mirror.CopyOptions
-	WorkingDir           string
-	Operator             operator.CollectorInterface
-	Release              release.CollectorInterface
-	AdditionalImages     additional.CollectorInterface
-	HelmCollector        helm.CollectorInterface
-	Mirror               mirror.MirrorInterface
-	Manifest             manifest.ManifestInterface
-	Batch                batch.BatchInterface
-	LocalStorageService  registry.Registry
-	LocalStorageDisk     string
-	ClusterResources     clusterresources.GeneratorInterface
-	ImageBuilder         imagebuilder.ImageBuilderInterface
-	CatalogBuilder       imagebuilder.CatalogBuilderInterface
-	MirrorArchiver       archive.Archiver
-	MirrorUnArchiver     archive.UnArchiver
-	MakeDir              MakeDirInterface
-	Delete               delete.DeleteInterface
-	MirrorStartTimeStamp string
-	stopRegistryOnce     sync.Once
+	Log                   clog.PluggableLoggerInterface
+	LogsDir               string
+	logFile               *os.File
+	registryLogFile       *os.File
+	Config                v2alpha1.ImageSetConfiguration
+	Opts                  *mirror.CopyOptions
+	WorkingDir            string
+	Operator              operator.CollectorInterface
+	Release               release.CollectorInterface
+	AdditionalImages      additional.CollectorInterface
+	HelmCollector         helm.CollectorInterface
+	Mirror                mirror.MirrorInterface
+	Manifest              manifest.ManifestInterface
+	Batch                 batch.BatchInterface
+	LocalStorageService   registry.Registry
+	LocalStorageDisk      string
+	ClusterResources      clusterresources.GeneratorInterface
+	ImageBuilder          imagebuilder.ImageBuilderInterface
+	CatalogBuilder        imagebuilder.CatalogBuilderInterface
+	MirrorArchiver        archive.Archiver
+	MirrorUnArchiver      archive.UnArchiver
+	MakeDir               MakeDirInterface
+	Delete                delete.DeleteInterface
+	MirrorStartTimeStamp  string
+	DryRunPlatformFilters map[string][]v2alpha1.InstancePlatformFilter
+	stopRegistryOnce      sync.Once
 }
 
 type MakeDirInterface interface {
@@ -915,6 +916,7 @@ func (o *ExecutorSchema) RunMirrorToDisk(cmd *cobra.Command, args []string) erro
 	}
 
 	if o.Opts.IsDryRun {
+		o.DryRunPlatformFilters = collectorSchema.PlatformFilters
 		return o.DryRun(cmd.Context(), collectorSchema.AllImages)
 	}
 
@@ -985,6 +987,7 @@ func (o *ExecutorSchema) RunMirrorToMirror(cmd *cobra.Command, args []string) er
 	}
 
 	if o.Opts.IsDryRun {
+		o.DryRunPlatformFilters = collectorSchema.PlatformFilters
 		return o.DryRun(cmd.Context(), collectorSchema.AllImages)
 	}
 
@@ -1049,6 +1052,7 @@ func (o *ExecutorSchema) RunDiskToMirror(cmd *cobra.Command, args []string) erro
 	}
 
 	if o.Opts.IsDryRun {
+		o.DryRunPlatformFilters = collectorSchema.PlatformFilters
 		return o.DryRun(cmd.Context(), collectorSchema.AllImages)
 	}
 

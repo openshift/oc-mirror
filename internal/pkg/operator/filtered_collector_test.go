@@ -1062,6 +1062,10 @@ func (o MockManifest) GetManifestListDigests(ctx context.Context, sourceCtx *typ
 	return nil, nil
 }
 
+func (o MockManifest) ImageBlobSizes(ctx context.Context, sourceCtx *types.SystemContext, imgRef string, platformFilters []v2alpha1.InstancePlatformFilter) ([]v2alpha1.BlobSizeInfo, error) {
+	return nil, nil
+}
+
 func (o MockHandler) getRelatedImagesFromCatalog(dc *declcfg.DeclarativeConfig, copyImageSchemaMap *v2alpha1.CopyImageSchemaMap) (map[string][]v2alpha1.RelatedImage, error) {
 	relatedImages := make(map[string][]v2alpha1.RelatedImage)
 	relatedImages["abc"] = []v2alpha1.RelatedImage{

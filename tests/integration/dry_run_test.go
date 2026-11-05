@@ -3,10 +3,14 @@ package integration_test
 import (
 	"os"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+
+	"github.com/openshift/oc-mirror/tests/integration/pkg/ocmirror"
 )
 
 // dockerTransportPrefix is the "docker://" transport prefix used in mapping.txt entries.
@@ -14,6 +18,8 @@ const (
 	dockerTransportPrefix = "docker://"
 	missingFileName       = "missing.txt"
 )
+
+var dryRunSizeBytesRE = regexp.MustCompile(`Total estimated size: .* \((\d+) bytes\)`)
 
 var _ = Describe("dry-run", func() {
 	var workDir string
@@ -36,6 +42,9 @@ var _ = Describe("dry-run", func() {
 
 			By("verifying mapping.txt contains valid mappings for all expected repositories")
 			expectValidMappingFile(workDir, filepath.Join(iscDir, iscHappyPath))
+
+			By("verifying dry-run size estimate is present and non-zero")
+			Expect(expectDryRunSizeBytes(result)).To(BeNumerically(">", 0))
 
 			By("verifying no images were mirrored to the registry")
 			expectNoRepositoriesInRegistry(*testRegistry)
@@ -69,6 +78,9 @@ var _ = Describe("dry-run", func() {
 
 			By("verifying mapping.txt contains valid mappings for all expected repositories")
 			expectValidMappingFile(workDir, filepath.Join(iscDir, iscHappyPath))
+
+			By("verifying d2m dry-run size matches mirror_*.tar bytes on disk")
+			Expect(expectDryRunSizeBytes(result)).To(Equal(sumMirrorTarBytes(workDir)))
 
 			By("verifying no images were mirrored to the registry")
 			expectNoRepositoriesInRegistry(*testRegistry)
@@ -113,6 +125,31 @@ var _ = Describe("dry-run", func() {
 		})
 	})
 
+	Describe("size estimation formulas (additional image only)", func() {
+		// No operators → m2m == raw digup; m2d == raw×2 (catalog cache term is 0).
+		iscManifestList := filepath.Join("dry_run", "isc-manifest-list.yaml")
+
+		It("should report m2d as twice the m2m digupped size", func() {
+			By("running mirrorToMirror dry-run")
+			m2mResult, err := runner.MirrorToMirror(ctx, filepath.Join(iscDir, iscManifestList), workDir, testRegistry.Endpoint(),
+				"--remove-signatures=true", "--dest-tls-verify=false", "--dry-run")
+			expectOcMirrorCommandSuccess(m2mResult, err)
+			m2mBytes := expectDryRunSizeBytes(m2mResult)
+			Expect(m2mBytes).To(BeNumerically(">", 0))
+
+			By("running mirrorToDisk dry-run on a fresh workspace")
+			m2dDir := setupWorkDir()
+			DeferCleanup(func() { cleanupWorkDir(m2dDir) })
+			m2dResult, err := runner.MirrorToDisk(ctx, filepath.Join(iscDir, iscManifestList), m2dDir,
+				"--remove-signatures=true", "--dry-run")
+			expectOcMirrorCommandSuccess(m2dResult, err)
+			m2dBytes := expectDryRunSizeBytes(m2dResult)
+
+			By("asserting m2d == 2 × m2m for additional-only ISC")
+			Expect(m2dBytes).To(Equal(m2mBytes * 2))
+		})
+	})
+
 	Describe("dry-run with a manifest list image", func() {
 		iscManifestList := filepath.Join("dry_run", "isc-manifest-list.yaml")
 		topLevelSource := "docker://quay.io/openshifttest/hello-openshift@sha256:61b8f5e1a3b5dbd9e2c35fd448dc5106337d7a299873dd3a6f0cd8d4891ecc27"
@@ -146,6 +183,35 @@ var _ = Describe("dry-run", func() {
 		})
 	})
 })
+
+// expectDryRunSizeBytes asserts the size-estimate banner is present and returns the byte total.
+func expectDryRunSizeBytes(result *ocmirror.Result) int64 {
+	GinkgoHelper()
+	out := result.Stdout + result.Stderr
+	Expect(out).To(ContainSubstring("Dry-run size estimate:"),
+		"missing size estimate in output:\n%s", out)
+	Expect(out).To(ContainSubstring("Images:"),
+		"missing Images count in output:\n%s", out)
+	m := dryRunSizeBytesRE.FindStringSubmatch(out)
+	Expect(m).NotTo(BeNil(), "expected Total estimated size with (N bytes) in output:\n%s", out)
+	n, err := strconv.ParseInt(m[1], 10, 64)
+	Expect(err).NotTo(HaveOccurred())
+	return n
+}
+
+func sumMirrorTarBytes(workDir string) int64 {
+	GinkgoHelper()
+	matches, err := filepath.Glob(filepath.Join(workDir, "mirror_*.tar"))
+	Expect(err).NotTo(HaveOccurred())
+	Expect(matches).NotTo(BeEmpty(), "expected mirror_*.tar under %s", workDir)
+	var total int64
+	for _, p := range matches {
+		info, err := os.Stat(p)
+		Expect(err).NotTo(HaveOccurred())
+		total += info.Size()
+	}
+	return total
+}
 
 // expectMappingContainsManifestListSubDigests verifies that mapping.txt contains one extra
 // line per manifest list sub-digest, each re-pinned to the top-level destination's repository.

@@ -1,17 +1,27 @@
 package manifest
 
 import (
+	"context"
+	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/google/go-containerregistry/pkg/crane"
+	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/empty"
 	"github.com/google/go-containerregistry/pkg/v1/fake"
+	"github.com/google/go-containerregistry/pkg/v1/layout"
+	"github.com/google/go-containerregistry/pkg/v1/mutate"
+	"github.com/google/go-containerregistry/pkg/v1/random"
 	digest "github.com/opencontainers/go-digest"
 	"github.com/opencontainers/image-spec/specs-go"
 	specv1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"go.podman.io/image/v5/manifest"
+	"go.podman.io/image/v5/types"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
@@ -207,4 +217,105 @@ func TestExtractOCILayers(t *testing.T) {
 			assert.Regexp(t, "extract directory: .*", err)
 		})
 	})
+}
+
+func TestManifestListBlobSizeHelpers(t *testing.T) {
+	m := &Manifest{Log: clog.New("debug")}
+	blobs := []v2alpha1.BlobSizeInfo{{Digest: "sha256:abc", Size: 10}}
+
+	_, err := m.finishManifestListBlobSizes(blobs, true, 0, 0, 0)
+	assert.ErrorContains(t, err, "no instances matched the requested platforms")
+	_, err = m.finishManifestListBlobSizes(blobs, false, 2, 1, 0)
+	assert.ErrorContains(t, err, "1 of 2 sub-manifests could not be sized")
+	got, err := m.finishManifestListBlobSizes(blobs, false, 1, 0, 0)
+	assert.NoError(t, err)
+	assert.Equal(t, blobs, got)
+
+	amd64 := manifest.ListUpdate{}
+	amd64.ReadOnly.Platform = &specv1.Platform{OS: "linux", Architecture: "amd64"}
+	platformless := manifest.ListUpdate{}
+	attestation := manifest.ListUpdate{}
+	attestation.ReadOnly.Platform = &specv1.Platform{OS: "unknown", Architecture: "unknown"}
+	attestation.ReadOnly.Annotations = map[string]string{"vnd.docker.reference.type": "attestation-manifest"}
+	filtered := map[string]bool{"linux/amd64": true}
+
+	assert.True(t, shouldSizeManifestInstance(amd64, nil, nil))
+	assert.True(t, shouldSizeManifestInstance(platformless, nil, nil))
+	assert.False(t, shouldSizeManifestInstance(attestation, nil, nil))
+	assert.True(t, shouldSizeManifestInstance(amd64, nil, filtered))
+	assert.False(t, shouldSizeManifestInstance(platformless, nil, filtered))
+	assert.False(t, shouldSizeManifestInstance(amd64, fmt.Errorf("boom"), filtered))
+}
+
+func TestImageBlobSizesPlatformFilter(t *testing.T) {
+	amd64Img, err := random.Image(512, 1)
+	require.NoError(t, err)
+	arm64Img, err := random.Image(2048, 2)
+	require.NoError(t, err)
+
+	desc := func(img v1.Image, arch string) v1.Descriptor {
+		t.Helper()
+		mt, err := img.MediaType()
+		require.NoError(t, err)
+		d, err := img.Digest()
+		require.NoError(t, err)
+		size, err := img.Size()
+		require.NoError(t, err)
+		return v1.Descriptor{MediaType: mt, Digest: d, Size: size, Platform: &v1.Platform{OS: "linux", Architecture: arch}}
+	}
+	dir := t.TempDir()
+	lp, err := layout.Write(dir, empty.Index)
+	require.NoError(t, err)
+	require.NoError(t, lp.AppendIndex(mutate.AppendManifests(empty.Index,
+		mutate.IndexAddendum{Add: amd64Img, Descriptor: desc(amd64Img, "amd64")},
+		mutate.IndexAddendum{Add: arm64Img, Descriptor: desc(arm64Img, "arm64")},
+	)))
+
+	amd64Manifest, err := amd64Img.Manifest()
+	require.NoError(t, err)
+	want := make([]v2alpha1.BlobSizeInfo, 0, len(amd64Manifest.Layers)+1)
+	for _, layer := range amd64Manifest.Layers {
+		want = append(want, v2alpha1.BlobSizeInfo{Digest: layer.Digest.String(), Size: layer.Size})
+	}
+	want = append(want, v2alpha1.BlobSizeInfo{Digest: amd64Manifest.Config.Digest.String(), Size: amd64Manifest.Config.Size})
+
+	blobs, err := (&Manifest{Log: clog.New("debug")}).ImageBlobSizes(
+		context.Background(), &types.SystemContext{}, consts.OciProtocolTrimmed+dir,
+		[]v2alpha1.InstancePlatformFilter{{OS: "linux", Architecture: "amd64"}},
+	)
+	require.NoError(t, err)
+	assert.ElementsMatch(t, want, blobs)
+}
+
+func TestParseBlobSizes(t *testing.T) {
+	fixture := filepath.Join(consts.TestFolder, "image-manifest.json")
+
+	manifestBytes, err := os.ReadFile(fixture)
+	require.NoError(t, err)
+	blobs, unknown, err := parseBlobSizes(manifestBytes, specv1.MediaTypeImageManifest)
+	require.NoError(t, err)
+	assert.Equal(t, 0, unknown)
+	assert.Len(t, blobs, 7)
+	var total int64
+	for _, b := range blobs {
+		total += b.Size
+	}
+	assert.Equal(t, int64(144979560), total)
+
+	_, unknown, err = parseBlobSizes([]byte("not json"), specv1.MediaTypeImageManifest)
+	assert.Error(t, err)
+	assert.Equal(t, 0, unknown)
+
+	m, err := (&Manifest{}).GetOCIImageManifest(fixture)
+	require.NoError(t, err)
+	require.GreaterOrEqual(t, len(m.Layers), 3)
+	m.Config.Size = 0
+	m.Layers = m.Layers[:3]
+	m.Layers[0].Size, m.Layers[1].Size, m.Layers[2].Size = 10000, -1, 0
+	manifestBytes, err = json.Marshal(m)
+	require.NoError(t, err)
+	blobs, unknown, err = parseBlobSizes(manifestBytes, specv1.MediaTypeImageManifest)
+	require.NoError(t, err)
+	assert.Equal(t, 3, unknown)
+	assert.Equal(t, []v2alpha1.BlobSizeInfo{{Digest: m.Layers[0].Digest.String(), Size: 10000}}, blobs)
 }

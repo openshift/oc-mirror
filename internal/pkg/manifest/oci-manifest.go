@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 
 	gcrv1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/layout"
@@ -26,10 +27,23 @@ import (
 
 type Manifest struct {
 	Log clog.PluggableLoggerInterface
+	// fetchCache optionally memoizes ImageManifest results for the current dry-run
+	// (inspect + size). Pointer so value-receiver methods share the same map.
+	fetchCache *sync.Map
 }
 
 func New(log clog.PluggableLoggerInterface) *Manifest {
 	return &Manifest{Log: log}
+}
+
+// BeginManifestCache starts memoizing ImageManifest responses until EndManifestCache.
+func (o *Manifest) BeginManifestCache() {
+	o.fetchCache = &sync.Map{}
+}
+
+// EndManifestCache drops the ImageManifest memoization map.
+func (o *Manifest) EndManifestCache() {
+	o.fetchCache = nil
 }
 
 // GetOCIImageIndex - used to get the oci index.json
