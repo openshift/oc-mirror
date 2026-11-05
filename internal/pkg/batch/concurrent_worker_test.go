@@ -76,7 +76,7 @@ func TestChannelConcurrentWorker(t *testing.T) {
 		Destination:         "oci:test",
 		Dev:                 false,
 		Mode:                mirror.DiskToMirror,
-		Function:            "copy",
+		Function:            "delete",
 	}
 	tempDir := t.TempDir()
 	relatedImages := []v2alpha1.CopyImageSchema{
@@ -141,6 +141,28 @@ func TestChannelConcurrentWorker(t *testing.T) {
 		}
 		assert.ElementsMatch(t, relatedImages, copiedImages.AllImages)
 	})
+	t.Run("Testing delete Worker - first release image absent: warns and deletes the rest (OCPBUGS-74339)", func(t *testing.T) {
+		mirrorMock := new(MirrorMock)
+		mirrorMock.On("Run", mock.Anything, relatedImages[0].Source, mock.Anything, mock.Anything, mock.Anything).Return(fmt.Errorf("Unable to delete registry/name/namespace/sometestimage-a. Image may not exist or is not stored with a v2 Schema in a v2 registry"))
+		mirrorMock.On("Run", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+		w := New(ChannelConcurrentWorker, log, tempDir, mirrorMock, uint(1), timestampStr)
+
+		copiedImages, err := w.Worker(context.Background(), collectedImages, deleteopts)
+		assert.NoError(t, err, "an absent image is not a delete error")
+		mirrorMock.AssertNumberOfCalls(t, "Run", len(relatedImages))
+		assert.ElementsMatch(t, relatedImages[1:], copiedImages.AllImages)
+	})
+	t.Run("Testing delete Worker - first release image fails: deletes the rest, returns the error (OCPBUGS-123476)", func(t *testing.T) {
+		mirrorMock := new(MirrorMock)
+		mirrorMock.On("Run", mock.Anything, relatedImages[0].Source, mock.Anything, mock.Anything, mock.Anything).Return(errcode.Error{Code: errcode.ErrorCodeUnauthorized, Message: "unauthorized"})
+		mirrorMock.On("Run", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+		w := New(ChannelConcurrentWorker, log, tempDir, mirrorMock, uint(1), timestampStr)
+
+		copiedImages, err := w.Worker(context.Background(), collectedImages, deleteopts)
+		assert.Error(t, err)
+		mirrorMock.AssertNumberOfCalls(t, "Run", len(relatedImages))
+		assert.ElementsMatch(t, relatedImages[1:], copiedImages.AllImages)
+	})
 	t.Run("Testing m2d Worker - single error on operator: should return safe error", func(t *testing.T) {
 		mirrorMock := new(MirrorMock)
 		mirrorMock.On("Run", mock.Anything, consts.DockerProtocol+"registry/name/namespace/sometestimage-c@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea", mock.Anything, mock.Anything, mock.Anything).Return(errcode.Error{Code: errcode.ErrorCodeUnauthorized, Message: "unauthorized"})
@@ -167,6 +189,28 @@ func TestChannelConcurrentWorker(t *testing.T) {
 		}
 
 		assert.GreaterOrEqual(t, len(relatedImages), len(copiedImages.AllImages))
+		for _, img := range copiedImages.AllImages {
+			assert.NotEmpty(t, img.Origin, "a cancelled copy must not record empty images")
+		}
+	})
+	t.Run("Testing d2m Worker - first release image fails with one worker: returns the error, records only copied images", func(t *testing.T) {
+		mirrorMock := new(MirrorMock)
+		mirrorMock.On("Run", mock.Anything, relatedImages[0].Source, mock.Anything, mock.Anything, mock.Anything).Return(errcode.Error{Code: errcode.ErrorCodeUnauthorized, Message: "unauthorized"})
+		mirrorMock.On("Run", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+		w := New(ChannelConcurrentWorker, log, tempDir, mirrorMock, uint(1), timestampStr)
+
+		copiedImages, err := w.Worker(context.Background(), collectedImages, d2mopts)
+		assert.Error(t, err)
+		// How many copies run before the cancel lands depends on scheduling, so the test
+		// does not count calls. It checks that nothing cancelled was recorded as copied.
+		copied := map[string]bool{}
+		for _, call := range mirrorMock.Calls {
+			copied[call.Arguments.String(1)] = true
+		}
+		for _, img := range copiedImages.AllImages {
+			assert.NotEmpty(t, img.Origin, "a cancelled copy must not record empty images")
+			assert.True(t, copied[img.Source], "%s was recorded as copied without a copy", img.Source)
+		}
 	})
 	t.Run("Testing d2m Worker - 2 errors: should return safe error", func(t *testing.T) {
 		mirrorMock := new(MirrorMock)
