@@ -195,22 +195,33 @@ func (o *ChannelConcurrentBatch) Worker(ctx context.Context, collectorSchema v2a
 	go runOverallProgress(overallProgress, cancelCtx, progressCh)
 
 	completed := 0
+	absent := 0
+results:
 	for completed < len(collectorSchema.AllImages) {
 		res := <-results
 		err := res.err
-		if err == nil {
+		switch {
+		case err == nil:
 			logImageSuccess(o.Log, &res.img, &opts)
 			copiedImages.AllImages = append(copiedImages.AllImages, res.img)
 			incrementTotals(res.imgType, &copiedImages)
-		} else {
+		case opts.IsDelete() && strings.Contains(err.err.Error(), absentOnDelete):
+			// The registry answered 404 for the image. It is absent, or stored in a format the
+			// v2 API does not serve. Either way there is nothing this run can delete (OCPBUGS-74339).
+			o.Log.Warn(workerPrefix+"%s: registry answered 404 (absent or not a v2 manifest), nothing to delete", res.img.Destination)
+			absent++
+			incrementTotals(res.imgType, &copiedImages)
+		default:
 			m.Lock()
 			errArray = append(errArray, *err)
 			m.Unlock()
 
 			logImageError(o.Log, &res.img, &opts)
-			if res.imgType.IsRelease() {
+			// A release that cannot be mirrored is unusable, so the mirror stops here.
+			// A delete goes on: every other image is still worth removing (OCPBUGS-123476).
+			if res.imgType.IsRelease() && !opts.IsDelete() {
 				cancel()
-				break
+				break results
 			}
 		}
 
@@ -222,6 +233,9 @@ func (o *ChannelConcurrentBatch) Worker(ctx context.Context, collectorSchema v2a
 	p.Wait()
 
 	logResults(o.Log, opts.Function, &copiedImages, &collectorSchema)
+	if absent > 0 {
+		o.Log.Warn(workerPrefix+"already absent from the registry, nothing to delete: %d", absent)
+	}
 
 	if len(errArray) > 0 {
 		batchErr := &BatchError{
