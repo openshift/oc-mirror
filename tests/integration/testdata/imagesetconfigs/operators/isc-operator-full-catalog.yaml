@@ -1,0 +1,8 @@
+# ImageSetConfig with a full (unfiltered) operator catalog: no packages are listed,
+# so the catalog is mirrored as is, with all of its bundles and related images.
+kind: ImageSetConfiguration
+apiVersion: mirror.openshift.io/v2alpha1
+mirror:
+  operators:
+  - catalog: quay.io/oc-mirror/oc-mirror-dev:test-catalog-20261103-2e526488d
+    full: true
