@@ -130,6 +130,18 @@ items:
   - sha256:e3649b5f99e0fcf52b3d19c3b201484e78f19873fb98a5b5a4b3a4d64c75ae78
 ```
 
+#### Images sharing a destination tag
+
+Several selected images can be mirrored to the same destination tag while having different digests, for instance
+`quay.io/ns/img:v1@sha256:aaa…` and `quay.io/ns/img:v1@sha256:bbb…`, digest-only images using the same `targetTag`,
+or digest-only images addressed as `:latest` with `--delete-v1-images`. A tag can only point at one of them, so the
+generated delete yaml addresses each of these images by digest (`imageReference: docker://<remote-registry>/ns/img@sha256:aaa…`).
+Images that do not share their destination tag keep their usual reference.
+
+The generate stage fails, without writing any delete yaml, when the same destination tag is selected both without a digest
+(`quay.io/ns/img:v1`) and with a digest (`quay.io/ns/img:v1@sha256:aaa…`): the image the tag-only selection refers to cannot be
+determined safely. Select every image of that tag by digest in the DeleteImageSetConfiguration and generate the delete yaml again.
+
 #### Deleting images addressed by digest
 
 When the delete yaml addresses images of a repository by digest, the delete stage first resolves every tag of that repository

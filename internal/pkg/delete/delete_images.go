@@ -7,7 +7,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"slices"
 	"sort"
 	"strings"
 
@@ -49,6 +48,14 @@ type DeleteImages struct {
 // WriteDeleteMetaData
 func (o DeleteImages) WriteDeleteMetaData(ctx context.Context, images []v2alpha1.CopyImageSchema) error {
 	o.Log.Info(emoji.PageFacingUp + " Generating delete file...")
+
+	// OCPBUGS-130951 - build the whole plan before touching the file system, so that a
+	// rejected plan neither creates a delete file nor overwrites a previously generated one.
+	items, err := o.processDeleteItems(ctx, images)
+	if err != nil {
+		return err
+	}
+
 	o.Log.Info("%s file created", o.Opts.Global.WorkingDir+deleteDir)
 
 	// we write the image and related blobs in yaml format to file for further processing
@@ -60,12 +67,10 @@ func (o DeleteImages) WriteDeleteMetaData(ctx context.Context, images []v2alpha1
 		discYamlFile = filepath.Join(o.Opts.Global.WorkingDir, strings.ReplaceAll(discYaml, ".", "-"+o.Opts.Global.DeleteID+"."))
 	}
 	// create the delete folder
-	err := os.MkdirAll(o.Opts.Global.WorkingDir+deleteDir, 0755)
+	err = os.MkdirAll(o.Opts.Global.WorkingDir+deleteDir, 0755)
 	if err != nil {
 		o.Log.Error("%v ", err)
 	}
-
-	items := o.processDeleteItems(ctx, images)
 
 	// sort the items
 	sort.SliceStable(items, func(i, j int) bool {
@@ -111,19 +116,26 @@ func (o DeleteImages) WriteDeleteMetaData(ctx context.Context, images []v2alpha1
 	return nil
 }
 
-// processDeleteItems processes the list of images and returns delete items
-func (o DeleteImages) processDeleteItems(ctx context.Context, images []v2alpha1.CopyImageSchema) []v2alpha1.DeleteItem {
-	duplicates := []string{}
+// processDeleteItems processes the list of images and returns delete items.
+// It returns an error when the images cannot be addressed safely (see resolveDeleteTargets).
+func (o DeleteImages) processDeleteItems(ctx context.Context, images []v2alpha1.CopyImageSchema) ([]v2alpha1.DeleteItem, error) {
+	targets, err := resolveDeleteTargets(images)
+	if err != nil {
+		return nil, err
+	}
+
+	planned := sets.New[string]()
 	items := make([]v2alpha1.DeleteItem, 0, len(images)*2)
-	for _, img := range images {
-		if slices.Contains(duplicates, img.Destination) {
-			o.Log.Debug("duplicate image found %s", img.Destination)
+	for i, img := range images {
+		target := targets[i]
+		if planned.Has(target) {
+			o.Log.Debug("duplicate image found %s", target)
 			continue
 		}
-		duplicates = append(duplicates, img.Destination)
+		planned.Insert(target)
 		item := v2alpha1.DeleteItem{
 			ImageName:      img.Origin,
-			ImageReference: img.Destination,
+			ImageReference: target,
 			Type:           img.Type,
 		}
 		items = append(items, item)
@@ -132,10 +144,126 @@ func (o DeleteImages) processDeleteItems(ctx context.Context, images []v2alpha1.
 			continue
 		}
 
-		sigs := o.sigDeleteItems(ctx, img)
-		items = append(items, sigs...)
+		sigImg := img
+		if target != img.Destination {
+			// The destination tag is shared with other digests: look the signatures up through
+			// this image's digest instead of a tag that can address another image.
+			sigImg.Source = withDigestOf(img.Source, target)
+		}
+		for _, sig := range o.sigDeleteItems(ctx, sigImg) {
+			if planned.Has(sig.ImageReference) {
+				continue
+			}
+			planned.Insert(sig.ImageReference)
+			items = append(items, sig)
+		}
 	}
-	return items
+	return items, nil
+}
+
+// destinationSelections gathers the distinct images selected for one destination reference.
+type destinationSelections struct {
+	destination string
+	indexes     []int
+	origins     sets.Set[string]
+	digests     sets.Set[string]
+	tagOnly     []string
+	pinned      []string
+}
+
+// add records the image at index i, whose origin parses into originSpec.
+func (s *destinationSelections) add(i int, origin string, originSpec image.ImageSpec) {
+	s.indexes = append(s.indexes, i)
+	if s.origins.Has(origin) {
+		return
+	}
+	s.origins.Insert(origin)
+	if originSpec.Digest == "" {
+		s.tagOnly = append(s.tagOnly, origin)
+		return
+	}
+	s.pinned = append(s.pinned, origin)
+	s.digests.Insert(originSpec.Algorithm + ":" + originSpec.Digest)
+}
+
+// groupByDestination groups the images that can be addressed by digest by their destination
+// reference, in order of first appearance. Operator catalogs and the Cincinnati graph image are
+// left out: they are built or rebuilt by oc-mirror, so their digest at the destination differs
+// from the origin digest.
+func groupByDestination(images []v2alpha1.CopyImageSchema) []*destinationSelections {
+	groups := map[string]*destinationSelections{}
+	var ordered []*destinationSelections
+	for i, img := range images {
+		if img.Type.IsOperatorCatalog() || img.Type == v2alpha1.TypeCincinnatiGraph {
+			continue
+		}
+		originSpec, err := image.ParseRef(img.Origin)
+		if err != nil {
+			// reported when the plan is executed
+			continue
+		}
+		group, ok := groups[img.Destination]
+		if !ok {
+			group = &destinationSelections{destination: img.Destination, origins: sets.New[string](), digests: sets.New[string]()}
+			groups[img.Destination] = group
+			ordered = append(ordered, group)
+		}
+		group.add(i, img.Origin, originSpec)
+	}
+	return ordered
+}
+
+// resolveDeleteTargets returns, for each image, the reference to write in the delete plan.
+//
+// Several selected images can share a destination reference: repo:v1@sha256:a and
+// repo:v1@sha256:b are both mirrored to <destination>/repo:v1 (OCPBUGS-105878), digest-only
+// images with the same targetTag share that tag, and with --delete-v1-images digest-only images
+// are all addressed as :latest. A tag only points at one manifest, so deleting the shared tag
+// would delete one of these images and silently leave the others (OCPBUGS-130951).
+//
+//   - When a destination is shared by different digests, each image is addressed by its digest
+//     in the destination repository.
+//   - When a destination is shared by digest-pinned and tag-only selections, the content of the
+//     tag-only selections cannot be determined safely and the plan is rejected.
+//   - Any other destination keeps its reference unchanged.
+func resolveDeleteTargets(images []v2alpha1.CopyImageSchema) ([]string, error) {
+	targets := make([]string, len(images))
+	for i, img := range images {
+		targets[i] = img.Destination
+	}
+
+	var rejected []string
+	for _, group := range groupByDestination(images) {
+		switch {
+		case len(group.tagOnly) > 0 && len(group.pinned) > 0:
+			rejected = append(rejected, fmt.Sprintf("destination %s is shared by tag-only %v and digest-pinned %v selections", group.destination, group.tagOnly, group.pinned))
+		case group.digests.Len() > 1:
+			for _, i := range group.indexes {
+				targets[i] = withDigestOf(images[i].Destination, images[i].Origin)
+			}
+		}
+	}
+
+	if len(rejected) > 0 {
+		return nil, fmt.Errorf("delete plan rejected: %s; the content of a tag-only selection cannot be determined safely, so no delete file was written; "+
+			"select every image of these destinations by digest (repository:tag@sha256:<digest> or repository@sha256:<digest>) and generate the delete file again",
+			strings.Join(rejected, "; "))
+	}
+	return targets, nil
+}
+
+// withDigestOf returns ref addressed by the digest of pinnedRef, or ref unchanged when either
+// reference cannot be parsed.
+func withDigestOf(ref, pinnedRef string) string {
+	refSpec, err := image.ParseRef(ref)
+	if err != nil {
+		return ref
+	}
+	pinnedSpec, err := image.ParseRef(pinnedRef)
+	if err != nil || pinnedSpec.Digest == "" {
+		return ref
+	}
+	return digestReferenceOf(refSpec, pinnedSpec.Algorithm+":"+pinnedSpec.Digest)
 }
 
 // DeleteRegistryImages - deletes both remote and local registries
