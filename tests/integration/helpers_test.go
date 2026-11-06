@@ -94,19 +94,26 @@ type ImageRef struct {
 }
 
 type OperatorConfig struct {
-	Catalog  string            `yaml:"catalog"`
-	Packages []OperatorPackage `yaml:"packages"`
+	Catalog                     string            `yaml:"catalog"`
+	Full                        *bool             `yaml:"full,omitempty"`
+	TargetCatalog               string            `yaml:"targetCatalog,omitempty"`
+	TargetTag                   string            `yaml:"targetTag,omitempty"`
+	TargetCatalogSourceTemplate string            `yaml:"targetCatalogSourceTemplate,omitempty"`
+	Packages                    []OperatorPackage `yaml:"packages,omitempty"`
 }
 
 type OperatorPackage struct {
-	Name     string            `yaml:"name"`
-	Channels []OperatorChannel `yaml:"channels"`
+	Name           string            `yaml:"name"`
+	DefaultChannel string            `yaml:"defaultChannel,omitempty"`
+	MinVersion     string            `yaml:"minVersion,omitempty"`
+	MaxVersion     string            `yaml:"maxVersion,omitempty"`
+	Channels       []OperatorChannel `yaml:"channels,omitempty"`
 }
 
 type OperatorChannel struct {
 	Name       string `yaml:"name"`
-	MinVersion string `yaml:"minVersion"`
-	MaxVersion string `yaml:"maxVersion"`
+	MinVersion string `yaml:"minVersion,omitempty"`
+	MaxVersion string `yaml:"maxVersion,omitempty"`
 }
 
 // expectOcMirrorCommandSuccess asserts that the oc-mirror command completed successfully.
@@ -511,12 +518,11 @@ func copyFile(src, dst string) error {
 // setupWorkDir creates a temporary working directory and copies signature files.
 // Returns the working directory path.
 func setupWorkDir() string {
-	workDir, err := os.MkdirTemp("", "oc-mirror-test-*")
-	Expect(err).NotTo(HaveOccurred())
+	workDir := GinkgoT().TempDir()
 
 	// Copy release signature files to working directory
 	sigDir := filepath.Join(workDir, dirWorkingDir, "signatures")
-	err = os.MkdirAll(sigDir, 0o755)
+	err := os.MkdirAll(sigDir, 0o755)
 	Expect(err).NotTo(HaveOccurred())
 
 	// Copy all release signature files from keys/ (any file that isn't the public key or cosign key)
@@ -834,8 +840,7 @@ func expectRebuiltTagMatchesDigest(ctx context.Context, reg registry.Registry, i
 }
 
 // extractCatalogConfigs pulls a catalog image from the registry and extracts
-// the FBC config files to a temporary directory on disk. The caller is
-// responsible for removing the returned directory when done.
+// the FBC config files to a temporary directory cleaned up by Ginkgo.
 func extractCatalogConfigs(ctx context.Context, reg registry.Registry, catalogRef string) string {
 	repo := extractRepositoryName(catalogRef)
 	tag := extractTag(catalogRef)
@@ -849,7 +854,7 @@ func extractCatalogConfigs(ctx context.Context, reg registry.Registry, catalogRe
 }
 
 // extractCatalogImageConfigs extracts the final FBC filesystem from either a
-// source or mirrored catalog. The caller must remove the returned directory.
+// source or mirrored catalog. Ginkgo cleans up the directory even if extraction fails.
 func extractCatalogImageConfigs(img v1.Image) string {
 	// Get the FBC configs path from the standard OLM label
 	cf, err := img.ConfigFile()
@@ -857,8 +862,7 @@ func extractCatalogImageConfigs(img v1.Image) string {
 	configsPath, ok := cf.Config.Labels["operators.operatorframework.io.index.configs.v1"]
 	Expect(ok).To(BeTrue(), "catalog image missing FBC configs label")
 
-	destDir, err := os.MkdirTemp("", "catalog-configs-*")
-	Expect(err).NotTo(HaveOccurred())
+	destDir := GinkgoT().TempDir()
 
 	// Read the final image filesystem, with layer deletions applied by the library.
 	rc := mutate.Extract(img)
@@ -930,8 +934,9 @@ func extractTag(imageRef string) string {
 
 // cleanupWorkDir removes the working directory.
 func cleanupWorkDir(workDir string) {
+	GinkgoHelper()
 	if workDir != "" {
-		os.RemoveAll(workDir)
+		Expect(os.RemoveAll(workDir)).To(Succeed(), "failed to clean up workspace %s", workDir)
 	}
 }
 

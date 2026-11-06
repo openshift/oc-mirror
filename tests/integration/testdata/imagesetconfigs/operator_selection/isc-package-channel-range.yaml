@@ -1,0 +1,12 @@
+kind: ImageSetConfiguration
+apiVersion: mirror.openshift.io/v2alpha1
+mirror:
+  operators:
+    - catalog: quay.io/oc-mirror/oc-mirror-dev:test-catalog-latest
+      packages:
+        - name: bar
+          defaultChannel: alpha
+          minVersion: '0.2.0'
+          maxVersion: '1.0.0'
+          channels:
+            - name: alpha

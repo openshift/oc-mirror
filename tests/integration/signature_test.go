@@ -12,6 +12,7 @@ import (
 	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/oc-mirror/tests/integration/pkg/ocmirror"
+	"github.com/openshift/oc-mirror/tests/integration/pkg/registry"
 )
 
 var _ = Describe("signatures", func() {
@@ -55,6 +56,9 @@ var _ = Describe("signatures", func() {
 
 		By("verifying signatures are present in the local registry")
 		expectSignaturesInRegistry(*testRegistry)
+
+		By("verifying the full catalog, every operator version and the original catalog digest survived transport")
+		expectFullOperatorCatalog(workDir, *testRegistry)
 
 		By("verifying the signature configmap was generated correctly")
 		expectSignatureConfigMapGenerated(workDir)
@@ -137,6 +141,19 @@ var _ = Describe("signatures", func() {
 		})
 	})
 })
+
+// The signature round trip also covers transporting the whole catalog.
+func expectFullOperatorCatalog(workDir string, reg registry.Registry) {
+	GinkgoHelper()
+	extra := map[string]string{
+		"openshift/release-images:v0.0.1": "quay.io/oc-mirror/release/test-release-index:v0.0.1",
+		"openshift/release:v0.0.1-alpine": "quay.io/oc-mirror/release/test-image:v0.0.1",
+	}
+	expectOperatorCatalogs(workDir, reg, extra, catalogExpectation{
+		Destination: testCatalogRepo + ":test-catalog-latest", Source: happyPathCatalog,
+		Full: true, Packages: fullCatalogPackages(),
+	})
+}
 
 // expectSignatureConfigMapGenerated verifies that the release signature configmap
 // (both JSON and YAML) was generated in working-dir/cluster-resources with the
