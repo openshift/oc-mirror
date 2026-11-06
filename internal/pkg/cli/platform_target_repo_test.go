@@ -336,3 +336,117 @@ func TestPlatformComponentOnlyDestinationConflict(t *testing.T) {
 	}
 	require.ErrorContains(t, ex.validatePlatformImageDestinations(images), "conflicting destination")
 }
+
+func TestPlatformImageDestinationConflictConfigSources(t *testing.T) {
+	const destination = "docker://mirror.example.com/releases:v1"
+	for _, tc := range []struct {
+		name                  string
+		platform              v2alpha1.Platform
+		firstType, secondType v2alpha1.ImageType
+		expected, unexpected  []string
+	}{
+		{
+			name:      "payload and additional image",
+			platform:  v2alpha1.Platform{TargetImageRepo: "releases"},
+			firstType: v2alpha1.TypeOCPRelease, secondType: v2alpha1.TypeGeneric,
+			expected:   []string{`platform.targetImageRepo "releases"`, "additionalImages"},
+			unexpected: []string{"platform.targetComponentRepo"},
+		},
+		{
+			name:      "additional image and payload",
+			platform:  v2alpha1.Platform{TargetImageRepo: "releases"},
+			firstType: v2alpha1.TypeGeneric, secondType: v2alpha1.TypeOCPRelease,
+			expected:   []string{"additionalImages", `platform.targetImageRepo "releases"`},
+			unexpected: []string{"platform.targetComponentRepo"},
+		},
+		{
+			name:      "component override and default payload",
+			platform:  v2alpha1.Platform{TargetComponentRepo: "openshift/release-images"},
+			firstType: v2alpha1.TypeOCPReleaseContent, secondType: v2alpha1.TypeOCPRelease,
+			expected:   []string{`platform.targetComponentRepo "openshift/release-images"`, "platform release payload (default repository)"},
+			unexpected: []string{"platform.targetImageRepo", "additionalImages"},
+		},
+		{
+			name:      "payload override and default component",
+			platform:  v2alpha1.Platform{TargetImageRepo: "openshift/release"},
+			firstType: v2alpha1.TypeOCPRelease, secondType: v2alpha1.TypeOCPReleaseContent,
+			expected:   []string{`platform.targetImageRepo "openshift/release"`, "platform release component (default repository)"},
+			unexpected: []string{"platform.targetComponentRepo", "additionalImages"},
+		},
+		{
+			name:      "unrelated additional images with a platform override configured",
+			platform:  v2alpha1.Platform{TargetImageRepo: "payloads", TargetComponentRepo: "components"},
+			firstType: v2alpha1.TypeGeneric, secondType: v2alpha1.TypeGeneric,
+			expected:   []string{"additionalImages"},
+			unexpected: []string{"platform.targetImageRepo", "platform.targetComponentRepo"},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ex := ExecutorSchema{}
+			ex.Config.Mirror.Platform = tc.platform
+			images := []v2alpha1.CopyImageSchema{
+				{Origin: "docker://source.example.com/first:v1", Destination: destination, Type: tc.firstType},
+				{Origin: "source.example.com/second:v1", Destination: destination, Type: tc.secondType},
+			}
+			originalImages := append([]v2alpha1.CopyImageSchema(nil), images...)
+			err := ex.validatePlatformImageDestinations(images)
+			require.ErrorContains(t, err, "conflicting destination")
+			require.ErrorContains(t, err, destination)
+			require.ErrorContains(t, err, "source.example.com/first:v1")
+			require.ErrorContains(t, err, "source.example.com/second:v1")
+			for _, expected := range tc.expected {
+				require.Contains(t, err.Error(), expected, "identify the actual configuration source")
+			}
+			for _, unexpected := range tc.unexpected {
+				require.NotContains(t, err.Error(), unexpected, "do not blame unrelated configuration fields")
+			}
+			require.Equal(t, originalImages, images, "validation must not modify the collected images")
+		})
+	}
+}
+
+func TestImageDestinationConfigSource(t *testing.T) {
+	ex := ExecutorSchema{}
+	ex.Config.Mirror.Platform = v2alpha1.Platform{TargetImageRepo: "payloads", TargetComponentRepo: "components"}
+	for _, tc := range []struct {
+		imageType v2alpha1.ImageType
+		want      string
+	}{
+		{v2alpha1.TypeOCPRelease, `platform.targetImageRepo "payloads"`},
+		{v2alpha1.TypeOCPReleaseContent, `platform.targetComponentRepo "components"`},
+		{v2alpha1.TypeKubeVirtContainer, `platform.targetComponentRepo "components"`},
+		{v2alpha1.TypeCincinnatiGraph, "platform.graph"},
+		{v2alpha1.TypeGeneric, "additionalImages"},
+		{v2alpha1.TypeOperatorCatalog, "operators"},
+		{v2alpha1.TypeOperatorBundle, "operators"},
+		{v2alpha1.TypeOperatorRelatedImage, "operators"},
+		{v2alpha1.TypeHelmImage, "helm"},
+		{v2alpha1.TypeInvalid, "unknown image type"},
+		{v2alpha1.ImageType(-1), "unknown image type -1"},
+	} {
+		t.Run(tc.want, func(t *testing.T) {
+			require.Equal(t, tc.want, ex.imageDestinationConfigSource(tc.imageType))
+		})
+	}
+}
+
+func TestSameImageDigestPreservesIdentityRules(t *testing.T) {
+	const origin = "source.example.com/release:v1"
+	digest := "@sha256:" + strings.Repeat("a", 64)
+	for _, tc := range []struct {
+		name, first, second string
+		same                bool
+	}{
+		{"same digest", origin + digest, "other.example.com/components" + digest, true},
+		{"different digests", origin + digest, origin + "@sha256:" + strings.Repeat("b", 64), false},
+		{"tag only", origin, origin, false},
+		{"tag and pinned reference remain distinct", origin, origin + digest, false},
+		{"pinned reference and tag remain distinct", origin + digest, origin, false},
+		{"invalid first origin", "", origin + digest, false},
+		{"invalid second origin", origin + digest, "invalid@sha256:abc", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			require.Equal(t, tc.same, sameImageDigest(tc.first, tc.second))
+		})
+	}
+}
