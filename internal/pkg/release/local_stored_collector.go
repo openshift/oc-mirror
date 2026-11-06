@@ -2,6 +2,7 @@ package release
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -219,10 +220,17 @@ func (o *LocalStorageCollector) collectReleaseImages(ctx context.Context, releas
 }
 
 func (o *LocalStorageCollector) ensureReleaseInOCIFormat(ctx context.Context, release v2alpha1.CopyImageSchema, dir string) error {
-	_, err := os.Stat(dir)
-	if err == nil {
-		o.Log.Debug(collectorPrefix+"release-images index directory alredy exists %s", dir)
+	// The OCI copy writes index.json last, when it commits. A directory without a
+	// readable index.json is the leftover of an interrupted run and must be copied again (OCPBUGS-77670).
+	if index, err := os.ReadFile(filepath.Join(dir, "index.json")); err == nil && json.Valid(index) {
+		o.Log.Debug(collectorPrefix+"release-images index directory already exists %s", dir)
 		return nil
+	}
+	if _, err := os.Stat(dir); err == nil {
+		o.Log.Warn(collectorPrefix+"release image directory %s has no index.json, copying it again", dir)
+		if err := os.RemoveAll(dir); err != nil {
+			return fmt.Errorf("remove incomplete oci dir: %w", err)
+		}
 	}
 	o.Log.Debug(collectorPrefix+"copying  release image %s ", release.Source)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
