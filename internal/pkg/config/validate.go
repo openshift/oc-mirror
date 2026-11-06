@@ -5,6 +5,7 @@ import (
 	"regexp"
 
 	"github.com/Masterminds/semver/v3"
+	"go.podman.io/image/v5/docker/reference"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 
@@ -18,7 +19,7 @@ type (
 
 var (
 	validationChecks       = []validationFunc{validateOperatorOptions, validateReleaseChannels, validateBlockedImages, validateReleasePlatformFields}
-	validationDeleteChecks = []validationDeleteFunc{validateOperatorOptionsDelete, validateReleaseChannelsDelete}
+	validationDeleteChecks = []validationDeleteFunc{validateOperatorOptionsDelete, validateReleaseChannelsDelete, validateReleaseTargetRepoDelete}
 )
 
 // Validate will check an ImagesetConfiguration for input errors.
@@ -142,17 +143,42 @@ func validatePackageChannel(ctlgName string, pkg *v2alpha1.IncludePackage, ch *v
 	return nil
 }
 
-// validateReleasePlatformFields ensures that platform.platforms and platform.architectures
-// are not used together — they are mutually exclusive.
+// validateReleasePlatformFields validates the destination repositories and ensures
+// that platform.platforms and platform.architectures are mutually exclusive.
 func validateReleasePlatformFields(cfg *v2alpha1.ImageSetConfiguration) []error {
+	errs := validatePlatformTargetRepos(cfg.Mirror.Platform)
 	//nolint:staticcheck // SA1019: Architectures is deprecated but we check it for mutual exclusivity
 	if len(cfg.Mirror.Platform.Platforms) > 0 && len(cfg.Mirror.Platform.Architectures) > 0 {
-		return []error{fmt.Errorf(
-			"platform.platforms and platform.architectures cannot be used together; " +
+		errs = append(errs, fmt.Errorf(
+			"platform.platforms and platform.architectures cannot be used together; "+
 				"use platform.platforms for sparse manifest filtering (requires disabling manifest list blob checks on container registry side), or platform.architectures (deprecated) for OCP multi payload or single arch payloads",
-		)}
+		))
+	}
+	return errs
+}
+
+func validatePlatformTargetRepo(field, repo string) error {
+	if repo != "" && (len(repo) > reference.NameTotalLengthMax || !v2alpha1.IsValidPathComponent(repo)) {
+		return fmt.Errorf("platform.%s %q must be a lowercase repository path of at most %d characters without a transport, tag, or digest", field, repo, reference.NameTotalLengthMax)
 	}
 	return nil
+}
+
+func validatePlatformTargetRepos(platform v2alpha1.Platform) []error {
+	var errs []error
+	for _, target := range []struct{ field, repo string }{
+		{"targetImageRepo", platform.TargetImageRepo},
+		{"targetComponentRepo", platform.TargetComponentRepo},
+	} {
+		if err := validatePlatformTargetRepo(target.field, target.repo); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return errs
+}
+
+func validateReleaseTargetRepoDelete(cfg *v2alpha1.DeleteImageSetConfiguration) error {
+	return utilerrors.NewAggregate(validatePlatformTargetRepos(cfg.Delete.Platform))
 }
 
 func validateReleaseChannels(cfg *v2alpha1.ImageSetConfiguration) []error {

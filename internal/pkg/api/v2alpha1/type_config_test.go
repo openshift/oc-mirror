@@ -6,6 +6,40 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func TestPlatformDeepCopyTargetRepos(t *testing.T) {
+	for _, repo := range []string{"", "ocp-release", "openshift4/ocp-release", "team/release_images.v4/release--repo"} {
+		t.Run("repo="+repo, func(t *testing.T) {
+			platform := Platform{TargetImageRepo: repo, TargetComponentRepo: repo}
+			assert.Equal(t, repo, platform.DeepCopy().TargetImageRepo)
+			assert.Equal(t, repo, platform.DeepCopy().TargetComponentRepo)
+		})
+	}
+}
+
+func TestPlatformDeepCopyPreservesFields(t *testing.T) {
+	platform := Platform{
+		TargetImageRepo:     "openshift-release-dev/ocp-release",
+		TargetComponentRepo: "openshift-release-dev/ocp-v4.0-art-dev",
+		Graph:               true,
+		Channels:            []ReleaseChannel{{Name: "stable-4.20"}},
+		//nolint:staticcheck // SA1019: ensure deprecated architecture data is still copied
+		Architectures:     []string{"amd64"},
+		Platforms:         []InstancePlatformFilter{{OS: "linux", Architecture: "arm64"}},
+		Release:           "quay.io/release/payload:v1",
+		KubeVirtContainer: true,
+	}
+	copied := platform.DeepCopy()
+	assert.Equal(t, platform, copied, "all scalar and slice values must be preserved")
+	copied.Channels[0].Name = "changed"
+	//nolint:staticcheck // SA1019: verify deprecated architecture slices are independent
+	copied.Architectures[0] = "changed"
+	copied.Platforms[0].OS = "changed"
+	assert.Equal(t, "stable-4.20", platform.Channels[0].Name)
+	//nolint:staticcheck // SA1019: verify deprecated architecture slices are independent
+	assert.Equal(t, "amd64", platform.Architectures[0])
+	assert.Equal(t, "linux", platform.Platforms[0].OS)
+}
+
 func TestIsValidPathComponent(t *testing.T) {
 	tests := []struct {
 		name           string

@@ -1,6 +1,7 @@
 package release
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"io"
@@ -334,7 +335,7 @@ func (o *LocalStorageCollector) prepareGraphImage(ctx context.Context) (v2alpha1
 		// Supposing that the mirror to disk saved the image with the latest tag
 		// If this supposition is false, then we need to implement a mechanism to save
 		// the digest of the graph image and use it here
-		Image: consts.DockerProtocol + filepath.Join(o.LocalStorageFQDN, graphImageName) + ":latest",
+		Image: consts.DockerProtocol + GraphImageReference(o.LocalStorageFQDN),
 		Type:  v2alpha1.TypeCincinnatiGraph,
 	}
 	// OCPBUGS-38037: Check the graph image is in the cache before adding it
@@ -380,7 +381,7 @@ func (o LocalStorageCollector) prepareM2DCopyBatch(images []v2alpha1.RelatedImag
 		}
 		src = imgSpec.ReferenceWithTransport
 
-		pathComponents := preparePathComponents(imgSpec, img.Type, img.Name)
+		pathComponents := o.releasePathComponents(imgSpec, img.Type, img.Name)
 		tag := prepareTag(imgSpec, img.Type, releaseTag, img.Name)
 
 		dest = consts.DockerProtocol + strings.Join([]string{o.destinationRegistry(), pathComponents + ":" + tag}, "/")
@@ -408,7 +409,7 @@ func (o LocalStorageCollector) prepareD2MCopyBatch(images []v2alpha1.RelatedImag
 			return nil, err
 		}
 
-		pathComponents := preparePathComponents(imgSpec, img.Type, img.Name)
+		pathComponents := o.releasePathComponents(imgSpec, img.Type, img.Name)
 		tag := prepareTag(imgSpec, img.Type, releaseTag, img.Name)
 
 		src = consts.DockerProtocol + strings.Join([]string{o.LocalStorageFQDN, pathComponents + ":" + tag}, "/")
@@ -473,7 +474,7 @@ func (o LocalStorageCollector) identifyReleases(ctx context.Context) ([]v2alpha1
 // by the collector.
 func (o *LocalStorageCollector) GraphImage() (string, error) {
 	if o.GraphDataImage == "" {
-		sourceGraphDataImage := filepath.Join(o.LocalStorageFQDN, graphImageName) + ":latest"
+		sourceGraphDataImage := GraphImageReference(o.LocalStorageFQDN)
 		graphRelatedImage := []v2alpha1.RelatedImage{
 			{
 				Name:  "release",
@@ -683,10 +684,14 @@ func (o LocalStorageCollector) handleGraphImage(ctx context.Context) (v2alpha1.C
 		// OCPBUGS-38037: this indicates that the official cincinnati API is not reacheable
 		// and that graph image cannot be rebuilt on top the complete graph in tar.gz format
 
-		graphImgRef := consts.DockerProtocol + filepath.Join(o.destinationRegistry(), graphImageName) + ":latest"
+		graphDestination, err := GraphImageDestination(o.destinationRegistry(), o.Opts)
+		if err != nil {
+			return v2alpha1.CopyImageSchema{}, err
+		}
+		graphImgRef := consts.DockerProtocol + graphDestination
 
 		// 1. check if graph image is already in cache
-		cachedImageRef := consts.DockerProtocol + filepath.Join(o.LocalStorageFQDN, graphImageName) + ":latest"
+		cachedImageRef := consts.DockerProtocol + GraphImageReference(o.LocalStorageFQDN)
 		alreadyInCache, err := o.imageExists(ctx, cachedImageRef)
 		if err != nil {
 			o.Log.Warn("graph image not found in cache: %v", err)
@@ -748,20 +753,26 @@ func compareByOriginSourceDest(a, b v2alpha1.CopyImageSchema) int {
 	return strings.Compare(a.Destination, b.Destination)
 }
 
-func preparePathComponents(imgSpec image.ImageSpec, imgType v2alpha1.ImageType, imgName string) string {
-	pathComponents := ""
+// releasePathComponents applies the independent payload and component overrides,
+// including kubevirt images, while preserving the separate graph repository.
+func (o LocalStorageCollector) releasePathComponents(imgSpec image.ImageSpec, imgType v2alpha1.ImageType, imgName string) string {
 	switch {
 	case imgType == v2alpha1.TypeOCPRelease:
-		pathComponents = releaseImagePathComponents
+		return cmp.Or(o.Config.Mirror.Platform.TargetImageRepo, releaseImagePathComponents)
+	case imgType == v2alpha1.TypeOCPReleaseContent:
+		if repo := o.Config.Mirror.Platform.TargetComponentRepo; repo != "" {
+			return repo
+		}
+		if imgName != "" {
+			return releaseComponentPathComponents
+		}
 	case imgType == v2alpha1.TypeCincinnatiGraph:
-		pathComponents = imgSpec.PathComponent
-	case imgType == v2alpha1.TypeOCPReleaseContent && imgName != "":
-		pathComponents = releaseComponentPathComponents
-	case imgSpec.IsImageByDigestOnly():
-		pathComponents = imgSpec.PathComponent
+		return imgSpec.PathComponent
 	}
-
-	return pathComponents
+	if imgSpec.IsImageByDigestOnly() {
+		return imgSpec.PathComponent
+	}
+	return ""
 }
 
 func prepareTag(imgSpec image.ImageSpec, imgType v2alpha1.ImageType, releaseTag, imgName string) string {

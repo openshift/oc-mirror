@@ -174,16 +174,14 @@ func WithMaxNestedPaths(imageRef string, maxNestedPaths int) (string, error) {
 	}
 	components := strings.Split(spec.PathComponent, "/")
 	// initialize the output
-	pathWithMaxNexted := spec.PathComponent
+	pathWithMaxNested := spec.PathComponent
 	if len(components) > maxNestedPaths {
 		// we keep (maxNestedPaths - 1) components the way they are
-		pathWithMaxNexted = strings.Join(components[:maxNestedPaths-1], "/")
 		// we concatenate the rest with `-` and this becomes the last component
 		lastPathComponent := strings.Join(components[maxNestedPaths-1:], "-")
-		pathWithMaxNexted = strings.Join([]string{pathWithMaxNexted, lastPathComponent}, "/")
-
+		pathWithMaxNested = strings.Join(append(components[:maxNestedPaths-1], lastPathComponent), "/")
 	}
-	return strings.Replace(imageRef, spec.PathComponent, pathWithMaxNexted, 1), nil
+	return strings.Replace(imageRef, spec.PathComponent, pathWithMaxNested, 1), nil
 }
 
 func (i ImageSpec) ComponentName() string {

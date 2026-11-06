@@ -189,6 +189,14 @@ func setupDryRunTest(t *testing.T, testFolder string, tt struct {
 
 	ex := createExecutorForTest(testFolder, opts, reg, log, tt)
 	testImages := selectTestImages(imgs, tt.shouldGenerateClusterResources, tt.expectCatalogs)
+	if tt.enableGraphGeneration {
+		testImages = append(testImages, v2alpha1.CopyImageSchema{
+			Source:      "docker://localhost:5000/openshift/graph-image:latest",
+			Destination: "docker://registry.example.com/test/openshift/graph-image:latest",
+			Origin:      "docker://localhost:5000/openshift/graph-image:latest",
+			Type:        v2alpha1.TypeCincinnatiGraph,
+		})
+	}
 
 	// Set up test environment based on expectations
 	if tt.expectSignatures {
