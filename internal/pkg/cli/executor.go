@@ -1167,21 +1167,26 @@ func (o *ExecutorSchema) validatePlatformDestination() error {
 		{"targetImageRepo", o.Config.Mirror.Platform.TargetImageRepo},
 		{"targetComponentRepo", o.Config.Mirror.Platform.TargetComponentRepo},
 	} {
-		if target.repo == "" {
-			continue
+		if err := o.validatePlatformTargetRepository(destination, target.field, target.repo); err != nil {
+			return err
 		}
-		ref, err := reference.WithName(destination + "/" + target.repo)
-		if err != nil {
-			return fmt.Errorf("platform.%s %q with destination %q is invalid: %w", target.field, target.repo, destination, err)
-		}
-		if limit := o.Opts.Global.MaxNestedPaths; limit > 0 && strings.Count(reference.Path(ref), "/")+1 > limit {
-			return fmt.Errorf("platform.%s %q with destination %q exceeds --max-nested-paths=%d; choose a repository and destination namespace that fit the limit", target.field, target.repo, o.Opts.Destination, limit)
-		}
-		if o.Config.Mirror.Platform.Graph {
-			if err := o.validatePlatformGraphRepository(destination, ref.Name(), target.field); err != nil {
-				return err
-			}
-		}
+	}
+	return nil
+}
+
+func (o *ExecutorSchema) validatePlatformTargetRepository(destination, field, repo string) error {
+	if repo == "" {
+		return nil
+	}
+	ref, err := reference.WithName(destination + "/" + repo)
+	if err != nil {
+		return fmt.Errorf("platform.%s %q with destination %q is invalid: %w", field, repo, destination, err)
+	}
+	if limit := o.Opts.Global.MaxNestedPaths; limit > 0 && strings.Count(reference.Path(ref), "/")+1 > limit {
+		return fmt.Errorf("platform.%s %q with destination %q exceeds --max-nested-paths=%d; choose a repository and destination namespace that fit the limit", field, repo, o.Opts.Destination, limit)
+	}
+	if o.Config.Mirror.Platform.Graph {
+		return o.validatePlatformGraphRepository(destination, ref.Name(), field)
 	}
 	return nil
 }
@@ -1209,22 +1214,57 @@ func (o *ExecutorSchema) validatePlatformImageDestinations(images []v2alpha1.Cop
 	if o.Config.Mirror.Platform.TargetImageRepo == "" && o.Config.Mirror.Platform.TargetComponentRepo == "" {
 		return nil
 	}
-	origins := make(map[string]string, len(images))
+	origins := make(map[string]v2alpha1.CopyImageSchema, len(images))
 	for _, img := range images {
-		origin := strings.TrimPrefix(img.Origin, consts.DockerProtocol)
+		img.Origin = strings.TrimPrefix(img.Origin, consts.DockerProtocol)
 		previous, exists := origins[img.Destination]
-		if exists && previous != origin {
-			previousSpec, previousErr := image.ParseRef(previous)
-			currentSpec, currentErr := image.ParseRef(origin)
-			if previousErr == nil && currentErr == nil && previousSpec.Digest != "" &&
-				previousSpec.Digest == currentSpec.Digest && previousSpec.Algorithm == currentSpec.Algorithm {
+		if exists && previous.Origin != img.Origin {
+			if sameImageDigest(previous.Origin, img.Origin) {
 				continue
 			}
-			return fmt.Errorf("platform.targetImageRepo %q and platform.targetComponentRepo %q produce conflicting destination %q for %q and %q", o.Config.Mirror.Platform.TargetImageRepo, o.Config.Mirror.Platform.TargetComponentRepo, img.Destination, previous, origin)
+			return fmt.Errorf("conflicting destination %q for %q (%s) and %q (%s)", img.Destination,
+				previous.Origin, o.imageDestinationConfigSource(previous.Type), img.Origin, o.imageDestinationConfigSource(img.Type))
 		}
-		origins[img.Destination] = origin
+		origins[img.Destination] = img
 	}
 	return nil
+}
+
+// sameImageDigest preserves the exemption for origins pinned to the same digest.
+// A tag-only reference does not establish identity with a digest-pinned reference.
+func sameImageDigest(first, second string) bool {
+	firstSpec, firstErr := image.ParseRef(first)
+	secondSpec, secondErr := image.ParseRef(second)
+	return firstErr == nil && secondErr == nil && firstSpec.Digest != "" &&
+		firstSpec.Digest == secondSpec.Digest && firstSpec.Algorithm == secondSpec.Algorithm
+}
+
+// imageDestinationConfigSource identifies the configuration section responsible
+// for an image destination, without blaming an unset platform override.
+func (o *ExecutorSchema) imageDestinationConfigSource(imageType v2alpha1.ImageType) string {
+	switch imageType {
+	case v2alpha1.TypeOCPRelease:
+		if repo := o.Config.Mirror.Platform.TargetImageRepo; repo != "" {
+			return fmt.Sprintf("platform.targetImageRepo %q", repo)
+		}
+		return "platform release payload (default repository)"
+	case v2alpha1.TypeOCPReleaseContent, v2alpha1.TypeKubeVirtContainer:
+		if repo := o.Config.Mirror.Platform.TargetComponentRepo; repo != "" {
+			return fmt.Sprintf("platform.targetComponentRepo %q", repo)
+		}
+		return "platform release component (default repository)"
+	case v2alpha1.TypeCincinnatiGraph:
+		return "platform.graph"
+	case v2alpha1.TypeGeneric:
+		return "additionalImages"
+	case v2alpha1.TypeOperatorCatalog, v2alpha1.TypeOperatorBundle, v2alpha1.TypeOperatorRelatedImage:
+		return "operators"
+	case v2alpha1.TypeHelmImage:
+		return "helm"
+	case v2alpha1.TypeInvalid:
+		return "unknown image type"
+	}
+	return fmt.Sprintf("unknown image type %d", imageType)
 }
 
 // setupLogsLevelAndDir - private utility to setup log
