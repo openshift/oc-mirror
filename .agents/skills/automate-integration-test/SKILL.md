@@ -10,19 +10,18 @@ Convert a manual test case description into a Ginkgo v2 integration test for the
 
 ## Test Images
 
-These are minimal images we generated and host ourselves to keep tests fast and self-contained, avoiding dependencies on external images that might change frequently.
+The suite uses minimal fixture images to keep tests fast and predictable. Reuse the complete, pinned image references
+in `tests/integration/testdata/imagesetconfigs/` and the matching test constants. Do not use abbreviated digests or
+substitute mutable `latest` tags.
 
-- Catalog: `quay.io/oc-mirror/oc-mirror-dev:test-catalog-20261103-2e526488d`
-- Release: `quay.io/oc-mirror/release/test-release-index:v0.0.1`
-- Additional: `quay.io/openshifttest/hello-openshift@sha256:61b8f5...`
-
-Reuse the pinned image tags in existing test data. See `tests/integration/image-builders/README.md` before publishing a new fixture version.
+See `tests/integration/image-builders/README.md` before publishing a new fixture version.
 
 ## Step-by-step process
 
 ### 1. Read project conventions
 
-Read `AGENTS.md` at the project root for architecture, conventions, and pitfalls.
+Read `AGENTS.md` for agent workflows, `CONTRIBUTING.md` for contributor requirements and test commands,
+`ARCHITECTURE.md` for the system design, and `docs/testing/README.md` for the testing strategy.
 
 ### 2. Clarify if needed
 
@@ -48,9 +47,8 @@ Prefer existing helpers. If a new one is needed, follow the `expect*` naming pat
 
 ### 5. Analyze oc-mirror APIs if needed
 
-If technical details are unclear:
-- Check for a local copy at `./oc-mirror`
-- Otherwise ask the user for a path or permission to clone from `github.com:openshift/oc-mirror.git`
+Inspect the API types in `internal/pkg/api/v2alpha1/` and the relevant implementation under `internal/pkg/`
+in this checkout. Do not look for a nested `./oc-mirror` checkout or clone another copy of this repository.
 
 ### 6. Write the test
 
@@ -62,7 +60,8 @@ Follow the patterns from existing tests. Key rules:
 
 ### 7. Choose or create ISC/DISC configs
 
-Check existing configs in `tests/integration/testdata/imagesetconfigs/` first. Only create new ones if needed, using the same YAML structure and the test images listed in `AGENTS.md`.
+Check existing configs in `tests/integration/testdata/imagesetconfigs/` first. Only create new ones if needed,
+using the same YAML structure and the pinned fixture references described in the Test Images section above.
 
 ### 8. Review the code
 
@@ -73,10 +72,17 @@ Before running, review the generated code for:
 
 ### 9. Run the tests
 
-Ask for permission, then run.
+Ask for permission before running tests. Follow the CLI integration test instructions in `CONTRIBUTING.md`.
+The suite is a separate Go module, so run focused tests from `tests/integration/`, not the repository root:
+
 ```bash
-go test -v ./tests/integration/ --ginkgo.focus "<test label>"
+make build
+cd tests/integration
+go test -v -count=1 -timeout 30m . -ginkgo.focus '<test description or regex>'
 ```
+
+These commands start at the repository root. The suite starts an in-process registry; no registry executable or
+`PATH` override is needed. Use `make test-integration-cli` from the repository root to build and run the full suite.
 
 ### 10. Output
 
