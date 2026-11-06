@@ -11,7 +11,11 @@ import (
 	"sort"
 	"strings"
 
+	"go.podman.io/common/pkg/retry"
+	imagemanifest "go.podman.io/image/v5/manifest"
+	"go.podman.io/image/v5/types"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
@@ -137,12 +141,9 @@ func (o DeleteImages) processDeleteItems(ctx context.Context, images []v2alpha1.
 // DeleteRegistryImages - deletes both remote and local registries
 func (o DeleteImages) DeleteRegistryImages(deleteImageList v2alpha1.DeleteImageList) error {
 	o.Log.Debug("deleting images from remote registry")
-	collectorSchema := v2alpha1.CollectorSchema{AllImages: []v2alpha1.CopyImageSchema{}}
-
-	increment := 1
-	if o.Opts.Global.ForceCacheDelete {
-		increment = 2
-	}
+	// all destination and cache deletions are derived (and validated) before any of them is
+	// deduplicated or handed over to the batch worker
+	tasks := make([]deleteTask, 0, len(deleteImageList.Items)*2)
 
 	allErrs := []error{}
 	for _, img := range deleteImageList.Items {
@@ -198,7 +199,7 @@ func (o DeleteImages) DeleteRegistryImages(deleteImageList v2alpha1.DeleteImageL
 			Type:        img.Type,
 		}
 		o.Log.Debug("deleting images %v", cis.Destination)
-		collectorSchema.AllImages = append(collectorSchema.AllImages, cis)
+		tasks = append(tasks, deleteTask{schema: cis, repository: imgSpecRef.Name, byDigest: imgSpecRef.Digest != ""})
 
 		if o.Opts.Global.ForceCacheDelete {
 			cacheDestination := img.ImageReference
@@ -214,30 +215,233 @@ func (o DeleteImages) DeleteRegistryImages(deleteImageList v2alpha1.DeleteImageL
 				Type:        img.Type,
 			}
 			o.Log.Debug("deleting images local cache %v", cis.Destination)
-			collectorSchema.AllImages = append(collectorSchema.AllImages, cis)
-		}
-
-		switch {
-		case img.Type.IsRelease():
-			collectorSchema.TotalReleaseImages += increment
-		case img.Type.IsOperator():
-			collectorSchema.TotalOperatorImages += increment
-		case img.Type.IsAdditionalImage():
-			collectorSchema.TotalAdditionalImages += increment
-		case img.Type.IsHelmImage():
-			collectorSchema.TotalHelmImages += increment
+			tasks = append(tasks, deleteTask{schema: cis, repository: imgSpecRef.Name, cache: true})
 		}
 	}
 
 	o.Opts.Stdout = io.Discard
 	if !o.Opts.Global.DeleteGenerate && len(o.Opts.Global.DeleteDestination) > 0 {
-		if _, err := o.Batch.Worker(context.Background(), collectorSchema, o.Opts); err != nil {
+		ctx := context.Background()
+		var err error
+		tasks, err = o.preflightPinnedRepositories(ctx, tasks)
+		if err != nil {
+			allErrs = append(allErrs, err)
+			return errors.Join(allErrs...)
+		}
+		if _, err := o.Batch.Worker(ctx, deleteCollectorSchema(tasks), o.Opts); err != nil {
 			o.Log.Warn("error during registry deletion: %v", err)
 			allErrs = append(allErrs, err)
 		}
 	}
 
 	return errors.Join(allErrs...)
+}
+
+// deleteTask is one deletion handed over to the batch worker.
+type deleteTask struct {
+	schema v2alpha1.CopyImageSchema
+	// repository is the destination repository (registry and path) of the delete item the
+	// task was derived from; a cache task keeps the repository of its destination item.
+	repository string
+	// cache is set for the local cache deletions of --force-cache-delete.
+	cache bool
+	// byDigest is set for destination deletions addressed by digest.
+	byDigest bool
+}
+
+// deleteCollectorSchema builds the batch worker input, counting every scheduled deletion.
+func deleteCollectorSchema(tasks []deleteTask) v2alpha1.CollectorSchema {
+	collectorSchema := v2alpha1.CollectorSchema{AllImages: make([]v2alpha1.CopyImageSchema, 0, len(tasks))}
+	for _, task := range tasks {
+		collectorSchema.AllImages = append(collectorSchema.AllImages, task.schema)
+		switch {
+		case task.schema.Type.IsRelease():
+			collectorSchema.TotalReleaseImages++
+		case task.schema.Type.IsOperator():
+			collectorSchema.TotalOperatorImages++
+		case task.schema.Type.IsAdditionalImage():
+			collectorSchema.TotalAdditionalImages++
+		case task.schema.Type.IsHelmImage():
+			collectorSchema.TotalHelmImages++
+		}
+	}
+	return collectorSchema
+}
+
+// preflightPinnedRepositories prepares the deletions of the repositories in which the delete
+// plan addresses at least one image by digest (see resolveDeleteTargets), together with their
+// local cache deletions. Deletions of any other repository are returned unchanged and cause no
+// registry access.
+//
+// In such a repository a tag and a digest, or two tags, can address the same manifest. The
+// registry deletes a manifest (and every tag pointing at it) whatever reference is used, so
+// deleting both references would delete the manifest twice and fail. Before anything is
+// deleted, every tag reference of these repositories is therefore resolved, once, against the
+// registry it belongs to, and replaced by the digest it points to: the reference that is
+// deduplicated is the reference that is deleted, even if the tag is moved afterwards. A tag-only
+// selection thus means the image the tag points to during this preflight. Deletions addressing
+// the same manifest are scheduled once.
+//
+// If any tag cannot be resolved, nothing is deleted and an error is returned. Failures of the
+// deletions themselves are reported by the batch worker, as for any other deletion.
+func (o DeleteImages) preflightPinnedRepositories(ctx context.Context, tasks []deleteTask) ([]deleteTask, error) {
+	pinned := pinnedRepositories(tasks)
+	if pinned.Len() == 0 {
+		return tasks, nil
+	}
+	resolver := &tagResolver{images: o, resolved: map[string]string{}}
+	scheduled := sets.New[string]()
+	prepared := make([]deleteTask, 0, len(tasks))
+	var failures []error
+	for _, task := range tasks {
+		if !pinned.Has(task.repository) {
+			prepared = append(prepared, task)
+			continue
+		}
+
+		ref, err := resolver.digestReference(ctx, task.schema.Destination, task.cache)
+		switch {
+		case err != nil:
+			failures = append(failures, err)
+		case scheduled.Has(ref):
+			o.Log.Info("%s addresses the same manifest as %s, which is already scheduled for deletion", task.schema.Destination, ref)
+		default:
+			scheduled.Insert(ref)
+			task.schema.Destination = ref
+			prepared = append(prepared, task)
+		}
+	}
+
+	if len(failures) > 0 {
+		return nil, fmt.Errorf("delete preflight failed, no images were deleted: %w", errors.Join(failures...))
+	}
+	return prepared, nil
+}
+
+// pinnedRepositories returns the repositories with at least one destination deletion addressed
+// by digest.
+func pinnedRepositories(tasks []deleteTask) sets.Set[string] {
+	pinned := sets.New[string]()
+	for _, task := range tasks {
+		if task.byDigest {
+			pinned.Insert(task.repository)
+		}
+	}
+	return pinned
+}
+
+// preflightSystemContexts returns the system contexts used to read the destination registry,
+// with the destination TLS settings, and the local cache, which is always served over plain HTTP
+// (see mirror.delete).
+func (o DeleteImages) preflightSystemContexts() (*types.SystemContext, *types.SystemContext, error) {
+	if o.Manifest == nil {
+		return nil, nil, errors.New("unable to resolve tag references: no manifest client configured")
+	}
+	if o.Opts.DestImage == nil {
+		return nil, nil, errors.New("unable to resolve tag references: no destination image options configured")
+	}
+	destinationCtx, err := o.Opts.DestImage.NewSystemContext()
+	if err != nil {
+		return nil, nil, fmt.Errorf("destination system context: %w", err)
+	}
+	cacheCtx, err := o.Opts.DestImage.NewSystemContext()
+	if err != nil {
+		return nil, nil, fmt.Errorf("cache system context: %w", err)
+	}
+	cacheCtx.DockerInsecureSkipTLSVerify = types.OptionalBoolTrue
+	return destinationCtx, cacheCtx, nil
+}
+
+// digestReferenceOf returns the reference of spec's repository addressed by dgst ("<algorithm>:<hex>").
+func digestReferenceOf(spec image.ImageSpec, dgst string) string {
+	return spec.Transport + spec.Name + "@" + dgst
+}
+
+// tagResolver resolves the tag references of the preflight to digest references, at most once
+// per reference, so that a tag listed several times is frozen to a single digest. The system
+// contexts are only created when a tag has to be resolved.
+type tagResolver struct {
+	images      DeleteImages
+	resolved    map[string]string
+	destination *types.SystemContext
+	cache       *types.SystemContext
+}
+
+// digestReference returns ref addressed by digest. A tag reference is resolved, against the
+// local cache when cache is set and against the destination registry otherwise, to the digest of
+// the manifest it currently points to.
+func (r *tagResolver) digestReference(ctx context.Context, ref string, cache bool) (string, error) {
+	spec, err := image.ParseRef(ref)
+	if err != nil {
+		return "", fmt.Errorf("parse %s: %w", ref, err)
+	}
+	if spec.Digest != "" {
+		return digestReferenceOf(spec, spec.Algorithm+":"+spec.Digest), nil
+	}
+	if digestRef, ok := r.resolved[ref]; ok {
+		return digestRef, nil
+	}
+
+	sysCtx, err := r.systemContext(cache)
+	if err != nil {
+		return "", fmt.Errorf("resolve %s: %w", ref, err)
+	}
+	manifestDigest, err := r.images.manifestDigest(ctx, sysCtx, ref)
+	if err != nil {
+		return "", fmt.Errorf("resolve %s: %w", ref, err)
+	}
+	digestRef := digestReferenceOf(spec, manifestDigest.String())
+	r.images.Log.Debug("%s resolved to %s", ref, digestRef)
+	r.resolved[ref] = digestRef
+	return digestRef, nil
+}
+
+// systemContext returns the system context to read the local cache or the destination registry.
+func (r *tagResolver) systemContext(cache bool) (*types.SystemContext, error) {
+	if r.destination == nil {
+		destinationCtx, cacheCtx, err := r.images.preflightSystemContexts()
+		if err != nil {
+			return nil, err
+		}
+		r.destination, r.cache = destinationCtx, cacheCtx
+	}
+	if cache {
+		return r.cache, nil
+	}
+	return r.destination, nil
+}
+
+// manifestDigest returns the digest of the manifest ref points to, computed the same way as the
+// registry deletion does (go.podman.io/image docker deleteImage).
+func (o DeleteImages) manifestDigest(ctx context.Context, sysCtx *types.SystemContext, ref string) (digest.Digest, error) {
+	retryOpts := retry.Options{}
+	if o.Opts.RetryOpts != nil {
+		retryOpts = *o.Opts.RetryOpts
+	}
+	retryOpts.IsErrorRetryable = mirror.IsErrorRetryable
+
+	var manifestDigest digest.Digest
+	err := retry.IfNecessary(ctx, func() error {
+		lookupCtx := ctx
+		if o.Opts.Global != nil && o.Opts.Global.CommandTimeout > 0 {
+			var cancel context.CancelFunc
+			lookupCtx, cancel = context.WithTimeout(ctx, o.Opts.Global.CommandTimeout)
+			defer cancel()
+		}
+		manifestBytes, _, err := o.Manifest.ImageManifest(lookupCtx, sysCtx, ref, nil)
+		if err != nil {
+			return err
+		}
+		manifestDigest, err = imagemanifest.Digest(manifestBytes)
+		if err != nil {
+			return fmt.Errorf("compute manifest digest: %w", err)
+		}
+		return nil
+	}, &retryOpts)
+	if err != nil {
+		return "", fmt.Errorf("get manifest: %w", err)
+	}
+	return manifestDigest, nil
 }
 
 // ReadDeleteMetaData - read the list of images to delete
