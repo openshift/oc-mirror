@@ -8,25 +8,15 @@ import (
 )
 
 // packagesWithoutVersionBounds returns a copy of the operator filter that keeps
-// package/channel names but drops min/max version bounds so sibling versions
-// remain visible when computing shared related images for delete.
+// selected package names but includes every channel and version of those
+// packages. Channel lists and version bounds would hide sibling bundles that
+// still share related images with the version being deleted.
 func packagesWithoutVersionBounds(op v2alpha1.Operator) v2alpha1.Operator {
 	out := op
+	out.Full = true
 	out.Packages = make([]v2alpha1.IncludePackage, len(op.Packages))
 	for i, pkg := range op.Packages {
-		p := pkg
-		p.MinVersion = ""
-		p.MaxVersion = ""
-		if len(pkg.Channels) > 0 {
-			p.Channels = make([]v2alpha1.IncludeChannel, len(pkg.Channels))
-			for j, ch := range pkg.Channels {
-				c := ch
-				c.MinVersion = ""
-				c.MaxVersion = ""
-				p.Channels[j] = c
-			}
-		}
-		out.Packages[i] = p
+		out.Packages[i] = v2alpha1.IncludePackage{Name: pkg.Name}
 	}
 	return out
 }

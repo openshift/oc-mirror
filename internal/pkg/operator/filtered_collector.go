@@ -286,7 +286,10 @@ func (o FilterCollector) collectOperator( //nolint:cyclop // TODO: this needs fu
 	// OCPBUGS-61236: when deleting a version filter, do not remove related images
 	// that sibling versions of the same package still reference.
 	if o.Opts.IsDeleteMode() && hasVersionConstraints(op) && !isFullCatalog(op) && result.DeclConfig != nil {
-		ri = o.excludeSharedRelatedForDelete(ctx, op, imgSpec, catalogDigest, result.DeclConfig, ri, copyImageSchemaMap)
+		ri, err = o.excludeSharedRelatedForDelete(ctx, op, imgSpec, catalogDigest, result.DeclConfig, ri, copyImageSchemaMap)
+		if err != nil {
+			return v2alpha1.CatalogFilterResult{}, err
+		}
 	}
 
 	// OCPBUGS-45059
@@ -385,24 +388,21 @@ func (o FilterCollector) excludeSharedRelatedForDelete(
 	deleteDC *declcfg.DeclarativeConfig,
 	deleteRelated map[string][]v2alpha1.RelatedImage,
 	_ *v2alpha1.CopyImageSchemaMap,
-) map[string][]v2alpha1.RelatedImage {
+) (map[string][]v2alpha1.RelatedImage, error) {
 	imageIndexDir := filepath.Join(o.Opts.Global.WorkingDir, operatorCatalogsDir, imgSpec.ComponentName(), catalogDigest)
 	dcPath, err := o.ctlgHandler.ExtractOCIConfigLayers(imgSpec, imageIndexDir)
 	if err != nil {
-		o.Log.Warn("unable to load full catalog for shared-image delete filtering: %v", err)
-		return deleteRelated
+		return nil, fmt.Errorf("load catalog for shared-image delete filtering: %w", err)
 	}
 	originalDC, err := o.ctlgHandler.GetDeclarativeConfig(ctx, dcPath)
 	if err != nil {
-		o.Log.Warn("unable to parse full catalog for shared-image delete filtering: %v", err)
-		return deleteRelated
+		return nil, fmt.Errorf("parse catalog for shared-image delete filtering: %w", err)
 	}
 	packageDC, err := filterCatalog(ctx, *originalDC, packagesWithoutVersionBounds(op))
 	if err != nil {
-		o.Log.Warn("unable to filter package-wide catalog for shared-image delete filtering: %v", err)
-		return deleteRelated
+		return nil, fmt.Errorf("filter package-wide catalog for shared-image delete filtering: %w", err)
 	}
-	return excludeRelatedImagesSharedWithSiblingBundles(o.Log, deleteRelated, deleteDC, packageDC)
+	return excludeRelatedImagesSharedWithSiblingBundles(o.Log, deleteRelated, deleteDC, packageDC), nil
 }
 
 func (o FilterCollector) filterOperator(ctx context.Context, op v2alpha1.Operator, imgSpec image.ImageSpec, catalogDigest string) (v2alpha1.CatalogFilterResult, error) { //nolint:cyclop // TODO: this needs further refactoring

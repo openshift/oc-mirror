@@ -100,8 +100,8 @@ var _ = Describe("delete", func() {
 	})
 
 	// OCPBUGS-61236: related images shared with a remaining sibling version
-	// must not be listed for delete. Uses the in-repo test-catalog-latest
-	// catalog (foo.v0.2.0 / v0.3.0 / v0.3.1 share the same operator image).
+	// must not be listed for delete. Uses the digest-pinned test catalog
+	// (foo.v0.2.0 / v0.3.0 / v0.3.1 share the same operator image).
 	Describe("delete related images shared with sibling operator versions", func() {
 		iscFile := filepath.Join("operators", "isc-operator-shared-related.yaml")
 		discFile := filepath.Join("operators", "disc-operator-shared-related.yaml")
@@ -110,7 +110,7 @@ var _ = Describe("delete", func() {
 		It("should keep related images still referenced by a sibling version", func() {
 			deleteYaml := filepath.Join(workDir, "working-dir", "delete", "delete-images.yaml")
 
-			By("mirroring foo 0.2.0 through 0.3.1 from the custom test catalog")
+			By("mirroring foo 0.2.0 through 0.3.1 from the digest-pinned test catalog")
 			result, err := runner.MirrorToMirror(ctx, filepath.Join(iscDir, iscFile), workDir, testRegistry.Endpoint(),
 				"--remove-signatures=true", "--dest-tls-verify=false")
 			expectOcMirrorCommandSuccess(result, err)
@@ -121,7 +121,7 @@ var _ = Describe("delete", func() {
 			expectOcMirrorCommandSuccess(result, err)
 			expectValidDeleteImagesFiles(workDir, "")
 
-			By("verifying the deleted bundle is listed and the shared related image is not")
+			By("verifying the deleted bundle is listed and sibling-shared related images are not")
 			items := parseDeleteImageList(deleteYaml)
 			Expect(items).NotTo(BeEmpty(), "expected delete-images.yaml to contain at least one item")
 
@@ -131,6 +131,8 @@ var _ = Describe("delete", func() {
 				if strings.Contains(combined, "foo-bundle-v0.2.0") {
 					sawDeletedBundle = true
 				}
+				Expect(combined).NotTo(ContainSubstring("foo-bundle-v0.3."),
+					"foo 0.3.x sibling bundle must remain and must not be deleted")
 				Expect(combined).NotTo(ContainSubstring(sharedRelatedDigest),
 					"shared related image %s is still referenced by foo 0.3.x and must not be deleted", sharedRelatedDigest)
 			}

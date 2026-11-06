@@ -4,7 +4,7 @@ kind: DeleteImageSetConfiguration
 apiVersion: mirror.openshift.io/v2alpha1
 delete:
   operators:
-    - catalog: quay.io/oc-mirror/oc-mirror-dev:test-catalog-latest
+    - catalog: quay.io/oc-mirror/oc-mirror-dev@sha256:a54a81fe094aa34f03b5d8e3aea88d8989ccf14b64b776f049a4139a858b738a
       packages:
       - name: foo
         defaultChannel: beta

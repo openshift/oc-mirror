@@ -2,6 +2,7 @@ package operator
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/operator-framework/operator-registry/alpha/declcfg"
@@ -41,14 +42,14 @@ func TestPackagesWithoutVersionBounds(t *testing.T) {
 	}
 	out := packagesWithoutVersionBounds(op)
 	require.Len(t, out.Packages, 1)
+	assert.True(t, out.Full)
 	assert.Equal(t, "quay-operator", out.Packages[0].Name)
 	assert.Empty(t, out.Packages[0].MinVersion)
 	assert.Empty(t, out.Packages[0].MaxVersion)
-	require.Len(t, out.Packages[0].Channels, 1)
-	assert.Empty(t, out.Packages[0].Channels[0].MinVersion)
-	assert.Empty(t, out.Packages[0].Channels[0].MaxVersion)
+	assert.Empty(t, out.Packages[0].Channels)
 	// original unchanged
 	assert.Equal(t, "3.11.5", op.Packages[0].MinVersion)
+	require.Len(t, op.Packages[0].Channels, 1)
 }
 
 func TestExcludeRelatedImagesSharedWithSiblingBundles(t *testing.T) {
@@ -277,9 +278,10 @@ func TestExcludeSharedRelatedForDelete_Integration(t *testing.T) {
 			},
 		},
 	}
-	got := collector.excludeSharedRelatedForDelete(
+	got, err := collector.excludeSharedRelatedForDelete(
 		t.Context(), deleteFilter, imgSpec, "testdigest", deleteDC, deleteRelated, copyMap,
 	)
+	require.NoError(t, err)
 
 	packageDC, err := filterCatalog(t.Context(), *loadFBC(), packagesWithoutVersionBounds(deleteFilter))
 	require.NoError(t, err)
@@ -289,4 +291,35 @@ func TestExcludeSharedRelatedForDelete_Integration(t *testing.T) {
 	t.Logf("package-wide bundles (%d): %v", len(packageNames), packageNames)
 	require.Greater(t, countSiblings(packageNames, deleteNames), 0, "package-wide catalog should include sibling versions")
 	assertSharedRelatedDropped(t, got, deleteRelated, deleteDC, packageDC)
+}
+
+type failingExtractHandler struct {
+	fbcCatalogHandler
+}
+
+func (h failingExtractHandler) ExtractOCIConfigLayers(_ image.ImageSpec, _ string) (string, error) {
+	return "", errors.New("extract failed")
+}
+
+func TestExcludeSharedRelatedForDelete_ExtractError(t *testing.T) {
+	log := clog.New("error")
+	op := v2alpha1.Operator{Catalog: "registry.redhat.io/redhat/redhat-operator-index:v4.14"}
+	imgSpec, err := image.ParseRef(op.Catalog)
+	require.NoError(t, err)
+	collector := &FilterCollector{
+		OperatorCollector: OperatorCollector{
+			Log:         log,
+			ctlgHandler: failingExtractHandler{},
+			Opts: mirror.CopyOptions{
+				Function: string(mirror.DeleteMode),
+				Global:   &mirror.GlobalOptions{WorkingDir: t.TempDir()},
+			},
+		},
+	}
+	got, err := collector.excludeSharedRelatedForDelete(
+		t.Context(), op, imgSpec, "testdigest", &declcfg.DeclarativeConfig{}, map[string][]v2alpha1.RelatedImage{"x": {}}, nil,
+	)
+	require.Error(t, err)
+	assert.Nil(t, got)
+	assert.Contains(t, err.Error(), "extract failed")
 }
