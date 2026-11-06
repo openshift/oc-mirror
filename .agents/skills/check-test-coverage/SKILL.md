@@ -12,17 +12,17 @@ Analyze which oc-mirror CLI features are tested at the integration and e2e level
 
 ### 1. Discover CLI features
 
-Run these commands to enumerate all subcommands and flags:
+From the repository root, build the checkout's binary with `make build`, then enumerate its subcommands and flags:
 
 ```bash
-oc-mirror --v2 --help
-oc-mirror --v2 delete --help
-oc-mirror --v2 list operators --help
-oc-mirror --v2 list releases --help
-oc-mirror --v2 version --help
+./bin/oc-mirror --v2 --help
+./bin/oc-mirror --v2 delete --help
+./bin/oc-mirror --v2 list operators --help
+./bin/oc-mirror --v2 list releases --help
+./bin/oc-mirror --v2 version --help
 ```
 
-If `oc-mirror` is not in PATH, build it first with `make build` and use `./bin/oc-mirror`.
+Use this binary rather than an unrelated installed version. See `CONTRIBUTING.md` for development and test commands.
 
 From the output, extract:
 - **Workflows**: mirrorToMirror (m2m), mirrorToDisk (m2d), diskToMirror (d2m)
