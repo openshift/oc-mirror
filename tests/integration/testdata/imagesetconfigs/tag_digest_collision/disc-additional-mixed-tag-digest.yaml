@@ -1,0 +1,9 @@
+# DeleteImageSetConfig selecting the same destination tag once without digest and once pinned
+# to a digest. The content of the tag-only selection cannot be determined safely, so delete
+# --generate must reject it without writing a delete file.
+kind: DeleteImageSetConfiguration
+apiVersion: mirror.openshift.io/v2alpha1
+delete:
+  additionalImages:
+  - name: quay.io/oc-mirror/oc-mirror-dev:shared-operand
+  - name: quay.io/oc-mirror/oc-mirror-dev:shared-operand@sha256:1ce8c0187c8fe6b4be327dc848b8baf062ce1baa5096b4f5d955893d126d5b58
