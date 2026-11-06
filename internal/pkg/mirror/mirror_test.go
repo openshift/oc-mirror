@@ -2,22 +2,27 @@ package mirror
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/docker/distribution/registry/api/errcode"
 	errcodev2 "github.com/docker/distribution/registry/api/v2"
 	"github.com/google/go-containerregistry/pkg/registry"
+	"github.com/opencontainers/go-digest"
+	imgspecv1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.podman.io/common/pkg/retry"
 	"go.podman.io/image/v5/copy"
 	"go.podman.io/image/v5/docker"
+	"go.podman.io/image/v5/manifest"
 	"go.podman.io/image/v5/signature"
 	"go.podman.io/image/v5/types"
 
@@ -453,4 +458,127 @@ func (o *mockMirrorCopy) CopyImage(ctx context.Context, pc *signature.PolicyCont
 
 func (o *mockMirrorDelete) DeleteImage(ctx context.Context, dest string, opts *CopyOptions) error {
 	return nil
+}
+
+// TestPutSignaturesRebuildsSigstoreConfig documents the OCPBUGS-129492 / #1478
+// failure against the real 4.18.45 cluster-samples-operator .sig
+// (ocp-v4.0-art-dev@sha256:234db4d1…). PutSignatures keeps all 8 layers (distinct
+// annotations) and only rewrites the config by dropping history/created.
+func TestPutSignaturesRebuildsSigstoreConfig(t *testing.T) {
+	original := []byte(`{"architecture":"","created":"0001-01-01T00:00:00Z","history":[{"created":"0001-01-01T00:00:00Z"},{"created":"0001-01-01T00:00:00Z"},{"created":"0001-01-01T00:00:00Z"},{"created":"0001-01-01T00:00:00Z"},{"created":"0001-01-01T00:00:00Z"},{"created":"0001-01-01T00:00:00Z"},{"created":"0001-01-01T00:00:00Z"},{"created":"0001-01-01T00:00:00Z"}],"os":"","rootfs":{"type":"layers","diff_ids":["sha256:5f4378b0c7c03bb67929b3b89fca3116ea7bf8e53fcfbc0e54e690b78b8d7b35","sha256:5f4378b0c7c03bb67929b3b89fca3116ea7bf8e53fcfbc0e54e690b78b8d7b35","sha256:5f4378b0c7c03bb67929b3b89fca3116ea7bf8e53fcfbc0e54e690b78b8d7b35","sha256:5f4378b0c7c03bb67929b3b89fca3116ea7bf8e53fcfbc0e54e690b78b8d7b35","sha256:5f4378b0c7c03bb67929b3b89fca3116ea7bf8e53fcfbc0e54e690b78b8d7b35","sha256:5f4378b0c7c03bb67929b3b89fca3116ea7bf8e53fcfbc0e54e690b78b8d7b35","sha256:5f4378b0c7c03bb67929b3b89fca3116ea7bf8e53fcfbc0e54e690b78b8d7b35","sha256:5f4378b0c7c03bb67929b3b89fca3116ea7bf8e53fcfbc0e54e690b78b8d7b35"]},"config":{}}`)
+	require.Equal(t, "sha256:2e6fab0b58f3f7ae92659664fc5bdc635b9b987cc63861e149759ce2886a0162", digest.FromBytes(original).String())
+
+	var src imgspecv1.Image
+	require.NoError(t, json.Unmarshal(original, &src))
+	require.Len(t, src.History, 8)
+	require.Len(t, src.RootFS.DiffIDs, 8)
+	uniq := map[digest.Digest]struct{}{}
+	for _, d := range src.RootFS.DiffIDs {
+		uniq[d] = struct{}{}
+	}
+	require.Len(t, uniq, 1)
+
+	var rebuilt imgspecv1.Image
+	rebuilt.RootFS.Type = "layers"
+	rebuilt.RootFS.DiffIDs = append([]digest.Digest{}, src.RootFS.DiffIDs...)
+	got, err := json.Marshal(rebuilt)
+	require.NoError(t, err)
+	assert.NotContains(t, string(got), "history")
+	assert.NotContains(t, string(got), "created")
+	assert.NotEqual(t, digest.FromBytes(original).String(), digest.FromBytes(got).String())
+}
+
+func TestSigstoreAttachmentTagsFromManifest(t *testing.T) {
+	single := []byte(`{"schemaVersion":2,"mediaType":"application/vnd.oci.image.manifest.v1+json","config":{"mediaType":"application/vnd.oci.image.config.v1+json","size":2,"digest":"sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"},"layers":[]}`)
+	tags, err := sigstoreAttachmentTagsFromManifest(single)
+	require.NoError(t, err)
+	require.Len(t, tags, 1)
+	d, err := manifest.Digest(single)
+	require.NoError(t, err)
+	assert.Equal(t, sigstoreAttachmentTag(d), tags[0])
+
+	list := []byte(`{"schemaVersion":2,"mediaType":"application/vnd.oci.image.index.v1+json","manifests":[{"mediaType":"application/vnd.oci.image.manifest.v1+json","size":1,"digest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","platform":{"architecture":"amd64","os":"linux"}},{"mediaType":"application/vnd.oci.image.manifest.v1+json","size":1,"digest":"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","platform":{"architecture":"arm64","os":"linux"}}]}`)
+	tags, err = sigstoreAttachmentTagsFromManifest(list)
+	require.NoError(t, err)
+	require.Len(t, tags, 3)
+	listDigest, err := manifest.Digest(list)
+	require.NoError(t, err)
+	assert.Equal(t, sigstoreAttachmentTag(listDigest), tags[0])
+	assert.Equal(t, "sha256-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.sig", tags[1])
+	assert.Equal(t, "sha256-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.sig", tags[2])
+}
+
+func TestIsManifestUnknownError(t *testing.T) {
+	assert.True(t, isManifestUnknownError(errcode.Error{Code: errcodev2.ErrorCodeManifestUnknown}))
+	assert.True(t, isManifestUnknownError(fmt.Errorf("reading image %q: manifest unknown", "img")))
+	assert.True(t, isManifestUnknownError(errcode.Error{Code: errcode.ErrorCodeUnknown, Message: "Not Found"}))
+	assert.True(t, isManifestUnknownError(errcode.Error{Code: errcode.ErrorCodeUnknown, Message: "manifest not found"}))
+	assert.True(t, isManifestUnknownError(docker.UnexpectedHTTPStatusError{StatusCode: http.StatusNotFound}))
+	assert.False(t, isManifestUnknownError(fmt.Errorf("manifest invalid")))
+	assert.False(t, isManifestUnknownError(fmt.Errorf("repository not found: no such manifest")))
+	assert.False(t, isManifestUnknownError(docker.UnexpectedHTTPStatusError{StatusCode: http.StatusBadRequest}))
+	assert.False(t, isManifestUnknownError(nil))
+}
+
+func TestCopySigstoreAttachmentsSkipsMissing(t *testing.T) {
+	testCopySigstoreAttachmentSkip(t, errcode.Error{Code: errcodev2.ErrorCodeManifestUnknown})
+}
+
+func TestCopySigstoreAttachmentsSkipsRedHatIONotFound(t *testing.T) {
+	testCopySigstoreAttachmentSkip(t, errcode.Error{Code: errcode.ErrorCodeUnknown, Message: "Not Found"})
+}
+
+func testCopySigstoreAttachmentSkip(t *testing.T, sigErr error) {
+	t.Helper()
+	global := &GlobalOptions{SecurePolicy: false, WorkingDir: t.TempDir()}
+	_, sharedOpts := SharedImageFlags()
+	_, deprecatedTLSVerifyOpt := DeprecatedTLSVerifyFlags()
+	_, srcOpts := ImageSrcFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "src-", "screds")
+	_, destOpts := ImageDestFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "dest-", "dcreds")
+	_, retryOpts := RetryFlags()
+
+	single := []byte(`{"schemaVersion":2,"mediaType":"application/vnd.oci.image.manifest.v1+json","config":{"mediaType":"application/vnd.oci.image.config.v1+json","size":2,"digest":"sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"},"layers":[]}`)
+	rec := &recordingMirrorCopy{manifest: single, sigErr: sigErr}
+	m := New(rec, &mockMirrorDelete{})
+	opts := CopyOptions{
+		Global:              global,
+		DeprecatedTLSVerify: deprecatedTLSVerifyOpt,
+		SrcImage:            srcOpts,
+		DestImage:           destOpts,
+		RetryOpts:           retryOpts,
+		RemoveSignatures:    false,
+	}
+	err := m.Run(context.Background(),
+		consts.DockerProtocol+"localhost.localdomain:5000/test:latest",
+		consts.DockerProtocol+"localhost.localdomain:5001/test:latest",
+		"copy", &opts)
+	require.NoError(t, err)
+	require.GreaterOrEqual(t, len(rec.calls), 2)
+	assert.False(t, rec.calls[0].removeSignatures, "parent copy must keep GPG lookaside signatures")
+	assert.True(t, rec.calls[1].removeSignatures)
+	assert.True(t, rec.calls[1].preserveDigests)
+	assert.Contains(t, rec.calls[1].src, ".sig")
+	assert.Contains(t, rec.calls[1].dest, ".sig")
+}
+
+type recordingMirrorCopy struct {
+	manifest []byte
+	sigErr   error
+	calls    []struct {
+		src, dest                         string
+		removeSignatures, preserveDigests bool
+	}
+}
+
+func (r *recordingMirrorCopy) CopyImage(ctx context.Context, pc *signature.PolicyContext, destRef, srcRef types.ImageReference, opts *copy.Options) ([]byte, error) {
+	src := srcRef.StringWithinTransport()
+	dest := destRef.StringWithinTransport()
+	r.calls = append(r.calls, struct {
+		src, dest                         string
+		removeSignatures, preserveDigests bool
+	}{src, dest, opts.RemoveSignatures, opts.PreserveDigests})
+	if strings.Contains(src, ".sig") || strings.Contains(dest, ".sig") {
+		return nil, r.sigErr
+	}
+	return r.manifest, nil
 }
