@@ -23,6 +23,7 @@ var (
 	policiesDir    string
 	cacheDir       string
 	graphDataDir   string
+	catalogsDir    string
 	ctx            context.Context
 	cancel         context.CancelFunc
 )
@@ -64,6 +65,7 @@ var _ = BeforeSuite(func() {
 	graphDataDir = filepath.Join(artifactsDir, "graphdatas")
 	keysDir = filepath.Join(artifactsDir, "keys")
 	policiesDir = filepath.Join(artifactsDir, "policies")
+	catalogsDir = filepath.Join(artifactsDir, "catalogs")
 
 	os.Setenv("OCP_SIGNATURE_VERIFICATION_PK", filepath.Join(keysDir, "release-pk.asc"))
 

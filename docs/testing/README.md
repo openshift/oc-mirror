@@ -37,6 +37,15 @@ the UTC publishing date and source commit. See the
 [integration image guide](../../tests/integration/image-builders/README.md) for
 publishing and updating fixtures without affecting other PRs.
 
+When a test only needs catalog content that oc-mirror reads, the declarative
+config can instead be checked in under `tests/integration/testdata/catalogs/`.
+The test validates it as `opm validate` does, builds a data-only catalog image
+from it, and serves that image from a separate local registry
+(`tests/integration/catalog_fixture_helpers_test.go`). Such an image has no opm
+binary or serve cache, so it covers oc-mirror's catalog handling but not opm
+serving or catalog installation on a cluster. Its bundle and related images
+still reference published fixture images.
+
 In these tests we assert the tangible outputs of `oc-mirror`: archive contents, mirrored images present on the target registry, etc.
 
 > **Example:** Execute the oc-mirror CLI command to successfully copy one image from a source registry to a target registry, and then verify the image exists in the target registry.
