@@ -85,7 +85,7 @@ oc-mirror --v2 -c ./isc.yaml --workspace file:///home/user/oc-mirror/workspace d
 |------|-------------|
 | `-c`, `--config` | Path to ImageSetConfiguration file (required) |
 | `--dry-run` | Preview what would be mirrored without copying. See [Dry Run](dry-run.md) |
-| `--parallel-images` | Number of images mirrored in parallel (default 4, max 10) |
+| `--parallel-images` | Number of images mirrored in parallel (default 4, max 128) |
 | `--parallel-layers` | Number of image layers mirrored in parallel (default 5, max 10) |
 | `--image-timeout` | Timeout for mirroring a single image (default 10m) |
 | `--max-nested-paths` | Limit nested paths for registries that restrict path depth |

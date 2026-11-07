@@ -515,13 +515,20 @@ func TestExecutorValidate(t *testing.T) {
 		}
 
 		// check ParallelImages
+		opts.ParallelLayerImages = 5
 		opts.ParallelImages = 11
+		assert.NoError(t, ex.Validate([]string{consts.FileProtocol + "test"}))
+
+		opts.ParallelImages = 128
+		assert.NoError(t, ex.Validate([]string{consts.FileProtocol + "test"}))
+
+		opts.ParallelImages = 129
 		err := ex.Validate([]string{consts.FileProtocol + "test"})
-		assert.EqualError(t, err, "the flag parallel-images must be between the range 1 to 10")
+		assert.EqualError(t, err, "the flag parallel-images must be between the range 1 to 128")
 
 		opts.ParallelImages = 0
 		err = ex.Validate([]string{consts.FileProtocol + "test"})
-		assert.EqualError(t, err, "the flag parallel-images must be between the range 1 to 10")
+		assert.EqualError(t, err, "the flag parallel-images must be between the range 1 to 128")
 
 		// check ParallelLayerImages
 		opts.ParallelImages = 5

@@ -21,4 +21,11 @@ const (
 	helmIndexesDir            string = "indexes"
 	maxParallelLayerDownloads uint   = 5
 	maxParallelImageDownloads uint   = 4
+	// Upper bound for --parallel-images. Upstream caps it at 10 (OCPBUGS-58467),
+	// but that bug was about 0 hanging, not about high values failing - its own
+	// reproducer ran --parallel-images 100 to completion. The batch worker is a
+	// plain semaphore, so this number is the real concurrency. 128 is a typo
+	// guard, not a recommendation: the registries on either end decide where
+	// more stops helping.
+	parallelImagesCeiling uint = 128
 )
