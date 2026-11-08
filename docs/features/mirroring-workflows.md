@@ -94,6 +94,8 @@ oc-mirror --v2 -c ./isc.yaml --workspace file:///home/user/oc-mirror/workspace d
 | `--remove-signatures` | Do not copy image signatures to the destination |
 | `--cache-dir` | Override the default cache directory (defaults to `$HOME`; see [Archive Management](archive-management.md)) |
 
+`--parallel-layers` applies to each image, so up to `--parallel-images` × `--parallel-layers` layers can be copied at the same time, each with its own connections and files. Before raising `--parallel-images` far above the default, check that the open-file limit allows for that. Go programs raise their soft limit to the hard limit at startup, so the hard limit (`ulimit -Hn`) is the one that counts.
+
 Signature handling can also be configured at a more granular level using YAML configuration files in the `registries.d` directory, allowing per-registry control over signature behavior.
 
 ## Incremental mirroring

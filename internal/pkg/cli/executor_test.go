@@ -516,6 +516,9 @@ func TestExecutorValidate(t *testing.T) {
 
 		// check ParallelImages
 		opts.ParallelLayerImages = 5
+		opts.ParallelImages = 1
+		assert.NoError(t, ex.Validate([]string{consts.FileProtocol + "test"}))
+
 		opts.ParallelImages = 11
 		assert.NoError(t, ex.Validate([]string{consts.FileProtocol + "test"}))
 
