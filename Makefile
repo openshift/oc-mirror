@@ -9,7 +9,7 @@ GOMODCACHE=$(shell $(GO) env GOMODCACHE)
 BUILD_MACHINERY_VERSION=v0.0.0-20240419090851-af9c868bcf52
 BUILD_MACHINERY_PATH=github.com/openshift/build-machinery-go
 
-$(shell $(GO) get ${BUILD_MACHINERY_PATH}@${BUILD_MACHINERY_VERSION})
+$(shell $(GO) mod download ${BUILD_MACHINERY_PATH}@${BUILD_MACHINERY_VERSION})
 
 # Include the library makefile
 include $(addprefix ${GOMODCACHE}/${BUILD_MACHINERY_PATH}@${BUILD_MACHINERY_VERSION}/make/, \
