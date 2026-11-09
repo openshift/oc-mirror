@@ -1073,7 +1073,7 @@ const (
 	// kubeVirtTestReleaseTag is the release directory name, used as release tag, of the
 	// synthetic release written by writeKubeVirtTestBootImages.
 	kubeVirtTestReleaseTag = "1.0.0-x86_64"
-	kubeVirtTestRepo       = "example.com/coreos"
+	kubeVirtTestRepo       = "registry.example.test/coreos"
 	kubeVirtTestDigest1    = "sha256:1111111111111111111111111111111111111111111111111111111111111111"
 	kubeVirtTestDigest2    = "sha256:2222222222222222222222222222222222222222222222222222222222222222"
 	kubeVirtTestDigest3    = "sha256:3333333333333333333333333333333333333333333333333333333333333333"
@@ -1443,69 +1443,120 @@ func TestPrepareReleaseBatchFromDirKubeVirtLegacyArchive(t *testing.T) {
 	}
 }
 
-// OCPBUGS-138157: the kubevirt logs of the images of a stream collection and of the legacy
-// archive lookup only name architectures and outcome codes, never images, registries,
-// caches, stream names or lookup errors, and the lookup adds no other log message.
+// OCPBUGS-138157: the complete logs of the mirror to disk and disk to mirror collection
+// of the images of a stream collection, including the legacy archive lookup, only name
+// architectures, counts and outcome codes: never the registries, caches, destinations or
+// references of these images, their stream names or lookup errors.
 func TestKubeVirtStreamCollectionLogs(t *testing.T) {
-	releaseDir := writeKubeVirtTestBootImages(t,
-		kubeVirtTestStream(t, map[string]string{"x86_64": kubeVirtTestDigest1}),
-		`{"rhel-9":`+kubeVirtTestStream(t, map[string]string{"x86_64": kubeVirtTestDigest1})+
-			`,"rhel-10":`+kubeVirtTestStream(t, map[string]string{"x86_64": kubeVirtTestDigest2})+`}`)
-	legacyCacheRef := consts.DockerProtocol + "localhost:9999/openshift/release:" + kubeVirtTestReleaseTag + "-kube-virt-container"
+	legacyStream := kubeVirtTestStream(t, map[string]string{"x86_64": kubeVirtTestDigest1})
+	streamCollection := `{"rhel-9":` + kubeVirtTestStream(t, map[string]string{"x86_64": kubeVirtTestDigest1}) +
+		`,"rhel-10":` + kubeVirtTestStream(t, map[string]string{"x86_64": kubeVirtTestDigest2}) + `}`
+	kubeVirtConfig := v2alpha1.ImageSetConfiguration{
+		ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
+			Mirror: v2alpha1.Mirror{Platform: v2alpha1.Platform{KubeVirtContainer: true}},
+		},
+	}
+	// forbidden are the strings that only the references of the images of the stream
+	// collection, their stream names or the lookup errors can bring into the logs.
+	forbidden := []string{
+		"registry.example.test",
+		strings.TrimPrefix(kubeVirtTestDigest1, "sha256:"),
+		strings.TrimPrefix(kubeVirtTestDigest2, "sha256:"),
+		"kube-virt-container",
+		"rhel-",
+		"manifest unknown",
+	}
+	requireSafeLogs := func(t *testing.T, logger *kubeVirtTestLogger, extraForbidden ...string) string {
+		t.Helper()
+		logs := strings.Join(logger.messages, "\n")
+		for _, s := range append(forbidden, extraForbidden...) {
+			require.NotContains(t, logs, s)
+		}
+		require.Contains(t, logs, "kubevirt: prepared 2 copies of stream collection images (architectures: x86_64)")
+		return logs
+	}
 
-	tests := []struct {
+	t.Run("mirror to disk", func(t *testing.T) {
+		logger := &kubeVirtTestLogger{}
+		workingDir := t.TempDir()
+		// release image of MockCincinnati: its manifests are already extracted and its
+		// OCI layout already exists.
+		writeKubeVirtTestBootImagesTo(t, filepath.Join(workingDir, releaseImageExtractDir, "ocp-release", "4.13.10-x86_64"),
+			legacyStream, streamCollection)
+		require.NoError(t, os.MkdirAll(filepath.Join(workingDir, releaseImageDir, "ocp-release", "4.13.10-x86_64"), 0o755))
+		opts := kubeVirtTestD2MOptions()
+		opts.Global.WorkingDir = workingDir
+		opts.Mode = mirror.MirrorToDisk
+		col := LocalStorageCollector{
+			Log:              logger,
+			Config:           kubeVirtConfig,
+			Manifest:         &kubeVirtTestCache{},
+			Mirror:           MockMirror{},
+			Cincinnati:       MockCincinnati{},
+			LocalStorageFQDN: "localhost:55000",
+			Opts:             opts,
+		}
+
+		copies, err := col.collectImageFromMirror(context.Background())
+		require.NoError(t, err)
+		require.Equal(t, []v2alpha1.CopyImageSchema{
+			{
+				Origin:      kubeVirtTestRepo + "@" + kubeVirtTestDigest2,
+				Source:      consts.DockerProtocol + kubeVirtTestRepo + "@" + kubeVirtTestDigest2,
+				Destination: consts.DockerProtocol + "localhost:55000/openshift/release:4.13.10-x86_64-kube-virt-container-rhel-10",
+				Type:        v2alpha1.TypeOCPReleaseContent,
+			},
+			{
+				Origin:      kubeVirtTestRepo + "@" + kubeVirtTestDigest1,
+				Source:      consts.DockerProtocol + kubeVirtTestRepo + "@" + kubeVirtTestDigest1,
+				Destination: consts.DockerProtocol + "localhost:55000/openshift/release:4.13.10-x86_64-kube-virt-container-rhel-9",
+				Type:        v2alpha1.TypeOCPReleaseContent,
+			},
+		}, kubeVirtTestCopies(copies))
+		requireSafeLogs(t, logger, "example.test")
+	})
+
+	cacheRef := func(name string) string {
+		return consts.DockerProtocol + "cache.example.test:9999/openshift/release:" + kubeVirtTestReleaseTag + "-" + name
+	}
+	diskToMirrorTests := []struct {
 		name     string
 		cache    map[string]string
 		outcomes []string
 	}{
 		{
-			name:     "legacy image of one of the streams",
-			cache:    map[string]string{legacyCacheRef: strings.TrimPrefix(kubeVirtTestDigest1, "sha256:")},
+			name:     "disk to mirror, archive with the images of the streams",
+			cache:    map[string]string{cacheRef("kube-virt-container-rhel-10"): "2", cacheRef("kube-virt-container-rhel-9"): "1"},
+			outcomes: nil,
+		},
+		{
+			name:     "disk to mirror, older archive with the legacy image of one of the streams",
+			cache:    map[string]string{cacheRef("kube-virt-container"): strings.TrimPrefix(kubeVirtTestDigest1, "sha256:")},
 			outcomes: []string{kubeVirtLegacyDigestMatched, kubeVirtLegacyDigestNotMatched},
 		},
 		{
-			name:     "no legacy image",
+			name:     "disk to mirror, archive without the images",
 			cache:    map[string]string{},
 			outcomes: []string{kubeVirtLegacyImageUnavailable},
 		},
 	}
-	for _, tt := range tests {
+	for _, tt := range diskToMirrorTests {
 		t.Run(tt.name, func(t *testing.T) {
 			logger := &kubeVirtTestLogger{}
+			opts := kubeVirtTestD2MOptions()
+			opts.Destination = consts.DockerProtocol + "mirror.example.test:5000/test"
 			col := LocalStorageCollector{
-				Log: logger,
-				Config: v2alpha1.ImageSetConfiguration{
-					ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
-						Mirror: v2alpha1.Mirror{Platform: v2alpha1.Platform{KubeVirtContainer: true}},
-					},
-				},
-				LocalStorageFQDN: "localhost:9999",
+				Log:              logger,
+				Config:           kubeVirtConfig,
+				LocalStorageFQDN: "cache.example.test:9999",
 				Manifest:         &kubeVirtTestCache{digests: tt.cache},
-				Opts:             kubeVirtTestD2MOptions(),
+				Opts:             opts,
 			}
 
-			batch, err := col.prepareReleaseBatchFromDir(context.Background(), releaseDir)
+			copies, err := col.prepareReleaseBatchFromDir(context.Background(), writeKubeVirtTestBootImages(t, legacyStream, streamCollection))
 			require.NoError(t, err)
-
-			// The generic source and destination debug messages of the copy batches are
-			// not specific to kubevirt images and are left out: the legacy lookup must
-			// not add any of them.
-			var kubeVirtLogs []string
-			sourceMessages := 0
-			for _, msg := range logger.messages {
-				switch {
-				case strings.HasPrefix(msg, "kubevirt:"), strings.HasPrefix(msg, "kubeVirtContainer"):
-					kubeVirtLogs = append(kubeVirtLogs, msg)
-				case strings.HasPrefix(msg, "source "):
-					sourceMessages++
-				}
-			}
-			require.Equal(t, len(batch), sourceMessages)
-			logs := strings.Join(kubeVirtLogs, "\n")
-			for _, forbidden := range []string{"example.com", "localhost", "sha256", "@", "manifest unknown", "rhel-"} {
-				require.NotContains(t, logs, forbidden)
-			}
-			require.Contains(t, logs, `architecture "x86_64"`)
+			require.Len(t, copies, 2)
+			logs := requireSafeLogs(t, logger, "example.test", "sha256", "@")
 			for _, outcome := range tt.outcomes {
 				require.Contains(t, logs, outcome)
 			}
@@ -1535,6 +1586,12 @@ type kubeVirtTestCache struct {
 	MockManifest
 	digests map[string]string
 	lookups int
+}
+
+// GetReleaseSchema returns no release payload images, so that only the release image
+// itself and the kubevirt images are collected.
+func (c *kubeVirtTestCache) GetReleaseSchema(string) ([]v2alpha1.RelatedImage, error) {
+	return nil, nil
 }
 
 func (c *kubeVirtTestCache) ImageDigest(_ context.Context, _ *types.SystemContext, imgRef string) (string, error) {
@@ -1590,6 +1647,15 @@ func kubeVirtTestStream(t *testing.T, digestByArch map[string]string) string {
 // the directory. Empty values are left out of the ConfigMap.
 func writeKubeVirtTestBootImages(t *testing.T, stream, streams string) string {
 	t.Helper()
+	dir := filepath.Join(t.TempDir(), kubeVirtTestReleaseTag)
+	writeKubeVirtTestBootImagesTo(t, dir, stream, streams)
+	return dir
+}
+
+// writeKubeVirtTestBootImagesTo writes the synthetic bootimages ConfigMap of
+// writeKubeVirtTestBootImages to the given release directory.
+func writeKubeVirtTestBootImagesTo(t *testing.T, dir, stream, streams string) {
+	t.Helper()
 	data := map[string]string{"releaseVersion": "0.0.1"}
 	if stream != "" {
 		data["stream"] = stream
@@ -1605,10 +1671,8 @@ func writeKubeVirtTestBootImages(t *testing.T, stream, streams string) string {
 	})
 	require.NoError(t, err)
 
-	dir := filepath.Join(t.TempDir(), kubeVirtTestReleaseTag)
 	require.NoError(t, os.MkdirAll(filepath.Join(dir, releaseManifests), 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(dir, releaseBootableImagesFullPath), configMap, 0o600))
-	return dir
 }
 
 func kubeVirtTestImage(dgst, name string) v2alpha1.RelatedImage {

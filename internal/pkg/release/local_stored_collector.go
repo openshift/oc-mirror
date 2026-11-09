@@ -138,7 +138,7 @@ func (o *LocalStorageCollector) collectImageFromMirror(ctx context.Context) ([]v
 		releaseRepoAndTag := hld[len(hld)-1]
 		releaseTag := releaseRepoAndTag[strings.Index(releaseRepoAndTag, ":")+1:]
 
-		allRelatedImages, err := o.collectReleaseImages(ctx, value)
+		allRelatedImages, kubeVirtStreamImages, err := o.collectReleaseImages(ctx, value)
 		if err != nil {
 			logCollectionError(o.Log, spinner, o.Opts.Global.IsTerminal, value.Source, err)
 			return []v2alpha1.CopyImageSchema{}, fmt.Errorf("%s%w", collectorPrefix, err)
@@ -156,6 +156,12 @@ func (o *LocalStorageCollector) collectImageFromMirror(ctx context.Context) ([]v
 			return []v2alpha1.CopyImageSchema{}, err
 		}
 		allImages = append(allImages, tmpAllImages...)
+		kubeVirtStreamCopies, err := o.prepareKubeVirtM2DCopyBatch(kubeVirtStreamImages, releaseTag)
+		if err != nil {
+			logCollectionError(o.Log, spinner, o.Opts.Global.IsTerminal, value.Source, err)
+			return []v2alpha1.CopyImageSchema{}, err
+		}
+		allImages = append(allImages, kubeVirtStreamCopies...)
 		spinner.Increment()
 		if !o.Opts.Global.IsTerminal {
 			o.Log.Info("Success collecting release %s", value.Source)
@@ -175,8 +181,9 @@ func (o *LocalStorageCollector) collectImageFromMirror(ctx context.Context) ([]v
 	return allImages, nil
 }
 
-// collects related images from a release
-func (o *LocalStorageCollector) collectReleaseImages(ctx context.Context, release v2alpha1.CopyImageSchema) ([]v2alpha1.RelatedImage, error) {
+// collects related images from a release. The kubevirt images of a stream collection are
+// returned separately, so that their copies are prepared without logging their references.
+func (o *LocalStorageCollector) collectReleaseImages(ctx context.Context, release v2alpha1.CopyImageSchema) ([]v2alpha1.RelatedImage, []kubeVirtImage, error) {
 	hld := strings.Split(release.Source, "/")
 	releaseRepoAndTag := hld[len(hld)-1]
 	imageIndexDir := strings.ReplaceAll(releaseRepoAndTag, ":", "/")
@@ -184,22 +191,22 @@ func (o *LocalStorageCollector) collectReleaseImages(ctx context.Context, releas
 	dir := filepath.Join(o.Opts.Global.WorkingDir, releaseImageDir, imageIndexDir)
 
 	if err := o.ensureReleaseInOCIFormat(ctx, release, dir); err != nil {
-		return []v2alpha1.RelatedImage{}, err
+		return nil, nil, err
 	}
 
 	img, err := o.Manifest.GetOCIImageFromIndex(dir)
 	if err != nil {
-		return nil, fmt.Errorf("failed to find release image in index: %w", err)
+		return nil, nil, fmt.Errorf("failed to find release image in index: %w", err)
 	}
 
 	dgest, err := img.Digest()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get release image digest: %w", err)
+		return nil, nil, fmt.Errorf("failed to get release image digest: %w", err)
 	}
 	o.Log.Debug(collectorPrefix+"image manifest digest %s", dgest.String())
 
 	if err := o.Manifest.ExtractOCILayers(img, cacheDir, releaseManifests); err != nil {
-		return []v2alpha1.RelatedImage{}, fmt.Errorf("extract release image %q manifests: %w", dgest.String(), err)
+		return nil, nil, fmt.Errorf("extract release image %q manifests: %w", dgest.String(), err)
 	}
 	o.Log.Debug("extracted layer %s ", cacheDir)
 
@@ -207,18 +214,25 @@ func (o *LocalStorageCollector) collectReleaseImages(ctx context.Context, releas
 	releaseDir := filepath.Join(cacheDir, releaseImageExtractFullPath)
 	allRelatedImages, err := o.Manifest.GetReleaseSchema(releaseDir)
 	if err != nil {
-		return []v2alpha1.RelatedImage{}, err
+		return nil, nil, err
 	}
 
-	if o.Config.Mirror.Platform.KubeVirtContainer {
-		kvImages, err := o.getKubeVirtImages(cacheDir)
-		if err != nil {
-			return []v2alpha1.RelatedImage{}, err
+	if !o.Config.Mirror.Platform.KubeVirtContainer {
+		return allRelatedImages, nil, nil
+	}
+	kvImages, err := o.collectKubeVirtImages(cacheDir)
+	if err != nil {
+		return nil, nil, err
+	}
+	var streamImages []kubeVirtImage
+	for _, img := range kvImages {
+		if img.legacyName == "" {
+			allRelatedImages = append(allRelatedImages, img.RelatedImage)
+		} else {
+			streamImages = append(streamImages, img)
 		}
-		allRelatedImages = append(allRelatedImages, kvImages...)
 	}
-
-	return allRelatedImages, nil
+	return allRelatedImages, streamImages, nil
 }
 
 func (o *LocalStorageCollector) ensureReleaseInOCIFormat(ctx context.Context, release v2alpha1.CopyImageSchema, dir string) error {
@@ -343,26 +357,71 @@ func (o *LocalStorageCollector) prepareReleaseBatchFromDir(ctx context.Context, 
 // instead, but only when its digest is the digest of the image of the stream: the
 // destination keeps the name of the stream, so that it always matches its content.
 // Otherwise the copy is kept unchanged and fails, like for any image missing from the archive.
+// The copies of the images of a stream collection are prepared without logging their
+// references; only a summary is logged (see logKubeVirtStreamCopies).
 func (o LocalStorageCollector) prepareKubeVirtD2MCopyBatch(ctx context.Context, images []kubeVirtImage, releaseTag string) ([]v2alpha1.CopyImageSchema, error) {
-	relatedImages := make([]v2alpha1.RelatedImage, 0, len(images))
+	copies := make([]v2alpha1.CopyImageSchema, 0, len(images))
+	var streamImages []kubeVirtImage
 	for _, img := range images {
-		relatedImages = append(relatedImages, img.RelatedImage)
-	}
-	copies, err := o.prepareD2MCopyBatch(relatedImages, releaseTag)
-	if err != nil || o.Opts.IsDeleteMode() {
-		return copies, err
-	}
-
-	for i, img := range images {
 		if img.legacyName == "" {
+			legacyCopies, err := o.prepareD2MCopyBatch([]v2alpha1.RelatedImage{img.RelatedImage}, releaseTag)
+			if err != nil {
+				return nil, err
+			}
+			copies = append(copies, legacyCopies...)
 			continue
 		}
-		copies[i].Source, err = o.kubeVirtD2MSource(ctx, img, copies[i], releaseTag)
+		streamCopy, err := o.d2mCopy(img.RelatedImage, releaseTag)
 		if err != nil {
-			return nil, err
+			return nil, kubeVirtStreamImageError(img)
 		}
+		if !o.Opts.IsDeleteMode() {
+			streamCopy.Source, err = o.kubeVirtD2MSource(ctx, img, streamCopy, releaseTag)
+			if err != nil {
+				return nil, err
+			}
+		}
+		copies = append(copies, streamCopy)
+		streamImages = append(streamImages, img)
 	}
+	o.logKubeVirtStreamCopies(streamImages)
 	return copies, nil
+}
+
+// prepareKubeVirtM2DCopyBatch prepares the mirror to disk (and mirror to mirror) copies
+// of the images of a stream collection without logging their references; only a summary
+// is logged (see logKubeVirtStreamCopies).
+func (o LocalStorageCollector) prepareKubeVirtM2DCopyBatch(images []kubeVirtImage, releaseTag string) ([]v2alpha1.CopyImageSchema, error) {
+	copies := make([]v2alpha1.CopyImageSchema, 0, len(images))
+	for _, img := range images {
+		streamCopy, err := o.m2dCopy(img.RelatedImage, releaseTag)
+		if err != nil {
+			return nil, kubeVirtStreamImageError(img)
+		}
+		copies = append(copies, streamCopy)
+	}
+	o.logKubeVirtStreamCopies(images)
+	return copies, nil
+}
+
+// logKubeVirtStreamCopies logs the number and the architectures of the copies of the
+// images of a stream collection, without their references.
+func (o LocalStorageCollector) logKubeVirtStreamCopies(images []kubeVirtImage) {
+	if len(images) == 0 {
+		return
+	}
+	archs := map[string]bool{}
+	for _, img := range images {
+		archs[img.arch] = true
+	}
+	o.Log.Debug("kubevirt: prepared %d copies of stream collection images (architectures: %s)",
+		len(images), strings.Join(slices.Sorted(maps.Keys(archs)), ", "))
+}
+
+// kubeVirtStreamImageError returns the error for an image of a stream collection whose
+// copy cannot be prepared. The error names its architecture only, not its reference.
+func kubeVirtStreamImageError(img kubeVirtImage) error {
+	return fmt.Errorf("kubevirt: invalid image reference for a stream collection image of architecture %q", img.arch)
 }
 
 // kubeVirtD2MSource returns the source, in the local cache, of the disk to mirror copy of
@@ -373,10 +432,11 @@ func (o LocalStorageCollector) kubeVirtD2MSource(ctx context.Context, img kubeVi
 	}
 	legacyRelatedImage := img.RelatedImage
 	legacyRelatedImage.Name = img.legacyName
-	legacySource, err := o.d2mCacheSource(legacyRelatedImage, releaseTag)
+	legacyCopy, err := o.d2mCopy(legacyRelatedImage, releaseTag)
 	if err != nil {
-		return "", err
+		return "", kubeVirtStreamImageError(img)
 	}
+	legacySource := legacyCopy.Source
 	// Only the architecture and an outcome code are logged: the references and the
 	// lookup errors name images and registries.
 	matches, err := o.cachedImageMatchesDigestRef(ctx, legacySource, img.Image)
@@ -392,18 +452,6 @@ func (o LocalStorageCollector) kubeVirtD2MSource(ctx context.Context, img kubeVi
 	o.Log.Info("kubevirt: copying the image archived under the legacy name for a stream collection image of architecture %q (%s)",
 		img.arch, kubeVirtLegacyDigestMatched)
 	return legacySource, nil
-}
-
-// d2mCacheSource returns the source, in the local cache, of the disk to mirror copy of an
-// image, built like in prepareD2MCopyBatch but without logging the reference.
-func (o LocalStorageCollector) d2mCacheSource(img v2alpha1.RelatedImage, releaseTag string) (string, error) {
-	imgSpec, err := image.ParseRef(img.Image)
-	if err != nil {
-		return "", err
-	}
-	pathComponents := preparePathComponents(imgSpec, img.Type, img.Name)
-	tag := prepareTag(imgSpec, img.Type, releaseTag, img.Name)
-	return consts.DockerProtocol + strings.Join([]string{o.LocalStorageFQDN, pathComponents + ":" + tag}, "/"), nil
 }
 
 // Outcome codes of the lookup of a stream collection image archived under its legacy name.
@@ -473,64 +521,71 @@ func (o *LocalStorageCollector) prepareGraphImage(ctx context.Context) (v2alpha1
 func (o LocalStorageCollector) prepareM2DCopyBatch(images []v2alpha1.RelatedImage, releaseTag string) ([]v2alpha1.CopyImageSchema, error) {
 	result := make([]v2alpha1.CopyImageSchema, 0, len(images))
 	for _, img := range images {
-		var src string
-		var dest string
-
-		imgSpec, err := image.ParseRef(img.Image)
+		imgCopy, err := o.m2dCopy(img, releaseTag)
 		if err != nil {
 			return nil, err
 		}
-		src = imgSpec.ReferenceWithTransport
 
-		pathComponents := preparePathComponents(imgSpec, img.Type, img.Name)
-		tag := prepareTag(imgSpec, img.Type, releaseTag, img.Name)
-
-		dest = consts.DockerProtocol + strings.Join([]string{o.destinationRegistry(), pathComponents + ":" + tag}, "/")
-
-		o.Log.Debug("source %s", src)
-		o.Log.Debug("destination %s", dest)
-		result = append(result, v2alpha1.CopyImageSchema{
-			Origin:      img.Image,
-			Source:      src,
-			Destination: dest,
-			Type:        img.Type,
-		})
+		o.Log.Debug("source %s", imgCopy.Source)
+		o.Log.Debug("destination %s", imgCopy.Destination)
+		result = append(result, imgCopy)
 	}
 	return result, nil
+}
+
+// m2dCopy returns the mirror to disk (or mirror to mirror) copy of an image, without logging it.
+func (o LocalStorageCollector) m2dCopy(img v2alpha1.RelatedImage, releaseTag string) (v2alpha1.CopyImageSchema, error) {
+	imgSpec, err := image.ParseRef(img.Image)
+	if err != nil {
+		return v2alpha1.CopyImageSchema{}, err
+	}
+
+	pathComponents := preparePathComponents(imgSpec, img.Type, img.Name)
+	tag := prepareTag(imgSpec, img.Type, releaseTag, img.Name)
+
+	return v2alpha1.CopyImageSchema{
+		Origin:      img.Image,
+		Source:      imgSpec.ReferenceWithTransport,
+		Destination: consts.DockerProtocol + strings.Join([]string{o.destinationRegistry(), pathComponents + ":" + tag}, "/"),
+		Type:        img.Type,
+	}, nil
 }
 
 func (o LocalStorageCollector) prepareD2MCopyBatch(images []v2alpha1.RelatedImage, releaseTag string) ([]v2alpha1.CopyImageSchema, error) {
 	result := make([]v2alpha1.CopyImageSchema, 0, len(images))
 	for _, img := range images {
-		var src string
-		var dest string
-
-		imgSpec, err := image.ParseRef(img.Image)
+		imgCopy, err := o.d2mCopy(img, releaseTag)
 		if err != nil {
 			return nil, err
 		}
 
-		pathComponents := preparePathComponents(imgSpec, img.Type, img.Name)
-		tag := prepareTag(imgSpec, img.Type, releaseTag, img.Name)
-
-		src = consts.DockerProtocol + strings.Join([]string{o.LocalStorageFQDN, pathComponents + ":" + tag}, "/")
-		dest = strings.Join([]string{o.Opts.Destination, pathComponents + ":" + tag}, "/")
-
-		if src == "" || dest == "" {
-			return result, fmt.Errorf("unable to determine src %s or dst %s for %s", src, dest, img.Name)
+		if imgCopy.Source == "" || imgCopy.Destination == "" {
+			return result, fmt.Errorf("unable to determine src %s or dst %s for %s", imgCopy.Source, imgCopy.Destination, img.Name)
 		}
 
-		o.Log.Debug("source %s", src)
-		o.Log.Debug("destination %s", dest)
-		result = append(result, v2alpha1.CopyImageSchema{
-			Origin:      img.Image,
-			Source:      src,
-			Destination: dest,
-			Type:        img.Type,
-		})
-
+		o.Log.Debug("source %s", imgCopy.Source)
+		o.Log.Debug("destination %s", imgCopy.Destination)
+		result = append(result, imgCopy)
 	}
 	return result, nil
+}
+
+// d2mCopy returns the disk to mirror copy of an image from the local cache, without logging it.
+func (o LocalStorageCollector) d2mCopy(img v2alpha1.RelatedImage, releaseTag string) (v2alpha1.CopyImageSchema, error) {
+	imgSpec, err := image.ParseRef(img.Image)
+	if err != nil {
+		return v2alpha1.CopyImageSchema{}, err
+	}
+
+	pathComponents := preparePathComponents(imgSpec, img.Type, img.Name)
+	tag := prepareTag(imgSpec, img.Type, releaseTag, img.Name)
+
+	return v2alpha1.CopyImageSchema{
+		Origin:      img.Image,
+		Source:      consts.DockerProtocol + strings.Join([]string{o.LocalStorageFQDN, pathComponents + ":" + tag}, "/"),
+		Destination: strings.Join([]string{o.Opts.Destination, pathComponents + ":" + tag}, "/"),
+		Type:        img.Type,
+	}, nil
 }
 
 func (o LocalStorageCollector) identifyReleases(ctx context.Context) ([]v2alpha1.RelatedImage, []string, error) {
