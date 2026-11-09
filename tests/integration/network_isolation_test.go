@@ -53,4 +53,54 @@ var _ = Describe("diskToMirror without network access", func() {
 		By("verifying images were mirrored to the destination registry")
 		expectSuccessfulMirrorInRegistry(iscPath, *testRegistry)
 	})
+
+	// OCPBUGS-136389: a full catalog (full: true, no packages) is never rebuilt, so
+	// diskToMirror must read it from the archive instead of its source registry.
+	It("should mirror a full catalog from a local archive when outbound network access is blocked", func() {
+		iscPath := filepath.Join(iscDir, "operators", "isc-operator-full-catalog.yaml")
+		cfg := parseImageSetConfig(iscPath)
+
+		By("resolving expected operator images independently from the source catalog")
+		expectedImages := sourceCatalogImageDigests(ctx, cfg.Mirror.Operators[0].Catalog)
+
+		By("running mirrorToDisk with network access")
+		result, err := runner.MirrorToDisk(ctx, iscPath, workDir)
+		expectOcMirrorCommandSuccess(result, err)
+
+		By("removing the local cache to simulate a clean disk-to-mirror environment")
+		Expect(os.RemoveAll(cacheDir)).To(Succeed(), "failed to remove the local cache %s", cacheDir)
+
+		By("removing the working-dir left by mirrorToDisk so that diskToMirror can only use the mirror archive")
+		m2dWorkingDir := filepath.Join(workDir, dirWorkingDir)
+		Expect(filepath.Join(m2dWorkingDir, dirOperatorCatalog)).To(BeADirectory(),
+			"mirrorToDisk should have stored the operator catalogs in its working-dir %s", m2dWorkingDir)
+		archives, err := filepath.Glob(filepath.Join(workDir, "mirror_*.tar"))
+		Expect(err).NotTo(HaveOccurred())
+		Expect(archives).NotTo(BeEmpty(), "mirrorToDisk should have written mirror archives to %s", workDir)
+		Expect(os.RemoveAll(m2dWorkingDir)).To(Succeed(), "failed to remove the mirrorToDisk working-dir %s", m2dWorkingDir)
+		Expect(m2dWorkingDir).NotTo(BeAnExistingFile(), "the mirrorToDisk working-dir %s must not exist before diskToMirror", m2dWorkingDir)
+		for _, archive := range archives {
+			Expect(archive).To(BeARegularFile(), "mirror archive %s must still be present for diskToMirror", archive)
+		}
+
+		By("running diskToMirror with outbound network access blocked")
+		offlineRunner := ocmirror.NewRunner(os.Getenv("OC_MIRROR_BINARY")).
+			WithEnv([]string{
+				"HTTP_PROXY=http://127.0.0.1:1",
+				"HTTPS_PROXY=http://127.0.0.1:1",
+				"NO_PROXY=localhost,127.0.0.1",
+			})
+		result, err = offlineRunner.DiskToMirror(ctx, iscPath, workDir, testRegistry.Endpoint(),
+			"--dest-tls-verify=false", "--retry-times=1")
+		expectOcMirrorCommandSuccess(result, err)
+
+		By("verifying diskToMirror rebuilt the working-dir from the mirror archive")
+		Expect(filepath.Join(m2dWorkingDir, dirOperatorCatalog)).To(BeADirectory(),
+			"diskToMirror should have extracted the operator catalogs from the mirror archive into %s", m2dWorkingDir)
+
+		By("verifying the catalog and every bundle and related image were mirrored to the destination registry")
+		for _, ref := range expectedImages {
+			expectImageReadableByDigest(ctx, *testRegistry, ref.Context().RepositoryStr(), ref.DigestStr())
+		}
+	})
 })

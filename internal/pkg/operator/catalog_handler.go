@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -173,11 +174,24 @@ func handleRelatedImages(bundle declcfg.Bundle, operatorName string, copyImageSc
 	return relatedImages, nil
 }
 
+// EnsureCatalogInOCIFormat makes the catalog available as an OCI layout in the
+// catalog-image directory under imageIndexDir. A catalog referenced with oci:// is
+// copied from its local layout if it is not there yet. Any other catalog is copied
+// from its registry, except in diskToMirror (but not delete), where the copy
+// extracted from the mirror archive is used and the source registry is never
+// contacted.
 func (o CatalogHandler) EnsureCatalogInOCIFormat(ctx context.Context, imgSpec image.ImageSpec, catalog, imageIndexDir string, opts mirror.CopyOptions) error {
 	o.Log.Debug("Ensuring catalog %q is in OCI format", catalog)
 	catalogImageDir := filepath.Join(imageIndexDir, operatorCatalogImageDir)
 
 	if imgSpec.Transport != consts.OciProtocol {
+		// OCPBUGS-136389: diskToMirror must not depend on the source registry being
+		// reachable. The catalog was already copied to the working-dir during
+		// mirrorToDisk and shipped in the archive, so use that copy instead.
+		if opts.IsDiskToMirror() && !opts.IsDeleteMode() {
+			return o.ensureArchivedCatalog(catalogImageDir)
+		}
+
 		// modify a copy, no the pointed value
 		var gOpts mirror.GlobalOptions
 		if opts.Global != nil {
@@ -215,6 +229,21 @@ func (o CatalogHandler) EnsureCatalogInOCIFormat(ctx context.Context, imgSpec im
 		}
 	}
 
+	return nil
+}
+
+// ensureArchivedCatalog verifies that the OCI copy of the catalog extracted from
+// the mirror archive is present in the working-dir. It never falls back to the
+// source registry: if the copy is missing, diskToMirror fails with a local error.
+// The content of the OCI layout is validated later, when its layers are extracted.
+func (o CatalogHandler) ensureArchivedCatalog(catalogImageDir string) error {
+	if _, err := os.Stat(filepath.Join(catalogImageDir, "index.json")); err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return fmt.Errorf("catalog not found in the mirror archive (expected at %s): ensure all archive files are present and the ImageSetConfiguration matches the one used for mirrorToDisk, diskToMirror does not access the source registry: %w", catalogImageDir, err)
+		}
+		return fmt.Errorf("unable to access the catalog from the mirror archive at %s: %w", catalogImageDir, err)
+	}
+	o.Log.Debug("Using the catalog copy extracted from the mirror archive")
 	return nil
 }
 
