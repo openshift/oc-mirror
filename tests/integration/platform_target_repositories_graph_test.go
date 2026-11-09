@@ -1,6 +1,7 @@
 package integration_test
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -108,5 +109,25 @@ var _ = Describe("platform target repositories with graph data", Label("platform
 	},
 		Entry("direct mirroring", false),
 		Entry("offline archive round trip", true),
+	)
+
+	DescribeTable("reserves the graph repository before collection can push it", func(field, repo string, limit int) {
+		isc := filepath.Join(workDir, "graph-conflict.yaml")
+		Expect(os.WriteFile(isc, fmt.Appendf(nil, `kind: ImageSetConfiguration
+apiVersion: mirror.openshift.io/v2alpha1
+mirror:
+  platform:
+    %s: %s
+    graph: true
+`, field, repo), 0600)).To(Succeed())
+		result, err := runner.MirrorToMirror(ctx, isc, workDir, testRegistry.Endpoint()+"/team",
+			"--cache-dir", filepath.Join(workDir, "cache"), "--dest-tls-verify=false", fmt.Sprintf("--max-nested-paths=%d", limit))
+		expectOcMirrorExitCode(result, err, 1, "conflicts with the Cincinnati graph repository")
+		expectEmptyRegistry(*testRegistry)
+	},
+		Entry("payload original path", "targetImageRepo", "openshift/graph-image", 0),
+		Entry("payload flattened path", "targetImageRepo", "openshift-graph-image", 2),
+		Entry("component original path", "targetComponentRepo", "openshift/graph-image", 0),
+		Entry("component flattened path", "targetComponentRepo", "openshift-graph-image", 2),
 	)
 })
