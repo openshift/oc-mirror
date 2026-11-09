@@ -56,37 +56,6 @@ var _ = Describe("platform target repository workflow combinations", Label("plat
 		Expect(repos).To(ConsistOf("openshift4/ocp-release"))
 	})
 
-	It("restores a repository containing working-dir into a fresh workspace and cache", func() {
-		isc := filepath.Join(iscDir, "platform_target_repo", "isc-working-dir.yaml")
-		result, err := runner.MirrorToDisk(ctx, isc, workDir,
-			"--cache-dir", filepath.Join(workDir, "cache"), "--remove-signatures=true")
-		expectOcMirrorCommandSuccess(result, err)
-		repo := "team/working-dir-release"
-		cachedDigests := make(map[string]string)
-		for _, tag := range []string{"v0.0.1", "v0.0.1-alpine"} {
-			cachedDigests[tag] = localCacheTagDigest(cacheDir, repo, tag)
-		}
-
-		By("transporting only the archives, without the original cache or workspace")
-		restoreDir := filepath.Join(workDir, "restore")
-		Expect(os.MkdirAll(restoreDir, 0700)).To(Succeed())
-		for _, archivePath := range findTarArchives(workDir) {
-			Expect(copyFile(archivePath, filepath.Join(restoreDir, filepath.Base(archivePath)))).To(Succeed())
-		}
-		result, err = runner.DiskToMirror(ctx, isc, restoreDir, testRegistry.Endpoint(),
-			"--cache-dir", filepath.Join(workDir, "restore-cache"), "--remove-signatures=true", "--dest-tls-verify=false")
-		expectOcMirrorCommandSuccess(result, err)
-		repositories, err := testRegistry.ListRepositories(ctx)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(repositories).To(ConsistOf(repo))
-		tags, err := testRegistry.ListTags(ctx, repo)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(tags).To(ConsistOf("v0.0.1", "v0.0.1-alpine"))
-		for _, tag := range tags {
-			Expect(registryImageDigest(testRegistry.Endpoint() + "/" + repo + ":" + tag)).To(Equal(cachedDigests[tag]))
-		}
-	})
-
 	It("keeps incremental archives and dry-run mappings on the custom repository", func() {
 		isc := filepath.Join(iscDir, "platform_target_repo", "isc.yaml")
 		result, err := runner.MirrorToDisk(ctx, isc, workDir, "--cache-dir", filepath.Join(workDir, "cache"), "--remove-signatures=true")

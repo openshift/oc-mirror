@@ -70,30 +70,30 @@ var _ = Describe("platform target repositories with graph data", Label("platform
 			})
 			result, err = offlineRunner.DiskToMirror(ctx, isc, restoreDir, destination,
 				"--cache-dir", filepath.Join(workDir, "restore-cache"), "--remove-signatures=true",
-				"--dest-tls-verify=false", "--max-nested-paths=2", "--retry-times=1")
+				"--dest-tls-verify=false", "--max-nested-paths=3", "--retry-times=1")
 			expectOcMirrorCommandSuccess(result, err)
 		} else {
 			By("mirroring directly with a destination nesting limit")
 			result, err := channelRunner.MirrorToMirror(ctx, isc, workDir, destination,
 				"--cache-dir", filepath.Join(workDir, "cache"), "--remove-signatures=true",
-				"--dest-tls-verify=false", "--max-nested-paths=2")
+				"--dest-tls-verify=false", "--max-nested-paths=3")
 			expectOcMirrorCommandSuccess(result, err)
 		}
 
 		By("checking that payloads, components, and graph images exist at the generated paths")
 		repositories, err := testRegistry.ListRepositories(ctx)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(repositories).To(ConsistOf("team/releases", "team/components", "team/openshift-graph-image"))
+		Expect(repositories).To(ConsistOf("team/releases", "team/components", "team/openshift/graph-image"))
 		tags, err := testRegistry.ListTags(ctx, "team/releases")
 		Expect(err).NotTo(HaveOccurred())
 		Expect(tags).To(ConsistOf("v0.0.1"))
 		componentTags, err := testRegistry.ListTags(ctx, "team/components")
 		Expect(err).NotTo(HaveOccurred(), "list independently mirrored release components")
 		Expect(componentTags).To(ConsistOf("v0.0.1-alpine"), "components must not be placed in the payload repository")
-		graphRef := destination + "/openshift-graph-image:latest"
+		graphRef := destination + "/openshift/graph-image:latest"
 		Expect(registryImageDigest(graphRef)).NotTo(BeEmpty())
 
-		By("checking that UpdateService points to the custom release repository and the flattened graph path")
+		By("checking that UpdateService points to the custom payload repository and unchanged graph repository")
 		content, err := os.ReadFile(filepath.Join(resourceWorkDir, dirWorkingDir, dirClusterResources, "updateService.yaml"))
 		Expect(err).NotTo(HaveOccurred())
 		var updateService struct {

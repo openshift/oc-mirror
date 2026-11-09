@@ -65,9 +65,10 @@ container reference length limit.
 
 If `--max-nested-paths` is set, explicit repository paths must fit that limit
 including the destination namespace; oc-mirror rejects them rather than silently
-flattening the requested paths. Default paths and the graph repository can
-still be flattened by that flag. Either override is rejected if it conflicts
-with the graph repository when `graph: true` is enabled.
+flattening the requested paths. Either override is rejected if it conflicts
+with the graph repository when `graph: true` is enabled. Graph path rewriting
+is not part of these settings; when using graph data, choose a nesting limit
+that also accommodates its existing `openshift/graph-image` path.
 
 ## Archive workflows and deletion
 
@@ -90,11 +91,3 @@ delete:
         minVersion: 4.20.8
         maxVersion: 4.20.9
 ```
-
-Existing limitations around graph deletion after nested-path rewriting and
-signature deletion without cached images are separate from these repository
-settings.
-
-The earlier, unmerged `platform.targetRepo` proposal is replaced by these two
-fields; it is not an alias. To use a shared repository, set both new fields to
-that repository explicitly.

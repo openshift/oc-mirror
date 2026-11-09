@@ -11,6 +11,7 @@ import (
 	confv1 "github.com/openshift/api/config/v1"
 	"github.com/otiai10/copy"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/validation"
 
@@ -26,6 +27,66 @@ import (
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/parser"
 )
+
+func TestReleaseCustomRepositoryMirrors(t *testing.T) {
+	target := "mirror.example.com/team/openshift4/ocp-release"
+	images := []v2alpha1.CopyImageSchema{
+		{Origin: "quay.io/openshift-release-dev/ocp-release:4.20.8-x86_64", Destination: "docker://" + target + ":4.20.8-x86_64", Type: v2alpha1.TypeOCPRelease},
+		{Origin: "quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:" + strings.Repeat("a", 64), Destination: "docker://" + target + ":4.20.8-x86_64-api-server", Type: v2alpha1.TypeOCPReleaseContent},
+	}
+	for _, tc := range []struct {
+		name      string
+		forceRepo bool
+	}{
+		{"default scope", false},
+		{"forced repository scope", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cr := ClusterResourcesGenerator{}
+			mirrors, err := cr.generateImageMirrors(images, DigestsOnlyMode, tc.forceRepo)
+			require.NoError(t, err)
+			idms, err := cr.generateIDMS(mirrors)
+			require.NoError(t, err)
+			require.Len(t, idms, 1)
+			require.ElementsMatch(t, []confv1.ImageDigestMirrors{
+				{Source: "quay.io/openshift-release-dev/ocp-release", Mirrors: []confv1.ImageMirror{confv1.ImageMirror(target)}},
+				{Source: "quay.io/openshift-release-dev/ocp-v4.0-art-dev", Mirrors: []confv1.ImageMirror{confv1.ImageMirror(target)}},
+			}, idms[0].Spec.ImageDigestMirrors)
+			mirrors, err = cr.generateImageMirrors(images, TagsOnlyMode, tc.forceRepo)
+			require.NoError(t, err)
+			itms, err := cr.generateITMS(mirrors)
+			require.NoError(t, err)
+			require.Len(t, itms, 1)
+			require.Equal(t, []confv1.ImageTagMirrors{
+				{Source: "quay.io/openshift-release-dev/ocp-release", Mirrors: []confv1.ImageMirror{confv1.ImageMirror(target)}},
+			}, itms[0].Spec.ImageTagMirrors)
+		})
+	}
+}
+
+func TestReleaseSeparateRepositoriesPreserveNamespaceMirrors(t *testing.T) {
+	const sourceNamespace = "quay.io/openshift-release-dev"
+	const destinationNamespace = "mirror.example.com/mirrors/quay.io/openshift-release-dev"
+	images := []v2alpha1.CopyImageSchema{
+		{
+			Origin: sourceNamespace + "/ocp-release:4.20.8-x86_64", Type: v2alpha1.TypeOCPRelease,
+			Destination: "docker://" + destinationNamespace + "/ocp-release:4.20.8-x86_64",
+		},
+		{
+			Origin: sourceNamespace + "/ocp-v4.0-art-dev@sha256:" + strings.Repeat("a", 64), Type: v2alpha1.TypeOCPReleaseContent,
+			Destination: "docker://" + destinationNamespace + "/ocp-v4.0-art-dev:4.20.8-x86_64-api-server",
+		},
+	}
+	cr := ClusterResourcesGenerator{}
+	mirrors, err := cr.generateImageMirrors(images, DigestsOnlyMode, false)
+	require.NoError(t, err)
+	idms, err := cr.generateIDMS(mirrors)
+	require.NoError(t, err)
+	require.Len(t, idms, 1)
+	require.Equal(t, []confv1.ImageDigestMirrors{
+		{Source: sourceNamespace, Mirrors: []confv1.ImageMirror{destinationNamespace}},
+	}, idms[0].Spec.ImageDigestMirrors, "preserved source paths must share the correct namespace mapping")
+}
 
 var (
 	imageListRelease = []v2alpha1.CopyImageSchema{

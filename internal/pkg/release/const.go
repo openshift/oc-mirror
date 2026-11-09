@@ -8,7 +8,6 @@ const (
 	buildGraphDataDir              = "/var/lib/cincinnati-graph-data"
 	graphDataMountPath             = "/var/lib/cincinnati/graph-data"
 	graphImageName                 = "openshift/graph-image"
-	graphImageTag                  = "latest"
 	releaseImageDir                = "release-images"
 	cincinnatiGraphDataDir         = "cincinnati-graph-data"
 	releaseImageExtractDir         = "hold-release"

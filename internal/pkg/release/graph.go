@@ -6,34 +6,14 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"path"
 	"path/filepath"
 
 	"go.podman.io/image/v5/types"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
 
-	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/imagebuilder"
-	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 )
-
-// GraphImageReference returns the graph image reference for a destination registry
-// and optional namespace, without a transport prefix.
-func GraphImageReference(destination string) string {
-	return path.Join(destination, graphImageName) + ":" + graphImageTag
-}
-
-// GraphImageDestination applies the destination nesting limit to the graph image
-// reference, without a transport prefix. Mirror-to-disk cache paths stay unchanged
-// so disk-to-mirror can find the graph image independently of destination limits.
-func GraphImageDestination(destination string, opts mirror.CopyOptions) (string, error) {
-	ref := GraphImageReference(destination)
-	if !opts.IsMirrorToDisk() && opts.Global.MaxNestedPaths > 0 {
-		return image.WithMaxNestedPaths(ref, opts.Global.MaxNestedPaths)
-	}
-	return ref, nil
-}
 
 // createGraphImage creates a graph image from the graph data
 // and returns the image reference.
@@ -75,10 +55,7 @@ func (o *LocalStorageCollector) CreateGraphImage(ctx context.Context, url string
 	cmd := []string{"/bin/bash", "-c", fmt.Sprintf("exec cp -rp %s/* %s", buildGraphDataDir, graphDataMountPath)}
 
 	// update a ubi9 image with this new graphLayer and new cmd
-	graphImageRef, err := GraphImageDestination(o.destinationRegistry(), o.Opts)
-	if err != nil {
-		return "", err
-	}
+	graphImageRef := filepath.Join(o.destinationRegistry(), graphImageName) + ":latest"
 	_, err = o.ImageBuilder.BuildAndPush(ctx, graphImageRef, layoutPath, cmd, graphLayer)
 	if err != nil {
 		return "", err

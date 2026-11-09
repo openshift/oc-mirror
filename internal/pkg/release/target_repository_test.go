@@ -1,17 +1,13 @@
-package cli
+package release
 
 import (
-	"context"
-	"errors"
 	"strings"
 	"testing"
 
-	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 	"go.podman.io/image/v5/docker/reference"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
-	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 )
 
@@ -20,6 +16,42 @@ func platformWithTargetRepo(field, repo string) v2alpha1.Platform {
 		return v2alpha1.Platform{TargetImageRepo: repo}
 	}
 	return v2alpha1.Platform{TargetComponentRepo: repo}
+}
+
+func TestValidatePlatformTargetRepo(t *testing.T) {
+	for _, tc := range []struct {
+		name, repo string
+		valid      bool
+	}{
+		{"empty", "", true},
+		{"single component", "ocp-release", true},
+		{"nested repository", "openshift4/ocp-release", true},
+		{"allowed separators", "team/release_images.v4/release--repo", true},
+		{"maximum length", strings.Repeat("a", 255), true},
+		{"uppercase", "UPPER/release", false},
+		{"tag", "repo:tag", false},
+		{"digest", "repo@sha256:abc", false},
+		{"transport", "docker://repo", false},
+		{"leading slash", "/repo", false},
+		{"trailing slash", "repo/", false},
+		{"empty component", "a//b", false},
+		{"parent component", "a/../b", false},
+		{"space", "a b", false},
+		{"registry port", "registry:5000/repo", false},
+		{"too long", strings.Repeat("a", 256), false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, field := range []string{"targetImageRepo", "targetComponentRepo"} {
+				errs := ValidateTargetRepositories(platformWithTargetRepo(field, tc.repo))
+				if !tc.valid {
+					require.Len(t, errs, 1)
+					require.ErrorContains(t, errs[0], "platform."+field)
+					continue
+				}
+				require.Empty(t, errs)
+			}
+		})
+	}
 }
 
 func TestPlatformTargetRepoNestingLimit(t *testing.T) {
@@ -40,16 +72,16 @@ func TestPlatformTargetRepoNestingLimit(t *testing.T) {
 				{"disk too deep", "a/b/c", "file:///tmp/archive", 2, true, true},
 			} {
 				t.Run(tc.name, func(t *testing.T) {
-					ex := ExecutorSchema{Opts: &mirror.CopyOptions{
-						Destination: tc.destination,
-						Mode:        mirror.MirrorToMirror,
-						Global:      &mirror.GlobalOptions{MaxNestedPaths: tc.limit},
-					}}
-					if tc.disk {
-						ex.Opts.Mode = mirror.MirrorToDisk
+					opts := mirror.CopyOptions{
+						Destination:      tc.destination,
+						Mode:             mirror.MirrorToMirror,
+						Global:           &mirror.GlobalOptions{MaxNestedPaths: tc.limit},
+						LocalStorageFQDN: "localhost:55000",
 					}
-					ex.Config.Mirror.Platform = platformWithTargetRepo(field, tc.repo)
-					err := ex.validatePlatformDestination()
+					if tc.disk {
+						opts.Mode = mirror.MirrorToDisk
+					}
+					err := ValidatePlatformDestination(platformWithTargetRepo(field, tc.repo), opts)
 					if tc.invalid {
 						require.ErrorContains(t, err, "exceeds --max-nested-paths")
 						return
@@ -80,15 +112,15 @@ func TestPlatformTargetRepoDestinationValidation(t *testing.T) {
 				{"cache port makes name too long", "file:///tmp/archive", reference.NameTotalLengthMax - len("localhost/"), 0, true, true},
 			} {
 				t.Run(tc.name, func(t *testing.T) {
-					ex := ExecutorSchema{Opts: &mirror.CopyOptions{
+					opts := mirror.CopyOptions{
 						Destination: tc.destination, Mode: mirror.MirrorToMirror,
-						Global: &mirror.GlobalOptions{MaxNestedPaths: tc.limit, Port: 55000},
-					}}
-					if tc.disk {
-						ex.Opts.Mode = mirror.MirrorToDisk
+						Global:           &mirror.GlobalOptions{MaxNestedPaths: tc.limit, Port: 55000},
+						LocalStorageFQDN: "localhost:55000",
 					}
-					ex.Config.Mirror.Platform = platformWithTargetRepo(field, strings.Repeat("a", tc.repoLength))
-					err := ex.validatePlatformDestination()
+					if tc.disk {
+						opts.Mode = mirror.MirrorToDisk
+					}
+					err := ValidatePlatformDestination(platformWithTargetRepo(field, strings.Repeat("a", tc.repoLength)), opts)
 					if tc.invalid {
 						require.ErrorContains(t, err, "platform."+field)
 						require.ErrorContains(t, err, "is invalid")
@@ -97,104 +129,6 @@ func TestPlatformTargetRepoDestinationValidation(t *testing.T) {
 					require.NoError(t, err)
 				})
 			}
-		})
-	}
-}
-
-type targetRepoResources struct {
-	MockClusterResources
-	graph, payload string
-}
-
-func (r *targetRepoResources) UpdateServiceGenerator(graph, payload string) error {
-	r.graph, r.payload = graph, payload
-	return nil
-}
-
-func TestPlatformTargetRepoUpdateServiceNesting(t *testing.T) {
-	resources := &targetRepoResources{}
-	ex := ExecutorSchema{
-		ClusterResources: resources,
-	}
-	ex.Config.Mirror.Platform.Graph = true
-	images := []v2alpha1.CopyImageSchema{
-		{Type: v2alpha1.TypeOCPReleaseContent, Destination: "docker://mirror.example.com/components:v1"},
-		{Type: v2alpha1.TypeCincinnatiGraph, Destination: "docker://mirror.example.com/team/openshift-graph-image:latest"},
-		{Type: v2alpha1.TypeOCPRelease, Destination: "docker://mirror.example.com/team/ocp-release:v1"},
-	}
-	require.NoError(t, ex.generateUpdateServiceResource(images))
-	require.Equal(t, "docker://mirror.example.com/team/openshift-graph-image:latest", resources.graph)
-	require.Equal(t, "docker://mirror.example.com/team/ocp-release:v1", resources.payload)
-}
-
-func TestUpdateServiceRequiresMirroredImages(t *testing.T) {
-	graph := v2alpha1.CopyImageSchema{Type: v2alpha1.TypeCincinnatiGraph, Destination: "docker://mirror.example.com/openshift/graph-image:latest"}
-	payload := v2alpha1.CopyImageSchema{Type: v2alpha1.TypeOCPRelease, Destination: "docker://mirror.example.com/releases:v1"}
-	for _, tc := range []struct {
-		name    string
-		enabled bool
-		images  []v2alpha1.CopyImageSchema
-	}{
-		{"graph disabled", false, nil},
-		{"no images", true, nil},
-		{"no payload", true, []v2alpha1.CopyImageSchema{graph}},
-		{"no graph", true, []v2alpha1.CopyImageSchema{payload}},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			resources := &targetRepoResources{}
-			ex := ExecutorSchema{ClusterResources: resources}
-			ex.Config.Mirror.Platform.Graph = tc.enabled
-			err := ex.generateUpdateServiceResource(tc.images)
-			if tc.enabled {
-				require.ErrorContains(t, err, "mirrored release and graph image destinations are required")
-			} else {
-				require.NoError(t, err)
-			}
-			require.Empty(t, resources.graph)
-			require.Empty(t, resources.payload)
-		})
-	}
-}
-
-type failedReleaseBatch struct{ err error }
-
-func (b failedReleaseBatch) Worker(context.Context, v2alpha1.CollectorSchema, mirror.CopyOptions) (v2alpha1.CollectorSchema, error) {
-	return v2alpha1.CollectorSchema{}, b.err
-}
-
-func TestUpdateServicePreservesBatchError(t *testing.T) {
-	for _, mode := range []string{mirror.MirrorToMirror, mirror.DiskToMirror} {
-		t.Run(mode, func(t *testing.T) {
-			batchErr := &CollectionError{ReleaseErr: errors.New("release copy failed")}
-			collector := &Collector{}
-			resources := &targetRepoResources{}
-			ex := ExecutorSchema{
-				Log: clog.New("error"),
-				Opts: &mirror.CopyOptions{
-					Mode:             mode,
-					RemoveSignatures: true,
-					Global:           &mirror.GlobalOptions{WorkingDir: t.TempDir()},
-				},
-				Release:          collector,
-				Operator:         collector,
-				AdditionalImages: collector,
-				HelmCollector:    collector,
-				Batch:            failedReleaseBatch{err: batchErr},
-				MirrorUnArchiver: MockMirrorUnArchiver{},
-				ClusterResources: resources,
-			}
-			ex.Config.Mirror.Platform.Graph = true
-			cmd := &cobra.Command{}
-			cmd.SetContext(context.Background())
-			var err error
-			if mode == mirror.MirrorToMirror {
-				err = ex.RunMirrorToMirror(cmd, nil)
-			} else {
-				err = ex.RunDiskToMirror(cmd, nil)
-			}
-			require.Same(t, batchErr, err, "resource generation must preserve the mirroring error and its exit code")
-			require.Empty(t, resources.graph)
-			require.Empty(t, resources.payload)
 		})
 	}
 }
@@ -210,14 +144,12 @@ func TestPlatformTargetRepoSingleLabelRegistry(t *testing.T) {
 				{"docker://registry/team", 2},
 			} {
 				t.Run(tc.destination, func(t *testing.T) {
-					ex := ExecutorSchema{Opts: &mirror.CopyOptions{
+					opts := mirror.CopyOptions{
 						Destination: tc.destination, Mode: mirror.MirrorToMirror,
 						Global: &mirror.GlobalOptions{MaxNestedPaths: tc.limit},
-					}}
-					ex.Config.Mirror.Platform = platformWithTargetRepo(field, "releases")
-					require.NoError(t, ex.validatePlatformDestination())
-					ex.Config.Mirror.Platform = platformWithTargetRepo(field, "team/releases")
-					require.ErrorContains(t, ex.validatePlatformDestination(), "exceeds --max-nested-paths")
+					}
+					require.NoError(t, ValidatePlatformDestination(platformWithTargetRepo(field, "releases"), opts))
+					require.ErrorContains(t, ValidatePlatformDestination(platformWithTargetRepo(field, "team/releases"), opts), "exceeds --max-nested-paths")
 				})
 			}
 		})
@@ -236,24 +168,28 @@ func TestPlatformTargetRepoGraphRepositoryConflict(t *testing.T) {
 				{"direct", "openshift/graph-image", mirror.MirrorToMirror, 0, true},
 				{"archive", "openshift/graph-image", mirror.MirrorToDisk, 0, true},
 				{"restore", "openshift/graph-image", mirror.DiskToMirror, 0, true},
-				{"flattened graph", "openshift-graph-image", mirror.MirrorToMirror, 1, true},
+				{"flattened graph", "openshift-graph-image", mirror.MirrorToMirror, 2, true},
 				{"unflattened cache", "openshift-graph-image", mirror.MirrorToDisk, 1, false},
 				{"separate repositories", "releases", mirror.MirrorToMirror, 1, false},
 			} {
 				t.Run(tc.name, func(t *testing.T) {
-					ex := ExecutorSchema{Opts: &mirror.CopyOptions{
-						Destination: "docker://mirror.example.com", Mode: tc.mode,
-						Global: &mirror.GlobalOptions{Port: 55000, MaxNestedPaths: tc.limit},
-					}}
-					ex.Config.Mirror.Platform = platformWithTargetRepo(field, tc.repo)
-					ex.Config.Mirror.Platform.Graph = true
-					if tc.conflict {
-						require.ErrorContains(t, ex.validatePlatformDestination(), "conflicts with the Cincinnati graph repository")
-					} else {
-						require.NoError(t, ex.validatePlatformDestination())
+					opts := mirror.CopyOptions{
+						Destination: "docker://mirror.example.com/team", Mode: tc.mode,
+						Global:           &mirror.GlobalOptions{Port: 55000, MaxNestedPaths: tc.limit},
+						LocalStorageFQDN: "localhost:55000",
 					}
-					ex.Config.Mirror.Platform.Graph = false
-					require.NoError(t, ex.validatePlatformDestination())
+					if tc.limit == 1 {
+						opts.Destination = "docker://mirror.example.com"
+					}
+					platform := platformWithTargetRepo(field, tc.repo)
+					platform.Graph = true
+					if tc.conflict {
+						require.ErrorContains(t, ValidatePlatformDestination(platform, opts), "conflicts with the Cincinnati graph repository")
+					} else {
+						require.NoError(t, ValidatePlatformDestination(platform, opts))
+					}
+					platform.Graph = false
+					require.NoError(t, ValidatePlatformDestination(platform, opts))
 				})
 			}
 		})
@@ -275,14 +211,12 @@ func TestPlatformTargetRepoImageDestinationConflicts(t *testing.T) {
 		{"same digest", "source.example.com/components" + digest, "other.example.com/components" + digest, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			ex := ExecutorSchema{}
-			ex.Config.Mirror.Platform.TargetImageRepo = "releases"
-			ex.Config.Mirror.Platform.TargetComponentRepo = "releases"
+			platform := v2alpha1.Platform{TargetImageRepo: "releases", TargetComponentRepo: "releases"}
 			images := []v2alpha1.CopyImageSchema{
 				{Origin: tc.first, Destination: target, Type: v2alpha1.TypeOCPRelease},
 				{Origin: tc.second, Destination: target, Type: v2alpha1.TypeOCPReleaseContent},
 			}
-			err := ex.validatePlatformImageDestinations(images)
+			err := ValidatePlatformImageDestinations(platform, images)
 			if tc.conflict {
 				require.ErrorContains(t, err, "conflicting destination")
 				require.ErrorContains(t, err, tc.first)
@@ -309,14 +243,14 @@ func TestPlatformTargetRepositoriesValidatedIndependently(t *testing.T) {
 		{"flattened component graph conflict", "releases", "openshift-graph-image", "targetComponentRepo", 2, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			ex := ExecutorSchema{Opts: &mirror.CopyOptions{
+			opts := mirror.CopyOptions{
 				Destination: "docker://mirror.example.com/team", Mode: mirror.MirrorToMirror,
 				Global: &mirror.GlobalOptions{MaxNestedPaths: tc.limit},
-			}}
-			ex.Config.Mirror.Platform = v2alpha1.Platform{
+			}
+			platform := v2alpha1.Platform{
 				TargetImageRepo: tc.imageRepo, TargetComponentRepo: tc.componentRepo, Graph: tc.graph,
 			}
-			err := ex.validatePlatformDestination()
+			err := ValidatePlatformDestination(platform, opts)
 			if tc.errorField != "" {
 				require.ErrorContains(t, err, "platform."+tc.errorField)
 				return
@@ -327,14 +261,13 @@ func TestPlatformTargetRepositoriesValidatedIndependently(t *testing.T) {
 }
 
 func TestPlatformComponentOnlyDestinationConflict(t *testing.T) {
-	ex := ExecutorSchema{}
-	ex.Config.Mirror.Platform.TargetComponentRepo = "openshift/release-images"
+	platform := v2alpha1.Platform{TargetComponentRepo: "openshift/release-images"}
 	const destination = "docker://mirror.example.com/openshift/release-images:v1-component"
 	images := []v2alpha1.CopyImageSchema{
 		{Origin: "quay.io/release/payload:v1-component", Destination: destination, Type: v2alpha1.TypeOCPRelease},
 		{Origin: "quay.io/release/components@sha256:" + strings.Repeat("a", 64), Destination: destination, Type: v2alpha1.TypeOCPReleaseContent},
 	}
-	require.ErrorContains(t, ex.validatePlatformImageDestinations(images), "conflicting destination")
+	require.ErrorContains(t, ValidatePlatformImageDestinations(platform, images), "conflicting destination")
 }
 
 func TestPlatformImageDestinationConflictConfigSources(t *testing.T) {
@@ -382,14 +315,12 @@ func TestPlatformImageDestinationConflictConfigSources(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			ex := ExecutorSchema{}
-			ex.Config.Mirror.Platform = tc.platform
 			images := []v2alpha1.CopyImageSchema{
 				{Origin: "docker://source.example.com/first:v1", Destination: destination, Type: tc.firstType},
 				{Origin: "source.example.com/second:v1", Destination: destination, Type: tc.secondType},
 			}
 			originalImages := append([]v2alpha1.CopyImageSchema(nil), images...)
-			err := ex.validatePlatformImageDestinations(images)
+			err := ValidatePlatformImageDestinations(tc.platform, images)
 			require.ErrorContains(t, err, "conflicting destination")
 			require.ErrorContains(t, err, destination)
 			require.ErrorContains(t, err, "source.example.com/first:v1")
@@ -406,8 +337,7 @@ func TestPlatformImageDestinationConflictConfigSources(t *testing.T) {
 }
 
 func TestImageDestinationConfigSource(t *testing.T) {
-	ex := ExecutorSchema{}
-	ex.Config.Mirror.Platform = v2alpha1.Platform{TargetImageRepo: "payloads", TargetComponentRepo: "components"}
+	platform := v2alpha1.Platform{TargetImageRepo: "payloads", TargetComponentRepo: "components"}
 	for _, tc := range []struct {
 		imageType v2alpha1.ImageType
 		want      string
@@ -425,7 +355,7 @@ func TestImageDestinationConfigSource(t *testing.T) {
 		{v2alpha1.ImageType(-1), "unknown image type -1"},
 	} {
 		t.Run(tc.want, func(t *testing.T) {
-			require.Equal(t, tc.want, ex.imageDestinationConfigSource(tc.imageType))
+			require.Equal(t, tc.want, imageDestinationConfigSource(platform, tc.imageType))
 		})
 	}
 }

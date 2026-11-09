@@ -335,7 +335,7 @@ func (o *LocalStorageCollector) prepareGraphImage(ctx context.Context) (v2alpha1
 		// Supposing that the mirror to disk saved the image with the latest tag
 		// If this supposition is false, then we need to implement a mechanism to save
 		// the digest of the graph image and use it here
-		Image: consts.DockerProtocol + GraphImageReference(o.LocalStorageFQDN),
+		Image: consts.DockerProtocol + filepath.Join(o.LocalStorageFQDN, graphImageName) + ":latest",
 		Type:  v2alpha1.TypeCincinnatiGraph,
 	}
 	// OCPBUGS-38037: Check the graph image is in the cache before adding it
@@ -474,7 +474,7 @@ func (o LocalStorageCollector) identifyReleases(ctx context.Context) ([]v2alpha1
 // by the collector.
 func (o *LocalStorageCollector) GraphImage() (string, error) {
 	if o.GraphDataImage == "" {
-		sourceGraphDataImage := GraphImageReference(o.LocalStorageFQDN)
+		sourceGraphDataImage := filepath.Join(o.LocalStorageFQDN, graphImageName) + ":latest"
 		graphRelatedImage := []v2alpha1.RelatedImage{
 			{
 				Name:  "release",
@@ -684,14 +684,10 @@ func (o LocalStorageCollector) handleGraphImage(ctx context.Context) (v2alpha1.C
 		// OCPBUGS-38037: this indicates that the official cincinnati API is not reacheable
 		// and that graph image cannot be rebuilt on top the complete graph in tar.gz format
 
-		graphDestination, err := GraphImageDestination(o.destinationRegistry(), o.Opts)
-		if err != nil {
-			return v2alpha1.CopyImageSchema{}, err
-		}
-		graphImgRef := consts.DockerProtocol + graphDestination
+		graphImgRef := consts.DockerProtocol + filepath.Join(o.destinationRegistry(), graphImageName) + ":latest"
 
 		// 1. check if graph image is already in cache
-		cachedImageRef := consts.DockerProtocol + GraphImageReference(o.LocalStorageFQDN)
+		cachedImageRef := consts.DockerProtocol + filepath.Join(o.LocalStorageFQDN, graphImageName) + ":latest"
 		alreadyInCache, err := o.imageExists(ctx, cachedImageRef)
 		if err != nil {
 			o.Log.Warn("graph image not found in cache: %v", err)
