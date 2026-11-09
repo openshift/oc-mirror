@@ -702,3 +702,26 @@ func TestPrepareCopyBatchBundleImage(t *testing.T) {
 		})
 	}
 }
+
+func TestCopyTypeForRepeatedImage(t *testing.T) {
+	testCases := []struct {
+		caseName  string
+		selected  v2alpha1.ImageType
+		requested v2alpha1.ImageType
+		expected  v2alpha1.ImageType
+	}{
+		{"bundle image then related image keeps the related image type", v2alpha1.TypeOperatorBundle, v2alpha1.TypeOperatorRelatedImage, v2alpha1.TypeOperatorRelatedImage},
+		{"related image then bundle image keeps the related image type", v2alpha1.TypeOperatorRelatedImage, v2alpha1.TypeOperatorBundle, v2alpha1.TypeOperatorRelatedImage},
+		{"bundle image requested twice stays a bundle image", v2alpha1.TypeOperatorBundle, v2alpha1.TypeOperatorBundle, v2alpha1.TypeOperatorBundle},
+		{"related image requested twice stays a related image", v2alpha1.TypeOperatorRelatedImage, v2alpha1.TypeOperatorRelatedImage, v2alpha1.TypeOperatorRelatedImage},
+		{"catalog image keeps its type when requested as a related image", v2alpha1.TypeOperatorCatalog, v2alpha1.TypeOperatorRelatedImage, v2alpha1.TypeOperatorCatalog},
+		{"catalog image keeps its type when requested as a bundle image", v2alpha1.TypeOperatorCatalog, v2alpha1.TypeOperatorBundle, v2alpha1.TypeOperatorCatalog},
+		{"bundle image keeps its type when requested as a catalog image", v2alpha1.TypeOperatorBundle, v2alpha1.TypeOperatorCatalog, v2alpha1.TypeOperatorBundle},
+		{"other image types are not changed", v2alpha1.TypeGeneric, v2alpha1.TypeOperatorRelatedImage, v2alpha1.TypeGeneric},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.caseName, func(t *testing.T) {
+			assert.Equal(t, testCase.expected, copyTypeForRepeatedImage(testCase.selected, testCase.requested))
+		})
+	}
+}
