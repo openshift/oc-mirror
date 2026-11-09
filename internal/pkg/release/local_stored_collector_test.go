@@ -1284,17 +1284,10 @@ func TestGetKubeVirtImagesStreamCollectionDestinations(t *testing.T) {
 
 	t.Run("disk to mirror", func(t *testing.T) {
 		d2m := col
-		d2m.Opts.Mode = mirror.DiskToMirror
-		d2m.Opts.Destination = consts.DockerProtocol + "localhost:5000/test"
-		batch, err := d2m.prepareReleaseBatchFromDir(releaseDir)
+		d2m.Opts = kubeVirtTestD2MOptions()
+		batch, err := d2m.prepareReleaseBatchFromDir(context.Background(), releaseDir)
 		require.NoError(t, err)
 
-		var kubeVirtCopies []v2alpha1.CopyImageSchema
-		for _, c := range batch {
-			if strings.HasPrefix(c.Origin, kubeVirtTestRepo+"@") {
-				kubeVirtCopies = append(kubeVirtCopies, c)
-			}
-		}
 		require.Equal(t, []v2alpha1.CopyImageSchema{
 			{
 				Origin:      kubeVirtTestRepo + "@" + kubeVirtTestDigest2,
@@ -1308,8 +1301,186 @@ func TestGetKubeVirtImagesStreamCollectionDestinations(t *testing.T) {
 				Destination: consts.DockerProtocol + "localhost:5000/test/openshift/release:1.0.0-x86_64-kube-virt-container-rhel-9",
 				Type:        v2alpha1.TypeOCPReleaseContent,
 			},
-		}, kubeVirtCopies)
+		}, kubeVirtTestCopies(batch))
 	})
+}
+
+// OCPBUGS-138157: archives created before stream collections were supported only hold
+// the image of the legacy stream, under its legacy name. Disk to mirror copies it to the
+// destination of a stream only when its digest is the digest of the image of that stream.
+func TestPrepareReleaseBatchFromDirKubeVirtLegacyArchive(t *testing.T) {
+	encoded := func(dgst string) string { return strings.TrimPrefix(dgst, "sha256:") }
+	cacheRef := func(name string) string {
+		return consts.DockerProtocol + "localhost:9999/openshift/release:" + kubeVirtTestReleaseTag + "-" + name
+	}
+	kubeVirtCopy := func(dgst, sourceName, destinationName string) v2alpha1.CopyImageSchema {
+		return v2alpha1.CopyImageSchema{
+			Origin:      kubeVirtTestRepo + "@" + dgst,
+			Source:      cacheRef(sourceName),
+			Destination: consts.DockerProtocol + "localhost:5000/test/openshift/release:" + kubeVirtTestReleaseTag + "-" + destinationName,
+			Type:        v2alpha1.TypeOCPReleaseContent,
+		}
+	}
+
+	singleArchRelease := writeKubeVirtTestBootImages(t,
+		kubeVirtTestStream(t, map[string]string{"x86_64": kubeVirtTestDigest1}),
+		`{"rhel-9":`+kubeVirtTestStream(t, map[string]string{"x86_64": kubeVirtTestDigest1})+
+			`,"rhel-10":`+kubeVirtTestStream(t, map[string]string{"x86_64": kubeVirtTestDigest2})+`}`)
+	multiArchRelease := writeKubeVirtTestBootImages(t,
+		kubeVirtTestStream(t, map[string]string{"x86_64": kubeVirtTestDigest1, "s390x": kubeVirtTestDigest3}),
+		`{"rhel-9":`+kubeVirtTestStream(t, map[string]string{"x86_64": kubeVirtTestDigest1, "s390x": kubeVirtTestDigest3})+`}`)
+	multiArchPlatform := v2alpha1.Platform{
+		Platforms: []v2alpha1.InstancePlatformFilter{
+			{OS: "linux", Architecture: "amd64"},
+			{OS: "linux", Architecture: "s390x"},
+		},
+		KubeVirtContainer: true,
+	}
+	streamCopies := []v2alpha1.CopyImageSchema{
+		kubeVirtCopy(kubeVirtTestDigest2, "kube-virt-container-rhel-10", "kube-virt-container-rhel-10"),
+		kubeVirtCopy(kubeVirtTestDigest1, "kube-virt-container-rhel-9", "kube-virt-container-rhel-9"),
+	}
+
+	tests := []struct {
+		name       string
+		platform   v2alpha1.Platform
+		releaseDir string
+		deleteMode bool
+		cache      map[string]string
+		expected   []v2alpha1.CopyImageSchema
+	}{
+		{
+			name:       "archive with the images of the streams",
+			releaseDir: singleArchRelease,
+			cache: map[string]string{
+				cacheRef("kube-virt-container-rhel-10"): encoded(kubeVirtTestDigest2),
+				cacheRef("kube-virt-container-rhel-9"):  encoded(kubeVirtTestDigest1),
+				cacheRef("kube-virt-container"):         encoded(kubeVirtTestDigest1),
+			},
+			expected: streamCopies,
+		},
+		{
+			name:       "older archive: the legacy image is copied to the destination of its stream only",
+			releaseDir: singleArchRelease,
+			cache:      map[string]string{cacheRef("kube-virt-container"): encoded(kubeVirtTestDigest1)},
+			expected: []v2alpha1.CopyImageSchema{
+				kubeVirtCopy(kubeVirtTestDigest2, "kube-virt-container-rhel-10", "kube-virt-container-rhel-10"),
+				kubeVirtCopy(kubeVirtTestDigest1, "kube-virt-container", "kube-virt-container-rhel-9"),
+			},
+		},
+		{
+			name:       "legacy image with another digest is not copied",
+			releaseDir: singleArchRelease,
+			cache:      map[string]string{cacheRef("kube-virt-container"): encoded(kubeVirtTestDigest4)},
+			expected:   streamCopies,
+		},
+		{
+			name:       "archive without the legacy image",
+			releaseDir: singleArchRelease,
+			cache:      map[string]string{},
+			expected:   streamCopies,
+		},
+		{
+			name:       "older multi-arch archive: the legacy image of each architecture is used",
+			platform:   multiArchPlatform,
+			releaseDir: multiArchRelease,
+			cache: map[string]string{
+				cacheRef("kube-virt-container-x86_64"): encoded(kubeVirtTestDigest1),
+				cacheRef("kube-virt-container-s390x"):  encoded(kubeVirtTestDigest3),
+			},
+			expected: []v2alpha1.CopyImageSchema{
+				kubeVirtCopy(kubeVirtTestDigest1, "kube-virt-container-x86_64", "kube-virt-container-x86_64-rhel-9"),
+				kubeVirtCopy(kubeVirtTestDigest3, "kube-virt-container-s390x", "kube-virt-container-s390x-rhel-9"),
+			},
+		},
+		{
+			name:       "older multi-arch archive: the legacy image of another architecture is not used",
+			platform:   multiArchPlatform,
+			releaseDir: multiArchRelease,
+			cache:      map[string]string{cacheRef("kube-virt-container-x86_64"): encoded(kubeVirtTestDigest3)},
+			expected: []v2alpha1.CopyImageSchema{
+				kubeVirtCopy(kubeVirtTestDigest1, "kube-virt-container-x86_64-rhel-9", "kube-virt-container-x86_64-rhel-9"),
+				kubeVirtCopy(kubeVirtTestDigest3, "kube-virt-container-s390x-rhel-9", "kube-virt-container-s390x-rhel-9"),
+			},
+		},
+		{
+			name:       "delete mode does not read the cache",
+			releaseDir: singleArchRelease,
+			deleteMode: true,
+			cache:      map[string]string{cacheRef("kube-virt-container"): encoded(kubeVirtTestDigest1)},
+			expected:   streamCopies,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			platform := tt.platform
+			if !platform.KubeVirtContainer {
+				platform = v2alpha1.Platform{KubeVirtContainer: true}
+			}
+			cache := &kubeVirtTestCache{digests: tt.cache}
+			col := LocalStorageCollector{
+				Log: clog.New("trace"),
+				Config: v2alpha1.ImageSetConfiguration{
+					ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
+						Mirror: v2alpha1.Mirror{Platform: platform},
+					},
+				},
+				LocalStorageFQDN: "localhost:9999",
+				Manifest:         cache,
+				Opts:             kubeVirtTestD2MOptions(),
+			}
+			if tt.deleteMode {
+				col.Opts.Function = string(mirror.DeleteMode)
+			}
+
+			batch, err := col.prepareReleaseBatchFromDir(context.Background(), tt.releaseDir)
+			require.NoError(t, err)
+			require.Equal(t, tt.expected, kubeVirtTestCopies(batch))
+			if tt.deleteMode {
+				require.Zero(t, cache.lookups)
+			}
+		})
+	}
+}
+
+// kubeVirtTestCache serves the manifest digests of the images of a synthetic local cache.
+type kubeVirtTestCache struct {
+	MockManifest
+	digests map[string]string
+	lookups int
+}
+
+func (c *kubeVirtTestCache) ImageDigest(_ context.Context, _ *types.SystemContext, imgRef string) (string, error) {
+	c.lookups++
+	if dgst, ok := c.digests[imgRef]; ok {
+		return dgst, nil
+	}
+	return "", fmt.Errorf("manifest unknown: %s", imgRef)
+}
+
+// kubeVirtTestD2MOptions returns the copy options of a disk to mirror run to localhost:5000/test.
+func kubeVirtTestD2MOptions() mirror.CopyOptions {
+	global := &mirror.GlobalOptions{}
+	_, sharedOpts := mirror.SharedImageFlags()
+	_, deprecatedTLSVerifyOpt := mirror.DeprecatedTLSVerifyFlags()
+	_, srcOpts := mirror.ImageSrcFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "src-", "screds")
+	return mirror.CopyOptions{
+		Global:      global,
+		SrcImage:    srcOpts,
+		Destination: consts.DockerProtocol + "localhost:5000/test",
+		Mode:        mirror.DiskToMirror,
+	}
+}
+
+// kubeVirtTestCopies returns the copies of the synthetic kubevirt images of a copy batch.
+func kubeVirtTestCopies(batch []v2alpha1.CopyImageSchema) []v2alpha1.CopyImageSchema {
+	var copies []v2alpha1.CopyImageSchema
+	for _, c := range batch {
+		if strings.HasPrefix(c.Origin, kubeVirtTestRepo+"@") {
+			copies = append(copies, c)
+		}
+	}
+	return copies
 }
 
 // kubeVirtTestStream returns the JSON document of a synthetic CoreOS stream with a
