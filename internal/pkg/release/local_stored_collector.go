@@ -2,6 +2,7 @@ package release
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"maps"
@@ -372,24 +373,45 @@ func (o LocalStorageCollector) kubeVirtD2MSource(ctx context.Context, img kubeVi
 	}
 	legacyRelatedImage := img.RelatedImage
 	legacyRelatedImage.Name = img.legacyName
-	legacyCopies, err := o.prepareD2MCopyBatch([]v2alpha1.RelatedImage{legacyRelatedImage}, releaseTag)
+	legacySource, err := o.d2mCacheSource(legacyRelatedImage, releaseTag)
 	if err != nil {
 		return "", err
 	}
-	legacySource := legacyCopies[0].Source
+	// Only the architecture and an outcome code are logged: the references and the
+	// lookup errors name images and registries.
 	matches, err := o.cachedImageMatchesDigestRef(ctx, legacySource, img.Image)
 	if err != nil || !matches {
-		reason := "it is a different image"
+		outcome := kubeVirtLegacyDigestNotMatched
 		if err != nil {
-			reason = err.Error()
+			outcome = kubeVirtLegacyImageUnavailable
 		}
-		o.Log.Warn("kubevirt: %s is not in the archive and %s cannot be used instead (%s): "+
-			"the archive was probably created by an older version of oc-mirror", streamCopy.Source, legacySource, reason)
+		o.Log.Warn("kubevirt: the archive has no image of a stream collection for architecture %q (%s): "+
+			"the archive was probably created by an older version of oc-mirror", img.arch, outcome)
 		return streamCopy.Source, nil
 	}
-	o.Log.Info("kubevirt: copying %s, the same image as %s, to %s", legacySource, streamCopy.Source, streamCopy.Destination)
+	o.Log.Info("kubevirt: copying the image archived under the legacy name for a stream collection image of architecture %q (%s)",
+		img.arch, kubeVirtLegacyDigestMatched)
 	return legacySource, nil
 }
+
+// d2mCacheSource returns the source, in the local cache, of the disk to mirror copy of an
+// image, built like in prepareD2MCopyBatch but without logging the reference.
+func (o LocalStorageCollector) d2mCacheSource(img v2alpha1.RelatedImage, releaseTag string) (string, error) {
+	imgSpec, err := image.ParseRef(img.Image)
+	if err != nil {
+		return "", err
+	}
+	pathComponents := preparePathComponents(imgSpec, img.Type, img.Name)
+	tag := prepareTag(imgSpec, img.Type, releaseTag, img.Name)
+	return consts.DockerProtocol + strings.Join([]string{o.LocalStorageFQDN, pathComponents + ":" + tag}, "/"), nil
+}
+
+// Outcome codes of the lookup of a stream collection image archived under its legacy name.
+const (
+	kubeVirtLegacyDigestMatched    = "legacy-digest-matched"
+	kubeVirtLegacyDigestNotMatched = "legacy-digest-not-matched"
+	kubeVirtLegacyImageUnavailable = "legacy-image-unavailable"
+)
 
 // cachedImageMatchesDigestRef reports whether the image of the local cache has the
 // sha256 manifest digest of the digest reference.
@@ -649,6 +671,8 @@ var kubeVirtStreamNameRegexp = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]*$`
 // kubeVirtImage is a kubevirt image to mirror.
 type kubeVirtImage struct {
 	v2alpha1.RelatedImage
+	// arch is the bootimages architecture key of the image.
+	arch string
 	// legacyName is the name that the image has in archives created before stream
 	// collections were supported. It is only set for the images of a stream collection.
 	legacyName string
@@ -683,8 +707,7 @@ func (o LocalStorageCollector) collectKubeVirtImages(releaseArtifactsDir string)
 		return nil, fmt.Errorf("marshalling kubevirt yaml file %w", err)
 	}
 
-	o.Log.Trace("data %v", icm.Data.Stream)
-	// now parse the json section(s)
+	// now parse the json section(s); their raw content names images and is not logged
 	streams, err := parseKubeVirtStreams(icm)
 	if err != nil {
 		return nil, err
@@ -723,11 +746,10 @@ func (o LocalStorageCollector) kubeVirtStreamImages(stream kubeVirtStream, archK
 		"ppc64le": stream.images.Architectures.Ppc64le,
 		"s390x":   stream.images.Architectures.S390x,
 	}
-	// streamInfo identifies the stream in log messages; it is empty for the legacy single stream.
-	streamInfo := ""
-	if stream.name != "" {
-		streamInfo = fmt.Sprintf(", stream: %q", stream.name)
-	}
+	// The images of a stream collection are only logged with their architecture: image
+	// references and stream names come from the release payload and are not logged.
+	// The legacy single stream keeps its existing log messages.
+	inCollection := stream.name != ""
 
 	var images []kubeVirtImage
 	for _, archKey := range archKeys {
@@ -738,17 +760,25 @@ func (o LocalStorageCollector) kubeVirtStreamImages(stream kubeVirtStream, archK
 		}
 		digestRef := ai.Images.Kubevirt.DigestRef
 		if digestRef == "" {
-			o.Log.Debug("kubevirt: no digest-ref for architecture %q in this release%s — skipping", archKey, streamInfo)
+			if inCollection {
+				o.Log.Debug("kubevirt: no digest-ref for architecture %q in a stream of the stream collection — skipping", archKey)
+			} else {
+				o.Log.Debug("kubevirt: no digest-ref for architecture %q in this release — skipping", archKey)
+			}
 			continue
 		}
-		if stream.name == "" && collected[digestRef] {
-			o.Log.Debug("kubevirt: legacy stream image %v already collected from the stream collection — skipping", digestRef)
+		if !inCollection && collected[digestRef] {
+			o.Log.Debug("kubevirt: legacy stream image for architecture %q already collected from the stream collection — skipping", archKey)
 			continue
 		}
 		collected[digestRef] = true
-		o.Log.Info("kubeVirtContainer set to true [ including : %v (arch: %v%s) ]", digestRef, archKey, streamInfo)
+		if inCollection {
+			o.Log.Info("kubeVirtContainer set to true [ including a stream collection image (arch: %v) ]", archKey)
+		} else {
+			o.Log.Info("kubeVirtContainer set to true [ including : %v (arch: %v) ]", digestRef, archKey)
+		}
 
-		img := kubeVirtImage{RelatedImage: v2alpha1.RelatedImage{
+		img := kubeVirtImage{arch: archKey, RelatedImage: v2alpha1.RelatedImage{
 			Image: digestRef,
 			Name:  kubeVirtImageName(archKey, len(archKeys) > 1, stream.name),
 			Type:  v2alpha1.TypeOCPReleaseContent,
@@ -775,7 +805,7 @@ func parseKubeVirtStreams(icm v2alpha1.InstallerConfigMap) ([]kubeVirtStream, er
 		}
 		for _, name := range slices.Sorted(maps.Keys(collection)) {
 			if !kubeVirtStreamNameRegexp.MatchString(name) {
-				return nil, fmt.Errorf("invalid stream name %q in kubevirt configmap streams data", name)
+				return nil, errors.New("invalid stream name in kubevirt configmap streams data: names may only contain letters, digits, '_', '.' and '-'")
 			}
 			streams = append(streams, kubeVirtStream{name: name, images: collection[name]})
 		}

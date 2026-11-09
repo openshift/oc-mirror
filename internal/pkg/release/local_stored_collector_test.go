@@ -1208,7 +1208,7 @@ func TestGetKubeVirtImagesStreamCollection(t *testing.T) {
 			name:     "stream name that cannot be used in an image tag",
 			platform: defaultPlatform,
 			streams:  `{"rhel/9":` + kubeVirtTestStream(t, map[string]string{"x86_64": kubeVirtTestDigest1}) + `}`,
-			err:      `invalid stream name "rhel/9" in kubevirt configmap streams data`,
+			err:      "invalid stream name in kubevirt configmap streams data",
 		},
 		{
 			name:     "stream collection without kubevirt images",
@@ -1442,6 +1442,93 @@ func TestPrepareReleaseBatchFromDirKubeVirtLegacyArchive(t *testing.T) {
 		})
 	}
 }
+
+// OCPBUGS-138157: the kubevirt logs of the images of a stream collection and of the legacy
+// archive lookup only name architectures and outcome codes, never images, registries,
+// caches, stream names or lookup errors, and the lookup adds no other log message.
+func TestKubeVirtStreamCollectionLogs(t *testing.T) {
+	releaseDir := writeKubeVirtTestBootImages(t,
+		kubeVirtTestStream(t, map[string]string{"x86_64": kubeVirtTestDigest1}),
+		`{"rhel-9":`+kubeVirtTestStream(t, map[string]string{"x86_64": kubeVirtTestDigest1})+
+			`,"rhel-10":`+kubeVirtTestStream(t, map[string]string{"x86_64": kubeVirtTestDigest2})+`}`)
+	legacyCacheRef := consts.DockerProtocol + "localhost:9999/openshift/release:" + kubeVirtTestReleaseTag + "-kube-virt-container"
+
+	tests := []struct {
+		name     string
+		cache    map[string]string
+		outcomes []string
+	}{
+		{
+			name:     "legacy image of one of the streams",
+			cache:    map[string]string{legacyCacheRef: strings.TrimPrefix(kubeVirtTestDigest1, "sha256:")},
+			outcomes: []string{kubeVirtLegacyDigestMatched, kubeVirtLegacyDigestNotMatched},
+		},
+		{
+			name:     "no legacy image",
+			cache:    map[string]string{},
+			outcomes: []string{kubeVirtLegacyImageUnavailable},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			logger := &kubeVirtTestLogger{}
+			col := LocalStorageCollector{
+				Log: logger,
+				Config: v2alpha1.ImageSetConfiguration{
+					ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
+						Mirror: v2alpha1.Mirror{Platform: v2alpha1.Platform{KubeVirtContainer: true}},
+					},
+				},
+				LocalStorageFQDN: "localhost:9999",
+				Manifest:         &kubeVirtTestCache{digests: tt.cache},
+				Opts:             kubeVirtTestD2MOptions(),
+			}
+
+			batch, err := col.prepareReleaseBatchFromDir(context.Background(), releaseDir)
+			require.NoError(t, err)
+
+			// The generic source and destination debug messages of the copy batches are
+			// not specific to kubevirt images and are left out: the legacy lookup must
+			// not add any of them.
+			var kubeVirtLogs []string
+			sourceMessages := 0
+			for _, msg := range logger.messages {
+				switch {
+				case strings.HasPrefix(msg, "kubevirt:"), strings.HasPrefix(msg, "kubeVirtContainer"):
+					kubeVirtLogs = append(kubeVirtLogs, msg)
+				case strings.HasPrefix(msg, "source "):
+					sourceMessages++
+				}
+			}
+			require.Equal(t, len(batch), sourceMessages)
+			logs := strings.Join(kubeVirtLogs, "\n")
+			for _, forbidden := range []string{"example.com", "localhost", "sha256", "@", "manifest unknown", "rhel-"} {
+				require.NotContains(t, logs, forbidden)
+			}
+			require.Contains(t, logs, `architecture "x86_64"`)
+			for _, outcome := range tt.outcomes {
+				require.Contains(t, logs, outcome)
+			}
+		})
+	}
+}
+
+// kubeVirtTestLogger records the formatted log messages.
+type kubeVirtTestLogger struct {
+	messages []string
+}
+
+func (l *kubeVirtTestLogger) record(msg string, val ...interface{}) {
+	l.messages = append(l.messages, fmt.Sprintf(msg, val...))
+}
+
+func (l *kubeVirtTestLogger) Error(msg string, val ...interface{}) { l.record(msg, val...) }
+func (l *kubeVirtTestLogger) Info(msg string, val ...interface{})  { l.record(msg, val...) }
+func (l *kubeVirtTestLogger) Debug(msg string, val ...interface{}) { l.record(msg, val...) }
+func (l *kubeVirtTestLogger) Trace(msg string, val ...interface{}) { l.record(msg, val...) }
+func (l *kubeVirtTestLogger) Warn(msg string, val ...interface{})  { l.record(msg, val...) }
+func (l *kubeVirtTestLogger) Level(string)                         {}
+func (l *kubeVirtTestLogger) GetLevel() string                     { return "trace" }
 
 // kubeVirtTestCache serves the manifest digests of the images of a synthetic local cache.
 type kubeVirtTestCache struct {

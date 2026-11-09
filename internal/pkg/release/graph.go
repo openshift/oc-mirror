@@ -98,7 +98,7 @@ func (o LocalStorageCollector) cachedImageDigest(ctx context.Context, ref string
 	sourceCtx.DockerInsecureSkipTLSVerify = types.OptionalBoolTrue
 	digest, err := o.Manifest.ImageDigest(ctx, sourceCtx, ref)
 	if err != nil {
-		return "", fmt.Errorf("get digest of cached image %s: %w", ref, err)
+		return "", fmt.Errorf("get digest of cached image: %w", err)
 	}
 	return digest, nil
 }
