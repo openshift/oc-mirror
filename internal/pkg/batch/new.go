@@ -15,6 +15,14 @@ func New(workerType string,
 	mirror mirror.MirrorInterface,
 	batchSize uint,
 	timestamp string,
+	resolver OperandResolver,
 ) BatchInterface {
-	return &ChannelConcurrentBatch{Log: log, LogsDir: logsDir, Mirror: mirror, MaxGoroutines: batchSize, SynchedTimeStamp: timestamp}
+	return &ChannelConcurrentBatch{
+		Log:              log,
+		LogsDir:          logsDir,
+		Mirror:           mirror,
+		MaxGoroutines:    batchSize,
+		SynchedTimeStamp: timestamp,
+		OperandResolver:  resolver,
+	}
 }
