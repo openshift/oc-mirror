@@ -169,9 +169,6 @@ func (o DeleteImages) DeleteRegistryImages(deleteImageList v2alpha1.DeleteImageL
 			continue
 		}
 		deleteDestBase := name[1]
-		// Phase two uses the references recorded in phase one, without the original
-		// configuration. All image types can use custom repositories, so validate
-		// that each reference stays inside the requested registry/namespace tree.
 		if !strings.HasPrefix(imgSpecRef.Name, deleteDestBase+"/") {
 			allErrs = append(allErrs, fmt.Errorf("delete destination %s does not match values found in the delete-images yaml file (expected prefix %s/, got %s)", o.Opts.Global.DeleteDestination, deleteDestBase, imgSpecRef.Name))
 			continue

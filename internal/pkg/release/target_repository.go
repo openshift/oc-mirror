@@ -21,8 +21,7 @@ func platformTargetRepositories(platform v2alpha1.Platform) []targetRepository {
 	}
 }
 
-// ValidateTargetRepositories checks repository syntax when loading an ISC or DISC.
-// Destination-dependent checks are deferred until the CLI knows the workflow and registry.
+// ValidateTargetRepositories checks repository syntax in an ISC or DISC.
 func ValidateTargetRepositories(platform v2alpha1.Platform) []error {
 	var errs []error
 	for _, target := range platformTargetRepositories(platform) {
@@ -33,9 +32,8 @@ func ValidateTargetRepositories(platform v2alpha1.Platform) []error {
 	return errs
 }
 
-// ValidatePlatformDestination checks the complete names and nesting limits once
-// the destination (or mirror-to-disk cache registry) is known. Syntax is checked
-// separately by ValidateTargetRepositories during configuration loading.
+// ValidatePlatformDestination checks full repository names, nesting limits,
+// and graph conflicts against the destination or cache registry.
 func ValidatePlatformDestination(platform v2alpha1.Platform, opts mirror.CopyOptions) error {
 	if platform.TargetImageRepo == "" && platform.TargetComponentRepo == "" {
 		return nil
@@ -69,8 +67,7 @@ func validateTargetRepository(platform v2alpha1.Platform, opts mirror.CopyOption
 	return nil
 }
 
-// Graph construction can push to the original graph repository before the batch
-// applies nesting limits. Reserve both locations without changing graph routing.
+// Reserve both graph paths: construction can push before batch path flattening.
 func validateGraphRepository(destination, targetRepository, field string, opts mirror.CopyOptions) error {
 	graphRef := destination + "/" + graphImageName + ":latest"
 	graphRefs := []string{graphRef}
@@ -93,8 +90,8 @@ func validateGraphRepository(destination, targetRepository, field string, opts m
 	return nil
 }
 
-// ValidatePlatformImageDestinations prevents repository overrides from assigning
-// different images to the same tag. Identical digest-pinned images may share it.
+// ValidatePlatformImageDestinations rejects conflicting tags when either repository
+// is overridden. Identical digest-pinned images may share a tag.
 func ValidatePlatformImageDestinations(platform v2alpha1.Platform, images []v2alpha1.CopyImageSchema) error {
 	if platform.TargetImageRepo == "" && platform.TargetComponentRepo == "" {
 		return nil

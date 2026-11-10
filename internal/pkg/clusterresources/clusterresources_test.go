@@ -11,7 +11,6 @@ import (
 	confv1 "github.com/openshift/api/config/v1"
 	"github.com/otiai10/copy"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/validation"
 
@@ -28,67 +27,15 @@ import (
 	"github.com/openshift/oc-mirror/v2/internal/pkg/parser"
 )
 
-func TestReleaseCustomRepositoryMirrors(t *testing.T) {
-	target := "mirror.example.com/team/openshift4/ocp-release"
-	images := []v2alpha1.CopyImageSchema{
-		{Origin: "quay.io/openshift-release-dev/ocp-release:4.20.8-x86_64", Destination: "docker://" + target + ":4.20.8-x86_64", Type: v2alpha1.TypeOCPRelease},
-		{Origin: "quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:" + strings.Repeat("a", 64), Destination: "docker://" + target + ":4.20.8-x86_64-api-server", Type: v2alpha1.TypeOCPReleaseContent},
-	}
-	for _, tc := range []struct {
-		name      string
-		forceRepo bool
-	}{
-		{"default scope", false},
-		{"forced repository scope", true},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			cr := ClusterResourcesGenerator{}
-			mirrors, err := cr.generateImageMirrors(images, DigestsOnlyMode, tc.forceRepo)
-			require.NoError(t, err)
-			idms, err := cr.generateIDMS(mirrors)
-			require.NoError(t, err)
-			require.Len(t, idms, 1)
-			require.ElementsMatch(t, []confv1.ImageDigestMirrors{
-				{Source: "quay.io/openshift-release-dev/ocp-release", Mirrors: []confv1.ImageMirror{confv1.ImageMirror(target)}},
-				{Source: "quay.io/openshift-release-dev/ocp-v4.0-art-dev", Mirrors: []confv1.ImageMirror{confv1.ImageMirror(target)}},
-			}, idms[0].Spec.ImageDigestMirrors)
-			mirrors, err = cr.generateImageMirrors(images, TagsOnlyMode, tc.forceRepo)
-			require.NoError(t, err)
-			itms, err := cr.generateITMS(mirrors)
-			require.NoError(t, err)
-			require.Len(t, itms, 1)
-			require.Equal(t, []confv1.ImageTagMirrors{
-				{Source: "quay.io/openshift-release-dev/ocp-release", Mirrors: []confv1.ImageMirror{confv1.ImageMirror(target)}},
-			}, itms[0].Spec.ImageTagMirrors)
-		})
-	}
-}
-
-func TestReleaseSeparateRepositoriesPreserveNamespaceMirrors(t *testing.T) {
-	const sourceNamespace = "quay.io/openshift-release-dev"
-	const destinationNamespace = "mirror.example.com/mirrors/quay.io/openshift-release-dev"
-	images := []v2alpha1.CopyImageSchema{
-		{
-			Origin: sourceNamespace + "/ocp-release:4.20.8-x86_64", Type: v2alpha1.TypeOCPRelease,
-			Destination: "docker://" + destinationNamespace + "/ocp-release:4.20.8-x86_64",
-		},
-		{
-			Origin: sourceNamespace + "/ocp-v4.0-art-dev@sha256:" + strings.Repeat("a", 64), Type: v2alpha1.TypeOCPReleaseContent,
-			Destination: "docker://" + destinationNamespace + "/ocp-v4.0-art-dev:4.20.8-x86_64-api-server",
-		},
-	}
-	cr := ClusterResourcesGenerator{}
-	mirrors, err := cr.generateImageMirrors(images, DigestsOnlyMode, false)
-	require.NoError(t, err)
-	idms, err := cr.generateIDMS(mirrors)
-	require.NoError(t, err)
-	require.Len(t, idms, 1)
-	require.Equal(t, []confv1.ImageDigestMirrors{
-		{Source: sourceNamespace, Mirrors: []confv1.ImageMirror{destinationNamespace}},
-	}, idms[0].Spec.ImageDigestMirrors, "preserved source paths must share the correct namespace mapping")
-}
-
 var (
+	imageListReleaseCustomRepository = []v2alpha1.CopyImageSchema{
+		{Origin: "quay.io/openshift-release-dev/ocp-release:4.20.8-x86_64", Destination: "docker://mirror.example.com/team/openshift4/ocp-release:4.20.8-x86_64", Type: v2alpha1.TypeOCPRelease},
+		{Origin: "quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:" + strings.Repeat("a", 64), Destination: "docker://mirror.example.com/team/openshift4/ocp-release:4.20.8-x86_64-api-server", Type: v2alpha1.TypeOCPReleaseContent},
+	}
+	imageListReleasePreservedRepositories = []v2alpha1.CopyImageSchema{
+		{Origin: "quay.io/openshift-release-dev/ocp-release:4.20.8-x86_64", Destination: "docker://mirror.example.com/mirrors/quay.io/openshift-release-dev/ocp-release:4.20.8-x86_64", Type: v2alpha1.TypeOCPRelease},
+		{Origin: "quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:" + strings.Repeat("a", 64), Destination: "docker://mirror.example.com/mirrors/quay.io/openshift-release-dev/ocp-v4.0-art-dev:4.20.8-x86_64-api-server", Type: v2alpha1.TypeOCPReleaseContent},
+	}
 	imageListRelease = []v2alpha1.CopyImageSchema{
 		{
 			Source:      consts.DockerProtocol + "localhost:55000/openshift/release:4.14.38-x86_64-agent-installer-api-server",
@@ -435,10 +382,11 @@ func TestGenerateIDMS(t *testing.T) {
 	log := clog.New("trace")
 
 	type testCase struct {
-		caseName         string
-		imgList          []v2alpha1.CopyImageSchema
-		expectedIdmsList []confv1.ImageDigestMirrorSet
-		expectedError    bool
+		caseName             string
+		imgList              []v2alpha1.CopyImageSchema
+		expectedIdmsList     []confv1.ImageDigestMirrorSet
+		expectedError        bool
+		forceRepositoryScope bool
 	}
 	testCases := []testCase{
 		{
@@ -542,6 +490,29 @@ func TestGenerateIDMS(t *testing.T) {
 			expectedError: false,
 		},
 	}
+	for _, forceRepo := range []bool{false, true} {
+		testCases = append(testCases, testCase{
+			caseName: fmt.Sprintf("custom release repository, forced scope=%t", forceRepo),
+			imgList:  imageListReleaseCustomRepository, forceRepositoryScope: forceRepo,
+			expectedIdmsList: []confv1.ImageDigestMirrorSet{{
+				ObjectMeta: metav1.ObjectMeta{Name: "idms-release-0"},
+				Spec: confv1.ImageDigestMirrorSetSpec{ImageDigestMirrors: []confv1.ImageDigestMirrors{
+					{Source: "quay.io/openshift-release-dev/ocp-release", Mirrors: []confv1.ImageMirror{"mirror.example.com/team/openshift4/ocp-release"}},
+					{Source: "quay.io/openshift-release-dev/ocp-v4.0-art-dev", Mirrors: []confv1.ImageMirror{"mirror.example.com/team/openshift4/ocp-release"}},
+				}},
+			}},
+		})
+	}
+	testCases = append(testCases, testCase{
+		caseName: "preserved release repositories share a namespace mirror",
+		imgList:  imageListReleasePreservedRepositories,
+		expectedIdmsList: []confv1.ImageDigestMirrorSet{{
+			ObjectMeta: metav1.ObjectMeta{Name: "idms-release-0"},
+			Spec: confv1.ImageDigestMirrorSetSpec{ImageDigestMirrors: []confv1.ImageDigestMirrors{
+				{Source: "quay.io/openshift-release-dev", Mirrors: []confv1.ImageMirror{"mirror.example.com/mirrors/quay.io/openshift-release-dev"}},
+			}},
+		}},
+	})
 	for _, testCase := range testCases {
 		t.Run(testCase.caseName, func(t *testing.T) {
 			tmpDir := t.TempDir()
@@ -552,7 +523,7 @@ func TestGenerateIDMS(t *testing.T) {
 				WorkingDir:       workingDir,
 				LocalStorageFQDN: "localhost:55000",
 			}
-			idmsList, err := cr.generateImageMirrors(testCase.imgList, DigestsOnlyMode, false)
+			idmsList, err := cr.generateImageMirrors(testCase.imgList, DigestsOnlyMode, testCase.forceRepositoryScope)
 			if err != nil {
 				t.Fatalf("should not fail")
 			}
@@ -582,10 +553,11 @@ func TestGenerateITMS(t *testing.T) {
 	log := clog.New("trace")
 
 	type testCase struct {
-		caseName         string
-		imgList          []v2alpha1.CopyImageSchema
-		expectedItmsList []confv1.ImageTagMirrorSet
-		expectedError    bool
+		caseName             string
+		imgList              []v2alpha1.CopyImageSchema
+		expectedItmsList     []confv1.ImageTagMirrorSet
+		expectedError        bool
+		forceRepositoryScope bool
 	}
 	testCases := []testCase{
 		{
@@ -666,6 +638,18 @@ func TestGenerateITMS(t *testing.T) {
 			expectedError: false,
 		},
 	}
+	for _, forceRepo := range []bool{false, true} {
+		testCases = append(testCases, testCase{
+			caseName: fmt.Sprintf("custom release repository, forced scope=%t", forceRepo),
+			imgList:  imageListReleaseCustomRepository, forceRepositoryScope: forceRepo,
+			expectedItmsList: []confv1.ImageTagMirrorSet{{
+				ObjectMeta: metav1.ObjectMeta{Name: "itms-release-0"},
+				Spec: confv1.ImageTagMirrorSetSpec{ImageTagMirrors: []confv1.ImageTagMirrors{
+					{Source: "quay.io/openshift-release-dev/ocp-release", Mirrors: []confv1.ImageMirror{"mirror.example.com/team/openshift4/ocp-release"}},
+				}},
+			}},
+		})
+	}
 	for _, testCase := range testCases {
 		t.Run(testCase.caseName, func(t *testing.T) {
 			tmpDir := t.TempDir()
@@ -676,7 +660,7 @@ func TestGenerateITMS(t *testing.T) {
 				WorkingDir:       workingDir,
 				LocalStorageFQDN: "localhost:55000",
 			}
-			itmsList, err := cr.generateImageMirrors(testCase.imgList, TagsOnlyMode, false)
+			itmsList, err := cr.generateImageMirrors(testCase.imgList, TagsOnlyMode, testCase.forceRepositoryScope)
 			if err != nil {
 				t.Fatalf("should not fail")
 			}

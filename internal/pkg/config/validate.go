@@ -143,8 +143,7 @@ func validatePackageChannel(ctlgName string, pkg *v2alpha1.IncludePackage, ch *v
 	return nil
 }
 
-// validateReleasePlatformFields validates the destination repositories and ensures
-// that platform.platforms and platform.architectures are mutually exclusive.
+// validateReleasePlatformFields checks repository syntax and mutually exclusive platform selectors.
 func validateReleasePlatformFields(cfg *v2alpha1.ImageSetConfiguration) []error {
 	errs := release.ValidateTargetRepositories(cfg.Mirror.Platform)
 	//nolint:staticcheck // SA1019: Architectures is deprecated but we check it for mutual exclusivity

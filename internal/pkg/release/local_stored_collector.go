@@ -749,8 +749,7 @@ func compareByOriginSourceDest(a, b v2alpha1.CopyImageSchema) int {
 	return strings.Compare(a.Destination, b.Destination)
 }
 
-// releasePathComponents applies the independent payload and component overrides,
-// including kubevirt images, while preserving the separate graph repository.
+// releasePathComponents selects release repositories without changing graph paths.
 func (o LocalStorageCollector) releasePathComponents(imgSpec image.ImageSpec, imgType v2alpha1.ImageType, imgName string) string {
 	switch {
 	case imgType == v2alpha1.TypeOCPRelease:
