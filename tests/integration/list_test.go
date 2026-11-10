@@ -20,10 +20,81 @@ import (
 )
 
 var _ = Describe("oc-mirror list operators", Ordered, func() {
+	binaryPath := os.Getenv("OC_MIRROR_BINARY")
+	catalogRunner := ocmirror.NewRunner(binaryPath)
+
 	BeforeAll(func() {
 		if skipListTest() {
 			Skip("oc-mirror list operators not available in < 4.22")
 		}
+
+		registryServer := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			switch r.URL.Path {
+			case "/v2/":
+				w.WriteHeader(http.StatusOK)
+			case "/v2/redhat/redhat-operator-index/manifests/v4.20",
+				"/v2/redhat/certified-operator-index/manifests/v4.20",
+				"/v2/redhat/community-operator-index/manifests/v4.20",
+				"/v2/redhat/redhat-marketplace-index/manifests/v4.20",
+				"/v2/redhat/redhat-operator-index/manifests/v4.22",
+				"/v2/redhat/certified-operator-index/manifests/v4.22",
+				"/v2/redhat/community-operator-index/manifests/v4.22",
+				"/v2/redhat/redhat-operator-index/manifests/v5.0",
+				"/v2/redhat/certified-operator-index/manifests/v5.0",
+				"/v2/redhat/community-operator-index/manifests/v5.0":
+				w.Header().Set("Content-Type", "application/vnd.oci.image.manifest.v1+json")
+				_, _ = io.WriteString(w, `{"schemaVersion":2,"config":{"mediaType":"application/vnd.oci.image.config.v1+json","digest":"sha256:0000000000000000000000000000000000000000000000000000000000000000","size":2},"layers":[]}`)
+			default:
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusNotFound)
+				_, _ = io.WriteString(w, `{"errors":[{"code":"MANIFEST_UNKNOWN","message":"manifest unknown"}]}`)
+			}
+		}))
+		DeferCleanup(registryServer.Close)
+
+		routingProxy, err := proxy.StartWithRoutes(map[string]string{
+			"registry.redhat.io:443": registryServer.Listener.Addr().String(),
+		})
+		Expect(err).NotTo(HaveOccurred())
+		DeferCleanup(routingProxy.Stop)
+
+		catalogRunner = catalogRunner.WithEnv([]string{
+			"HTTP_PROXY=" + routingProxy.URL(), "HTTPS_PROXY=" + routingProxy.URL(),
+			"NO_PROXY=localhost,127.0.0.1",
+		})
+	})
+	It("lists the default catalogs available before the marketplace removal", func() {
+		result, err := catalogRunner.ListOperators(ctx, "--catalogs", "--version=4.20", "--src-tls-verify=false")
+		expectOcMirrorCommandSuccess(result, err)
+		Expect(result.Stdout).To(Equal(`Available OpenShift OperatorHub catalogs:
+OpenShift 4.20:
+registry.redhat.io/redhat/redhat-operator-index:v4.20
+registry.redhat.io/redhat/certified-operator-index:v4.20
+registry.redhat.io/redhat/community-operator-index:v4.20
+registry.redhat.io/redhat/redhat-marketplace-index:v4.20
+`))
+	})
+	It("omits the marketplace catalog at and after the removal version", func() {
+		for _, version := range []string{"4.22", "5.0"} {
+			result, err := catalogRunner.ListOperators(ctx, "--catalogs", "--version="+version, "--src-tls-verify=false")
+			expectOcMirrorCommandSuccess(result, err)
+			Expect(result.Stdout).To(Equal(`Available OpenShift OperatorHub catalogs:
+OpenShift ` + version + `:
+registry.redhat.io/redhat/redhat-operator-index:v` + version + `
+registry.redhat.io/redhat/certified-operator-index:v` + version + `
+registry.redhat.io/redhat/community-operator-index:v` + version + `
+`))
+		}
+	})
+	It("reports catalog tags that do not exist", func() {
+		result, err := catalogRunner.ListOperators(ctx, "--catalogs", "--version=foobar", "--src-tls-verify=false")
+		expectOcMirrorCommandSuccess(result, err)
+		Expect(result.Stdout).To(Equal(`Available OpenShift OperatorHub catalogs:
+OpenShift foobar:
+Invalid catalog reference "registry.redhat.io/redhat/redhat-operator-index:vfoobar", please check version
+Invalid catalog reference "registry.redhat.io/redhat/certified-operator-index:vfoobar", please check version
+Invalid catalog reference "registry.redhat.io/redhat/community-operator-index:vfoobar", please check version
+`))
 	})
 	It("should list operators of a specific catalog", func() {
 		result, err := runner.ListOperators(ctx, "--catalog", happyPathCatalog)
