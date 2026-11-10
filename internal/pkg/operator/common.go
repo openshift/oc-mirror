@@ -132,6 +132,8 @@ func (o OperatorCollector) catalogDigest(ctx context.Context, catalog v2alpha1.O
 // image for another is copied as a related image: the batch worker skips bundle images
 // whose related images failed to copy, and that must not drop an image another bundle
 // depends on. Any other combination keeps the type of the copy task already selected.
+// The type keeps the image from being skipped with its own bundle; the batch worker still
+// recognizes it as a bundle image from BundlesByImage and never handles it as an optional operand.
 func copyTypeForRepeatedImage(selected, requested v2alpha1.ImageType) v2alpha1.ImageType {
 	if selected == v2alpha1.TypeOperatorBundle && requested == v2alpha1.TypeOperatorRelatedImage {
 		return v2alpha1.TypeOperatorRelatedImage
