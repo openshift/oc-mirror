@@ -10,6 +10,8 @@ import (
 	"strings"
 
 	"github.com/distribution/reference"
+	"github.com/docker/distribution/registry/api/errcode"
+	errcodev2 "github.com/docker/distribution/registry/api/v2"
 	"github.com/opencontainers/go-digest"
 	"go.podman.io/common/pkg/retry"
 	"go.podman.io/image/v5/copy"
@@ -318,10 +320,46 @@ func (o *Mirror) Check(ctx context.Context, image string, opts *CopyOptions, asC
 
 	if err == nil {
 		return true, nil
-	} else if strings.Contains(err.Error(), "manifest unknown") {
+	}
+	if isConfirmedAbsence(err) {
 		return false, nil
-	} else {
-		return false, err
+	}
+	return false, err
+}
+
+// isConfirmedAbsence reports NAME_UNKNOWN / MANIFEST_UNKNOWN from the registry.
+// Those mean the repository or tag is not present, not an auth/network failure.
+func isConfirmedAbsence(err error) bool {
+	if err == nil {
+		return false
+	}
+	var ec errcode.Error
+	if errors.As(err, &ec) && isAbsenceErrorCode(ec.Code) {
+		return true
+	}
+	var ecs errcode.Errors
+	if errors.As(err, &ecs) {
+		for _, e := range ecs {
+			if isConfirmedAbsence(e) {
+				return true
+			}
+		}
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "manifest unknown") || strings.Contains(msg, "name unknown")
+}
+
+func isAbsenceErrorCode(code errcode.ErrorCode) bool {
+	switch code {
+	case errcodev2.ErrorCodeNameUnknown, errcodev2.ErrorCodeManifestUnknown:
+		return true
+	default:
+		switch code.String() {
+		case "NAME_UNKNOWN", "MANIFEST_UNKNOWN":
+			return true
+		default:
+			return false
+		}
 	}
 }
 
