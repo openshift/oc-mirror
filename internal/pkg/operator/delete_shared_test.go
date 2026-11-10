@@ -95,13 +95,151 @@ func TestExcludeRelatedImagesSharedWithSiblingBundles(t *testing.T) {
 		},
 	}
 
-	got := excludeRelatedImagesSharedWithSiblingBundles(log, deleteRelated, deleteDC, packageWideDC)
+	got := excludeRelatedImagesSharedWithSiblingBundles(log, deleteRelated, deleteDC, packageWideDC, nil, nil)
 	require.Contains(t, got, "quay-operator.v3.11.5")
 	images := got["quay-operator.v3.11.5"]
 	refs := relatedImageRefs(images)
 	assert.Contains(t, refs, bundleOld)
 	assert.Contains(t, refs, onlyOld)
 	assert.NotContains(t, refs, shared)
+}
+
+func TestExcludeRelatedImagesSharedByDestinationIdentity(t *testing.T) {
+	log := clog.New("error")
+	digest := "sha256:1ce8c0187c8fe6b4be327dc848b8baf062ce1baa5096b4f5d955893d126d5b58"
+	fromRedhat := "registry.redhat.io/rhel8/redis-6@" + digest
+	fromQuay := "quay.io/rhel8/redis-6@" + digest
+	bundleOld := "registry.redhat.io/quay/quay-operator-bundle@sha256:bundle3115"
+	bundleNew := "registry.redhat.io/quay/quay-operator-bundle@sha256:bundle3116"
+
+	deleteDC := &declcfg.DeclarativeConfig{
+		Bundles: []declcfg.Bundle{
+			{Name: "quay-operator.v3.11.5", Package: "quay-operator", Image: bundleOld},
+		},
+	}
+	packageWideDC := &declcfg.DeclarativeConfig{
+		Bundles: []declcfg.Bundle{
+			{
+				Name:    "quay-operator.v3.11.5",
+				Package: "quay-operator",
+				Image:   bundleOld,
+				RelatedImages: []declcfg.RelatedImage{
+					{Name: "redis", Image: fromRedhat},
+				},
+			},
+			{
+				Name:    "quay-operator.v3.11.6",
+				Package: "quay-operator",
+				Image:   bundleNew,
+				RelatedImages: []declcfg.RelatedImage{
+					{Name: "redis", Image: fromQuay},
+				},
+			},
+		},
+	}
+	deleteRelated := map[string][]v2alpha1.RelatedImage{
+		"quay-operator.v3.11.5": {
+			{Name: "bundle", Image: bundleOld, Type: v2alpha1.TypeOperatorBundle},
+			{Name: "redis", Image: fromRedhat, Type: v2alpha1.TypeOperatorRelatedImage},
+		},
+	}
+
+	got := excludeRelatedImagesSharedWithSiblingBundles(log, deleteRelated, deleteDC, packageWideDC, nil, nil)
+	refs := relatedImageRefs(got["quay-operator.v3.11.5"])
+	assert.Contains(t, refs, bundleOld)
+	assert.NotContains(t, refs, fromRedhat)
+}
+
+func TestExcludeRelatedImagesUnionDeleteSelection(t *testing.T) {
+	log := clog.New("error")
+	shared := "registry.redhat.io/rhel8/redis-6@sha256:shared"
+	bundleOld := "registry.redhat.io/quay/quay-operator-bundle@sha256:bundle3115"
+	bundleNew := "registry.redhat.io/quay/quay-operator-bundle@sha256:bundle3116"
+
+	deleteDC := &declcfg.DeclarativeConfig{
+		Bundles: []declcfg.Bundle{
+			{Name: "quay-operator.v3.11.5", Package: "quay-operator", Image: bundleOld},
+		},
+	}
+	packageWideDC := &declcfg.DeclarativeConfig{
+		Bundles: []declcfg.Bundle{
+			{
+				Name:    "quay-operator.v3.11.5",
+				Package: "quay-operator",
+				Image:   bundleOld,
+				RelatedImages: []declcfg.RelatedImage{
+					{Name: "redis", Image: shared},
+				},
+			},
+			{
+				Name:    "quay-operator.v3.11.6",
+				Package: "quay-operator",
+				Image:   bundleNew,
+				RelatedImages: []declcfg.RelatedImage{
+					{Name: "redis", Image: shared},
+				},
+			},
+		},
+	}
+	deleteRelated := map[string][]v2alpha1.RelatedImage{
+		"quay-operator.v3.11.5": {
+			{Name: "bundle", Image: bundleOld, Type: v2alpha1.TypeOperatorBundle},
+			{Name: "redis", Image: shared, Type: v2alpha1.TypeOperatorRelatedImage},
+		},
+	}
+	union := map[string]struct{}{"quay-operator.v3.11.6": {}}
+
+	got := excludeRelatedImagesSharedWithSiblingBundles(log, deleteRelated, deleteDC, packageWideDC, union, nil)
+	refs := relatedImageRefs(got["quay-operator.v3.11.5"])
+	assert.Contains(t, refs, bundleOld)
+	assert.Contains(t, refs, shared)
+}
+
+func TestExcludeRelatedImagesSiblingMissingOnDestination(t *testing.T) {
+	log := clog.New("error")
+	shared := "registry.redhat.io/rhel8/redis-6@sha256:shared"
+	bundleOld := "registry.redhat.io/quay/quay-operator-bundle@sha256:bundle3115"
+	bundleNew := "registry.redhat.io/quay/quay-operator-bundle@sha256:bundle3116"
+
+	deleteDC := &declcfg.DeclarativeConfig{
+		Bundles: []declcfg.Bundle{
+			{Name: "quay-operator.v3.11.5", Package: "quay-operator", Image: bundleOld},
+		},
+	}
+	packageWideDC := &declcfg.DeclarativeConfig{
+		Bundles: []declcfg.Bundle{
+			{
+				Name:    "quay-operator.v3.11.5",
+				Package: "quay-operator",
+				Image:   bundleOld,
+				RelatedImages: []declcfg.RelatedImage{
+					{Name: "redis", Image: shared},
+				},
+			},
+			{
+				Name:    "quay-operator.v3.11.6",
+				Package: "quay-operator",
+				Image:   bundleNew,
+				RelatedImages: []declcfg.RelatedImage{
+					{Name: "redis", Image: shared},
+				},
+			},
+		},
+	}
+	deleteRelated := map[string][]v2alpha1.RelatedImage{
+		"quay-operator.v3.11.5": {
+			{Name: "bundle", Image: bundleOld, Type: v2alpha1.TypeOperatorBundle},
+			{Name: "redis", Image: shared, Type: v2alpha1.TypeOperatorRelatedImage},
+		},
+	}
+	siblingPresent := func(b declcfg.Bundle) bool {
+		return b.Name != "quay-operator.v3.11.6"
+	}
+
+	got := excludeRelatedImagesSharedWithSiblingBundles(log, deleteRelated, deleteDC, packageWideDC, nil, siblingPresent)
+	refs := relatedImageRefs(got["quay-operator.v3.11.5"])
+	assert.Contains(t, refs, bundleOld)
+	assert.Contains(t, refs, shared)
 }
 
 func TestHasVersionConstraints(t *testing.T) {
@@ -197,11 +335,8 @@ func keptImageSet(got map[string][]v2alpha1.RelatedImage) map[string]struct{} {
 
 func assertSharedRelatedDropped(t *testing.T, got, deleteRelated map[string][]v2alpha1.RelatedImage, deleteDC, packageDC *declcfg.DeclarativeConfig) {
 	t.Helper()
-	deleteBundleImages := make(map[string]struct{}, len(deleteDC.Bundles))
-	for _, b := range deleteDC.Bundles {
-		deleteBundleImages[b.Image] = struct{}{}
-	}
-	siblingImages := siblingKeepImages(packageDC, deleteBundleIdentityNames(deleteDC))
+	_, deleteBundleImages := deleteBundleIdentity(deleteDC)
+	siblingImages := siblingKeepImages(packageDC, deleteBundleIdentityNames(deleteDC), nil)
 	require.NotEmpty(t, siblingImages)
 
 	kept := keptImageSet(got)
@@ -213,7 +348,7 @@ func assertSharedRelatedDropped(t *testing.T, got, deleteRelated map[string][]v2
 				assert.Contains(t, kept, img.Image, "bundle image for the deleted version must stay in the delete set")
 				continue
 			}
-			if _, shared := siblingImages[img.Image]; shared {
+			if _, shared := siblingImages[destIdentity(img.Image)]; shared {
 				droppedShared++
 				assert.NotContains(t, kept, img.Image, "related image still referenced by a sibling version must not be deleted: %s", img.Image)
 			}
@@ -279,7 +414,7 @@ func TestExcludeSharedRelatedForDelete_Integration(t *testing.T) {
 		},
 	}
 	got, err := collector.excludeSharedRelatedForDelete(
-		t.Context(), deleteFilter, imgSpec, "testdigest", deleteDC, deleteRelated, copyMap,
+		t.Context(), deleteFilter, imgSpec, "testdigest", deleteDC, deleteRelated, nil,
 	)
 	require.NoError(t, err)
 

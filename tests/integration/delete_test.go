@@ -9,6 +9,8 @@ import (
 	. "github.com/onsi/gomega"
 	"gopkg.in/yaml.v3"
 	"k8s.io/apimachinery/pkg/util/sets"
+
+	"github.com/openshift/oc-mirror/tests/integration/pkg/registry"
 )
 
 var _ = Describe("delete", func() {
@@ -137,9 +139,32 @@ var _ = Describe("delete", func() {
 					"shared related image %s is still referenced by foo 0.3.x and must not be deleted", sharedRelatedDigest)
 			}
 			Expect(sawDeletedBundle).To(BeTrue(), "expected foo-bundle-v0.2.0 in the delete list")
+
+			By("executing delete phase two and leaving the sibling-shared related image on the destination")
+			result, err = runner.DeletePhaseTwo(ctx, deleteYaml, testRegistry.Endpoint(),
+				"--dest-tls-verify=false")
+			expectOcMirrorCommandSuccess(result, err)
+			expectSharedRelatedImagePresent(*testRegistry, sharedRelatedDigest)
 		})
 	})
 })
+
+func expectSharedRelatedImagePresent(reg registry.Registry, digest string) {
+	tag := strings.ReplaceAll(digest, ":", "-")
+	repos, err := reg.ListRepositories(ctx)
+	Expect(err).NotTo(HaveOccurred())
+	found := false
+	for _, repo := range repos {
+		tags, err := reg.ListTags(ctx, repo)
+		Expect(err).NotTo(HaveOccurred())
+		for _, t := range tags {
+			if t == tag || strings.Contains(t, strings.TrimPrefix(digest, "sha256:")) {
+				found = true
+			}
+		}
+	}
+	Expect(found).To(BeTrue(), "shared related image %s must remain on the destination after deleting the older sibling", digest)
+}
 
 type deleteImageListItem struct {
 	ImageName      string `yaml:"imageName"`

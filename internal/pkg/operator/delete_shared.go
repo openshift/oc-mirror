@@ -4,6 +4,7 @@ import (
 	"github.com/operator-framework/operator-registry/alpha/declcfg"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 )
 
@@ -35,22 +36,69 @@ func hasVersionConstraints(op v2alpha1.Operator) bool {
 	return false
 }
 
+// destIdentity is the mirrored destination repository plus digest (or tag).
+// Source registries that share a path and digest map to the same destination.
+func destIdentity(ref string) string {
+	spec, err := image.ParseRef(ref)
+	if err != nil {
+		return ref
+	}
+	if spec.PathComponent == "" {
+		return ref
+	}
+	if spec.Digest != "" {
+		algo := spec.Algorithm
+		if algo == "" {
+			algo = "sha256"
+		}
+		return spec.PathComponent + "@" + algo + ":" + spec.Digest
+	}
+	if spec.Tag != "" {
+		return spec.PathComponent + ":" + spec.Tag
+	}
+	return spec.PathComponent
+}
+
+func destIdentitySet(refs ...string) map[string]struct{} {
+	out := make(map[string]struct{}, len(refs))
+	for _, ref := range refs {
+		if ref == "" {
+			continue
+		}
+		out[destIdentity(ref)] = struct{}{}
+	}
+	return out
+}
+
+func mergeBundleNames(sets ...map[string]struct{}) map[string]struct{} {
+	out := make(map[string]struct{})
+	for _, set := range sets {
+		for name := range set {
+			out[name] = struct{}{}
+		}
+	}
+	return out
+}
+
 // excludeRelatedImagesSharedWithSiblingBundles drops related images from the
 // delete set when another (non-deleted) bundle of the same package still
-// references the same image digest (OCPBUGS-61236). Bundle images for the
+// references the same destination image (OCPBUGS-61236). Bundle images for the
 // versions being deleted are always kept in the delete set.
 func excludeRelatedImagesSharedWithSiblingBundles(
 	log clog.PluggableLoggerInterface,
 	deleteRelated map[string][]v2alpha1.RelatedImage,
 	deleteDC *declcfg.DeclarativeConfig,
 	packageWideDC *declcfg.DeclarativeConfig,
+	unionDeleteBundles map[string]struct{},
+	siblingPresent func(bundle declcfg.Bundle) bool,
 ) map[string][]v2alpha1.RelatedImage {
 	if deleteDC == nil || packageWideDC == nil || len(deleteRelated) == 0 {
 		return deleteRelated
 	}
 
 	deleteBundles, deleteBundleImages := deleteBundleIdentity(deleteDC)
-	keepImages := siblingKeepImages(packageWideDC, deleteBundles)
+	deleteBundles = mergeBundleNames(deleteBundles, unionDeleteBundles)
+	keepImages := siblingKeepImages(packageWideDC, deleteBundles, siblingPresent)
 	if len(keepImages) == 0 {
 		return deleteRelated
 	}
@@ -62,19 +110,30 @@ func deleteBundleIdentity(dc *declcfg.DeclarativeConfig) (names, images map[stri
 	images = make(map[string]struct{}, len(dc.Bundles))
 	for _, b := range dc.Bundles {
 		names[b.Name] = struct{}{}
-		images[b.Image] = struct{}{}
+		if id := destIdentity(b.Image); id != "" {
+			images[id] = struct{}{}
+		}
 	}
 	return names, images
 }
 
-func siblingKeepImages(packageWideDC *declcfg.DeclarativeConfig, deleteBundles map[string]struct{}) map[string]struct{} {
+func siblingKeepImages(
+	packageWideDC *declcfg.DeclarativeConfig,
+	deleteBundles map[string]struct{},
+	siblingPresent func(bundle declcfg.Bundle) bool,
+) map[string]struct{} {
 	keep := make(map[string]struct{})
 	for _, b := range packageWideDC.Bundles {
 		if _, deleting := deleteBundles[b.Name]; deleting {
 			continue
 		}
+		if siblingPresent != nil && !siblingPresent(b) {
+			continue
+		}
 		for _, ri := range b.RelatedImages {
-			keep[ri.Image] = struct{}{}
+			if id := destIdentity(ri.Image); id != "" {
+				keep[id] = struct{}{}
+			}
 		}
 	}
 	return keep
@@ -84,7 +143,7 @@ func mustKeepInDeleteSet(img v2alpha1.RelatedImage, deleteBundleImages map[strin
 	if img.Type == v2alpha1.TypeOperatorBundle || img.Image == "" {
 		return true
 	}
-	_, isBundleImg := deleteBundleImages[img.Image]
+	_, isBundleImg := deleteBundleImages[destIdentity(img.Image)]
 	return isBundleImg
 }
 
@@ -102,7 +161,7 @@ func filterSharedRelatedImages(
 				kept = append(kept, img)
 				continue
 			}
-			if _, shared := keepImages[img.Image]; shared {
+			if _, shared := keepImages[destIdentity(img.Image)]; shared {
 				skipped++
 				log.Info("skipping delete of related image %s (still referenced by another operator version)", img.Image)
 				continue
