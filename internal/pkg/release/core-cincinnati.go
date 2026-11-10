@@ -194,18 +194,22 @@ func CalculateUpgrades(ctx context.Context, cs CincinnatiSchema, sourceChannel, 
 // calculate will calculate Cincinnati upgrades between channels by finding the latest versions in the source channels
 // and incrementing the minor version until the target channel is reached.
 func calculate(ctx context.Context, cs CincinnatiSchema, sourceChannel, targetChannel string, startVer, reqVer semver.Version) (requested cincinnati.Update, upgrades []cincinnati.Update, err error) {
-	source, target, _, err := getSemverFromChannels(sourceChannel, targetChannel)
+	source, target, sourcePrefix, err := getSemverFromChannels(sourceChannel, targetChannel)
 	if err != nil {
 		return requested, upgrades, err
 	}
-	// Keep the configured target prefix for the whole walk so an EUS path that
-	// hops through stable on odd minors does not lose eus on later even minors.
-	// fast/candidate/stable keep their own prefix on every intermediate minor.
+	// Non-EUS mixed-family walks keep the source prefix (fast-4.12 → stable-4.14
+	// still uses fast-4.13). EUS walks use the eus prefix so odd minors rewrite
+	// to stable and later even minors stay on eus.
 	targetIdx := strings.LastIndex(targetChannel, "-")
 	if targetIdx == -1 {
 		return requested, upgrades, fmt.Errorf("invalid channel name %s", targetChannel)
 	}
-	prefix := targetChannel[:targetIdx]
+	targetPrefix := targetChannel[:targetIdx]
+	prefix := sourcePrefix
+	if sourcePrefix == "eus" || targetPrefix == "eus" {
+		prefix = "eus"
+	}
 	// We immediately bump the source channel since current source channel upgrades have
 	// already been calculated
 	source.Minor++

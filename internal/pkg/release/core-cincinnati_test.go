@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
+	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/cincinnati"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 )
@@ -766,6 +767,140 @@ func TestCalculateUpgrades_FastKeepsPrefixOnOddMinors(t *testing.T) {
 	require.Contains(t, seen, "fast-4.14")
 	_, hasStable := seen["stable-4.13"]
 	require.False(t, hasStable)
+}
+
+func TestCalculateUpgrades_MixedFamilyKeepsSourcePrefix(t *testing.T) {
+	arch := "test-arch"
+	var mu sync.Mutex
+	seen := map[string]struct{}{}
+
+	handler := func(w http.ResponseWriter, r *http.Request) {
+		ch := r.URL.Query().Get("channel")
+		mu.Lock()
+		seen[ch] = struct{}{}
+		mu.Unlock()
+		if ch == "stable-4.13" {
+			t.Errorf("fast-4.12 → stable-4.14 must keep fast-4.13, not rewrite to stable-4.13")
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		graphs := map[string]string{
+			"fast-4.12": `{
+				"nodes": [
+					{"version": "4.12.1", "payload": "quay.io/openshift-release-dev/ocp-release:4.12.1"},
+					{"version": "4.12.2", "payload": "quay.io/openshift-release-dev/ocp-release:4.12.2"}
+				],
+				"edges": [[0,1]]
+			}`,
+			"fast-4.13": `{
+				"nodes": [
+					{"version": "4.12.2", "payload": "quay.io/openshift-release-dev/ocp-release:4.12.2"},
+					{"version": "4.13.1", "payload": "quay.io/openshift-release-dev/ocp-release:4.13.1"}
+				],
+				"edges": [[0,1]]
+			}`,
+			"stable-4.14": `{
+				"nodes": [
+					{"version": "4.13.1", "payload": "quay.io/openshift-release-dev/ocp-release:4.13.1"},
+					{"version": "4.14.3", "payload": "quay.io/openshift-release-dev/ocp-release:4.14.3"}
+				],
+				"edges": [[0,1]]
+			}`,
+		}
+		body, ok := graphs[ch]
+		if !ok {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, err := w.Write([]byte(body))
+		require.NoError(t, err)
+	}
+
+	ts := httptest.NewServer(http.HandlerFunc(handler))
+	t.Cleanup(ts.Close)
+	endpoint, err := url.Parse(ts.URL)
+	require.NoError(t, err)
+
+	cs := CincinnatiSchema{
+		Log:              clog.New("trace"),
+		Client:           &mockClient{url: endpoint},
+		CincinnatiParams: CincinnatiParams{Arch: arch, GraphDataDir: t.TempDir()},
+	}
+	_, _, updates, err := CalculateUpgrades(
+		context.Background(), cs,
+		"fast-4.12", "stable-4.14",
+		semver.MustParse("4.12.1"), semver.MustParse("4.14.3"),
+	)
+	require.NoError(t, err)
+
+	got := make([]string, 0, len(updates))
+	for _, u := range updates {
+		got = append(got, u.Version.String())
+	}
+	require.Equal(t, []string{"4.12.1", "4.12.2", "4.13.1", "4.14.3"}, got)
+
+	mu.Lock()
+	defer mu.Unlock()
+	require.Contains(t, seen, "fast-4.12")
+	require.Contains(t, seen, "fast-4.13")
+	require.Contains(t, seen, "stable-4.14")
+	_, hasStable413 := seen["stable-4.13"]
+	require.False(t, hasStable413)
+}
+
+func TestGetChannelDownloads_ShortestPathQueriesSubscribedChannel(t *testing.T) {
+	arch := "test-arch"
+	var mu sync.Mutex
+	seen := map[string]struct{}{}
+
+	handler := func(w http.ResponseWriter, r *http.Request) {
+		ch := r.URL.Query().Get("channel")
+		mu.Lock()
+		seen[ch] = struct{}{}
+		mu.Unlock()
+		if ch != "eus-4.14" {
+			t.Errorf("shortestPath must query only the subscribed channel, got %s", ch)
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		body := `{
+			"nodes": [
+				{"version": "4.12.40", "payload": "quay.io/openshift-release-dev/ocp-release:4.12.40"},
+				{"version": "4.12.50", "payload": "quay.io/openshift-release-dev/ocp-release:4.12.50"},
+				{"version": "4.13.5", "payload": "quay.io/openshift-release-dev/ocp-release:4.13.5"},
+				{"version": "4.14.1", "payload": "quay.io/openshift-release-dev/ocp-release:4.14.1"},
+				{"version": "4.14.10", "payload": "quay.io/openshift-release-dev/ocp-release:4.14.10"}
+			],
+			"edges": [[0,1],[1,2],[2,3],[3,4]]
+		}`
+		w.Header().Set("Content-Type", "application/json")
+		_, err := w.Write([]byte(body))
+		require.NoError(t, err)
+	}
+
+	ts := httptest.NewServer(http.HandlerFunc(handler))
+	t.Cleanup(ts.Close)
+	endpoint, err := url.Parse(ts.URL)
+	require.NoError(t, err)
+
+	cs := CincinnatiSchema{
+		Log:              clog.New("trace"),
+		Client:           &mockClient{url: endpoint},
+		CincinnatiParams: CincinnatiParams{Arch: arch, GraphDataDir: t.TempDir()},
+	}
+	images, err := getChannelDownloads(context.Background(), cs, nil, v2alpha1.ReleaseChannel{
+		Name:         "eus-4.14",
+		MinVersion:   "4.12.40",
+		MaxVersion:   "4.14.10",
+		ShortestPath: true,
+	})
+	require.NoError(t, err)
+	require.NotEmpty(t, images)
+
+	mu.Lock()
+	defer mu.Unlock()
+	require.Equal(t, map[string]struct{}{"eus-4.14": {}}, seen)
 }
 
 func TestHandleBlockedEdges(t *testing.T) {
