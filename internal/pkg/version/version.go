@@ -14,12 +14,15 @@ import (
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 )
 
+// releaseVersion is shared by all version output until release versioning is redesigned.
+const releaseVersion = "v2.0.1"
+
 var (
 	// commitFromGit is a constant representing the source version that
 	// generated this build. It should be set during build via -ldflags.
 	commitFromGit string
-	// versionFromGit is a constant representing the version tag that
-	// generated this build. It should be set during build via -ldflags.
+	// versionFromGit is retained for compatibility with existing build linker flags.
+	// Version output temporarily uses releaseVersion instead.
 	versionFromGit = "v0.0.0-unknown"
 	// major version
 	majorFromGit string
@@ -139,7 +142,7 @@ func Get() Info {
 		Major:                majorFromGit,
 		Minor:                minorFromGit,
 		GitCommit:            commitFromGit,
-		GitVersion:           versionFromGit,
+		GitVersion:           releaseVersion,
 		GitTreeState:         gitTreeState,
 		BuildDate:            buildDate,
 		GoVersion:            runtime.Version(),
