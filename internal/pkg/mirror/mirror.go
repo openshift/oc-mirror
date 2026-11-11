@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"strings"
@@ -262,6 +263,10 @@ func IsErrorRetryable(err error) bool {
 		// Bare 429 sentinel from httpResponseToError; retryable by neither this
 		// switch nor go.podman.io/common.
 		return true
+	case errors.Is(err, io.ErrUnexpectedEOF):
+		return true
+	case isTLSAlertError(err):
+		return true
 	case errors.As(err, &httpError):
 		// 429: registries under sustained load (notably AWS ECR) rate-limit rather than
 		// returning 5xx. Upstream only retries this shape when it parses as errcode.Error.
@@ -279,6 +284,41 @@ func IsErrorRetryable(err error) bool {
 		// Delegate the remaining checks to containers/common
 		return retry.IsErrorRetryable(err)
 	}
+}
+
+// isTLSAlertError reports whether err is a TLS alert - either one sent by
+// the remote peer or one we sent ourselves.
+//
+// crypto/tls reports these by wrapping them in a net.OpError with Op
+// "remote error" or "local error" respectively. That is the only part of
+// the alert visible here: the underlying alert code enum is unexported for
+// ordinary (non-QUIC) connections, so unlike tls.AlertError (which
+// crypto/tls only ever constructs on the QUIC code path), it cannot be
+// recovered with errors.As. That also means we cannot distinguish a
+// transient server-side alert from a systematic one (bad cert, version
+// mismatch, etc.) by code. In practice, systematic TLS failures are likely
+// to occur on the very first connection, before we get to the point of
+// retrying blob copies, so any alert we see here is almost certainly
+// transient.
+//
+// It is deliberately not restricted to "remote error": genuinely permanent
+// failures such as certificate rejection or cipher/version mismatch don't
+// go through this path at all (crypto/tls returns a
+// *tls.CertificateVerificationError or a plain error for those, discarding
+// the net.OpError that the alert-sending call produces as a side effect).
+// The "local error" alerts that do reach here are overwhelmingly us
+// detecting that the peer sent garbled or malformed data (e.g. a record
+// that fails to decrypt), which is just as likely to be transient CDN
+// flakiness as a "remote error" alert is.
+func isTLSAlertError(err error) bool {
+	var opErr *net.OpError
+	for errors.As(err, &opErr) {
+		if opErr.Op == "remote error" || opErr.Op == "local error" {
+			return true
+		}
+		err = opErr.Err
+	}
+	return false
 }
 
 // check exists - checks if image exists
