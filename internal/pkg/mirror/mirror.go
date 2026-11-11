@@ -324,7 +324,7 @@ func (o *Mirror) Check(ctx context.Context, image string, opts *CopyOptions, asC
 	if isConfirmedAbsence(err) {
 		return false, nil
 	}
-	return false, err
+	return false, fmt.Errorf("checking image %s: %w", image, err)
 }
 
 // isConfirmedAbsence reports NAME_UNKNOWN / MANIFEST_UNKNOWN from the registry.
