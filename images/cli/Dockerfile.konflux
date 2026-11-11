@@ -1,6 +1,15 @@
 # Dockerfile for the Konflux CDN release pipeline: cross-compiles oc-mirror binaries
 # for all supported architectures on RHEL 8/9, packages them as compressed tarballs
 # in /releases/ for push-artifacts-to-cdn.
+#
+# The binaries (v2 and the embedded v1) are built with CGO_ENABLED=1 and
+# GOEXPERIMENT=strictfipsruntime so they use the Go toolchain's OpenSSL backend.
+# images/cli/konflux-cross.sh prepares the target C toolchains from RPMs prefetched to
+# /cachi2/output/deps/generic. They are listed in the ART image metadata as
+# konflux.cachi2.artifact_lockfile resources, and each one is checked against the
+# artifacts.lock.yaml that ART generates in the source root. After the build the script
+# verifies every binary. There is no fallback to CGO_ENABLED=0: missing or unexpected
+# inputs, or binaries without the FIPS build settings, fail the build.
 
 # Stage 1: Cross-compile RHEL 8 binaries for all architectures
 FROM registry.access.redhat.com/ubi8/go-toolset:1.26 AS builder_rhel8
@@ -8,7 +17,9 @@ USER root
 WORKDIR /go/src/github.com/openshift/oc-mirror
 COPY . .
 RUN git config --global --add safe.directory /go/src/github.com/openshift/oc-mirror && \
-    CGO_ENABLED=0 make cross-build && \
+    . "$(images/cli/konflux-cross.sh prepare el8)" && \
+    make cross-build && \
+    images/cli/konflux-cross.sh verify el8 && \
     mkdir -p /output && \
     for arch in amd64 arm64 ppc64le s390x; do \
       tar -czf /output/oc-mirror-rhel8-linux-${arch}.tar.gz -C bin/linux-${arch} oc-mirror || exit 1; \
@@ -20,7 +31,9 @@ USER root
 WORKDIR /go/src/github.com/openshift/oc-mirror
 COPY . .
 RUN git config --global --add safe.directory /go/src/github.com/openshift/oc-mirror && \
-    CGO_ENABLED=0 make cross-build && \
+    . "$(images/cli/konflux-cross.sh prepare el9)" && \
+    make cross-build && \
+    images/cli/konflux-cross.sh verify el9 && \
     mkdir -p /output && \
     for arch in amd64 arm64 ppc64le s390x; do \
       tar -czf /output/oc-mirror-rhel9-linux-${arch}.tar.gz -C bin/linux-${arch} oc-mirror || exit 1; \
