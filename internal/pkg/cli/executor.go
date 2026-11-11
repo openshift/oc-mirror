@@ -617,8 +617,11 @@ func (o *ExecutorSchema) Complete(args []string) error {
 	o.Batch = batch.New(batch.ChannelConcurrentWorker, o.Log, o.LogsDir, o.Mirror, o.Opts.ParallelImages, o.MirrorStartTimeStamp, operator.NewOperandResolver(o.Log, o.Opts, o.Mirror, o.Manifest))
 
 	if o.Opts.IsMirrorToDisk() {
-		if err := archive.RemovePastArchives(rootDir); err != nil {
-			return fmt.Errorf("unable to delete past archives from %s: %w", rootDir, err)
+		// A dry run must not change the destination (OCPBUGS-140608).
+		if !o.Opts.IsDryRun {
+			if err := archive.RemovePastArchives(rootDir); err != nil {
+				return fmt.Errorf("unable to delete past archives from %s: %w", rootDir, err)
+			}
 		}
 		o.MirrorArchiver, err = archive.NewMirrorArchive(o.Opts, rootDir, o.Opts.Global.ConfigPath, o.Opts.Global.WorkingDir, o.LocalStorageDisk, o.Config.ImageSetConfigurationSpec.ArchiveSize, o.Log)
 		if err != nil {

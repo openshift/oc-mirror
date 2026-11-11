@@ -720,6 +720,34 @@ func TestExecutorComplete(t *testing.T) {
 		err = folder.RemoveFolders("../../pkg/cli/test", "../../pkg/cli/tmp", "../../pkg/cli/working-dir")
 		assert.NoError(t, err)
 	})
+
+	t.Run("Testing Executor : complete m2d with --dry-run keeps past archives", func(t *testing.T) {
+		dest := t.TempDir()
+		pastArchive := filepath.Join(dest, "mirror_000001.tar")
+		assert.NoError(t, os.WriteFile(pastArchive, []byte("tar"), 0o600))
+		ex.Opts.Global.From = ""
+		ex.Opts.Global.WorkingDir = ""
+		ex.Opts.Global.SinceString = ""
+		ex.Opts.IsDryRun = true
+		defer func() { ex.Opts.IsDryRun = false }()
+
+		assert.NoError(t, ex.Complete([]string{consts.FileProtocol + dest}))
+		content, err := os.ReadFile(pastArchive)
+		assert.NoError(t, err, "a dry run must not delete the archives of a previous run")
+		assert.Equal(t, []byte("tar"), content)
+	})
+
+	t.Run("Testing Executor : complete m2d without --dry-run removes past archives", func(t *testing.T) {
+		dest := t.TempDir()
+		pastArchive := filepath.Join(dest, "mirror_000001.tar")
+		assert.NoError(t, os.WriteFile(pastArchive, []byte("tar"), 0o600))
+		ex.Opts.Global.From = ""
+		ex.Opts.Global.WorkingDir = ""
+		ex.Opts.Global.SinceString = ""
+
+		assert.NoError(t, ex.Complete([]string{consts.FileProtocol + dest}))
+		assert.NoFileExists(t, pastArchive)
+	})
 }
 
 // TestExecutorLocalStorage
