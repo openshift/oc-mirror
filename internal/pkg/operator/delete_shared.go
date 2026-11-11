@@ -59,17 +59,6 @@ func destIdentity(ref string) string {
 	return spec.PathComponent
 }
 
-func destIdentitySet(refs ...string) map[string]struct{} {
-	out := make(map[string]struct{}, len(refs))
-	for _, ref := range refs {
-		if ref == "" {
-			continue
-		}
-		out[destIdentity(ref)] = struct{}{}
-	}
-	return out
-}
-
 func mergeBundleNames(sets ...map[string]struct{}) map[string]struct{} {
 	out := make(map[string]struct{})
 	for _, set := range sets {
