@@ -28,6 +28,7 @@ import (
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/skipped"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/version"
 )
 
 func TestExcludeSkippedImagesRestoresAvailableOperandPlatforms(t *testing.T) {
@@ -471,6 +472,23 @@ func TestExecutorNewMirrorCommand(t *testing.T) {
 		log := clog.New("trace")
 		NewMirrorCmd(log)
 	})
+}
+
+func TestExecutorVersionFlag(t *testing.T) {
+	for _, args := range [][]string{{"--version"}, {"--version", "--v2"}} {
+		t.Run(strings.Join(args, " "), func(t *testing.T) {
+			cmd := NewMirrorCmd(clog.New("info"))
+			require.Equal(t, version.Get().GitVersion, cmd.Version)
+
+			var output bytes.Buffer
+			cmd.SetOut(&output)
+			cmd.SetErr(&output)
+			cmd.SetArgs(args)
+
+			require.NoError(t, cmd.Execute())
+			require.Equal(t, fmt.Sprintf("%s version %s\n", cmd.Name(), version.Get().GitVersion), output.String())
+		})
+	}
 }
 
 // TestExecutorValidate

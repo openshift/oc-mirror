@@ -17,6 +17,10 @@ func TestNewVersionCommand(t *testing.T) {
 	require.NotNil(t, cmd)
 }
 
+func TestReleaseVersion(t *testing.T) {
+	require.Equal(t, "v2.0.1", Get().GitVersion)
+}
+
 func TestVersionValidate(t *testing.T) {
 
 	type spec struct {
