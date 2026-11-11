@@ -8,6 +8,32 @@ import (
 	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
 )
 
+func TestImage_SetTag(t *testing.T) {
+	const digest = "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+	tests := []struct {
+		name, reference, tag, expectedRef string
+	}{
+		{name: "tag only", reference: "localhost:55000/name:tag", tag: "newtag", expectedRef: "localhost:55000/name:newtag"},
+		{name: "tag only with transport", reference: consts.DockerProtocol + "localhost:55000/name:tag", tag: "newtag", expectedRef: "localhost:55000/name:newtag"},
+		{name: "tag only with tag in name", reference: "localhost:55000/name:name", tag: "newtag", expectedRef: "localhost:55000/name:newtag"},
+		{name: "tag and digest", reference: "localhost:55000/name:tag@" + digest, tag: "newtag", expectedRef: "localhost:55000/name:newtag@" + digest},
+		{name: "digest only", reference: "localhost:55000/name@" + digest, tag: "newtag", expectedRef: "localhost:55000/name:newtag@" + digest},
+		{name: "remove tag", reference: "localhost:55000/name:tag@" + digest, tag: "", expectedRef: "localhost:55000/name@" + digest},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			original, err := ParseRef(test.reference)
+			require.NoError(t, err)
+			updated := original.SetTag(test.tag)
+			require.Equal(t, test.expectedRef, updated.Reference)
+			require.Equal(t, original.Transport+test.expectedRef, updated.ReferenceWithTransport)
+			require.Equal(t, test.tag, updated.Tag)
+			require.Equal(t, original.Name, updated.Name)
+			require.Equal(t, original.Digest, updated.Digest)
+		})
+	}
+}
+
 func TestImage_IsImageByDigest(t *testing.T) {
 	imgRefs := []string{
 		consts.DockerProtocol + "localhost:5000/ubi8/ubi:latest",
