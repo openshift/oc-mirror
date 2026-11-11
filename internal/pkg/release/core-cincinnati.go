@@ -16,7 +16,10 @@ import (
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 )
 
-const ChannelInfo = "channel %q: %v"
+const (
+	ChannelInfo      = "channel %q: %v"
+	eusChannelPrefix = "eus"
+)
 
 // Error is returned when are unable to get updates.
 type Error struct {
@@ -207,8 +210,8 @@ func calculate(ctx context.Context, cs CincinnatiSchema, sourceChannel, targetCh
 	}
 	targetPrefix := targetChannel[:targetIdx]
 	prefix := sourcePrefix
-	if sourcePrefix == "eus" || targetPrefix == "eus" {
-		prefix = "eus"
+	if sourcePrefix == eusChannelPrefix || targetPrefix == eusChannelPrefix {
+		prefix = eusChannelPrefix
 	}
 	// We immediately bump the source channel since current source channel upgrades have
 	// already been calculated
@@ -311,7 +314,7 @@ func upgradeChannelName(prefix string, ver semver.Version) string {
 // intermediates use stable. All other prefixes (stable, fast, candidate) are
 // kept as-is for every minor.
 func upgradeChannelPrefix(prefix string, minor uint64) string {
-	if prefix == "eus" && minor%2 == 1 {
+	if prefix == eusChannelPrefix && minor%2 == 1 {
 		return "stable"
 	}
 	return prefix
