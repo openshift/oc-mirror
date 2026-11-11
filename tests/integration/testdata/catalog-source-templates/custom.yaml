@@ -1,0 +1,17 @@
+apiVersion: operators.coreos.com/v1alpha1
+kind: CatalogSource
+metadata:
+  name: template-placeholder
+  namespace: template-placeholder
+  labels:
+    integration.oc-mirror/custom: preserved
+  annotations:
+    integration.oc-mirror/note: preserved
+spec:
+  image: template.invalid/catalog:placeholder
+  sourceType: grpc
+  displayName: Integration Catalog
+  publisher: oc-mirror tests
+  updateStrategy:
+    registryPoll:
+      interval: 30m

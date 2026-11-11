@@ -1,0 +1,11 @@
+# Package-level bounds exclude baz's head (1.1.0). Unlike foo, baz's upgrade
+# graph does not require an out-of-range head to connect the selected versions.
+kind: ImageSetConfiguration
+apiVersion: mirror.openshift.io/v2alpha1
+mirror:
+  operators:
+    - catalog: quay.io/oc-mirror/oc-mirror-dev:test-catalog-20261103-2e526488d
+      packages:
+        - name: baz
+          minVersion: '1.0.0'
+          maxVersion: '1.0.1'
