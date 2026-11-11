@@ -260,7 +260,7 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 	cmd.PersistentFlags().Uint16VarP(&opts.Global.Port, "port", "p", 55000, "HTTP port used by oc-mirror's local storage instance")
 	cmd.PersistentFlags().BoolVar(&opts.Global.V2, "v2", false, "Redirect the flow to oc-mirror v2")
 	cmd.PersistentFlags().UintVar(&opts.ParallelLayerImages, "parallel-layers", maxParallelLayerDownloads, "Indicates the number of image layers mirrored in parallel")
-	cmd.PersistentFlags().UintVar(&opts.ParallelImages, "parallel-images", maxParallelImageDownloads, "Indicates the number of images mirrored in parallel")
+	cmd.PersistentFlags().UintVar(&opts.ParallelImages, "parallel-images", maxParallelImageDownloads, "Indicates the number of images mirrored in parallel (1-128)")
 	cmd.PersistentFlags().BoolVar(&opts.Global.CpuProf, "cpu-prof", false, "Enable CPU profiling")
 	cmd.PersistentFlags().BoolVar(&opts.Global.MemProf, "mem-prof", false, "Enable Memory profiling")
 	cmd.PersistentFlags().StringVar(&opts.Global.RegistriesDirPath, "registries.d", "", "use registry configuration files in `DIR` (e.g. for container signature storage)")
@@ -421,9 +421,10 @@ func (o *ExecutorSchema) Validate(dest []string) error { //nolint:cyclop // pre-
 	if o.Opts.IsDryRunManifestLists {
 		o.Opts.IsDryRun = true
 	}
-	// OCPBUGS-58467
-	if o.Opts.ParallelImages > 10 || o.Opts.ParallelImages < 1 {
-		return fmt.Errorf("the flag parallel-images must be between the range 1 to 10")
+	// OCPBUGS-58467. The lower bound is load-bearing: 0 sizes the batch
+	// worker's semaphore at zero and the copy hangs forever without an error.
+	if o.Opts.ParallelImages > parallelImagesCeiling || o.Opts.ParallelImages < 1 {
+		return fmt.Errorf("the flag parallel-images must be between the range 1 to %d", parallelImagesCeiling)
 	}
 	if o.Opts.ParallelLayerImages > 10 || o.Opts.ParallelLayerImages < 1 {
 		return fmt.Errorf("the flag parallel-layers must be between the range 1 to 10")
