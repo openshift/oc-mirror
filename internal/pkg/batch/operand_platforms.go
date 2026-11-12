@@ -15,7 +15,7 @@ import (
 // runs replay the archived decisions instead of reading source bundles.
 func (o *ChannelConcurrentBatch) retryOperandCopy(ctx context.Context, img v2alpha1.CopyImageSchema, schema v2alpha1.CollectorSchema, opts mirror.CopyOptions, copyErr error) ([]v2alpha1.InstancePlatformFilter, bool, error) {
 	bundles := schema.CopyImageSchemaMap.BundlesByImage[img.Origin]
-	if img.Type != v2alpha1.TypeOperatorRelatedImage || o.OperandResolver == nil || len(bundles) == 0 || opts.IsDiskToMirror() || opts.IsDeleteMode() {
+	if img.Type != v2alpha1.TypeOperatorRelatedImage || isBundleImage(img.Origin, bundles) || o.OperandResolver == nil || len(bundles) == 0 || opts.IsDiskToMirror() || opts.IsDeleteMode() {
 		return nil, false, copyErr
 	}
 	operand, err := o.OperandResolver.IsOperand(ctx, img.Origin, bundles)
@@ -35,6 +35,22 @@ func (o *ChannelConcurrentBatch) retryOperandCopy(ctx context.Context, img v2alp
 	}
 	o.Log.Warn("Skipping platform(s) %s for operand %s: %s", strings.Join(missing, ", "), img.Origin, noMatchingPlatformReason)
 	return available, len(available) == 0, nil
+}
+
+// isBundleImage reports whether an image is the bundle image of one of the bundles
+// that reference it; bundles is keyed by bundle image, as BundlesByImage records it.
+// An image that is one bundle's bundle image and another bundle's related image is
+// copied as a related image, so that it is not skipped with its own bundle, but it
+// is still required by its own bundle and is never an optional operand.
+func isBundleImage(origin string, bundles map[string]string) bool {
+	if _, found := bundles[origin]; found {
+		return true
+	}
+	if _, ref, found := strings.Cut(origin, "://"); found {
+		_, found = bundles[ref]
+		return found
+	}
+	return false
 }
 
 // copyAvailableOperandPlatforms handles a failed copy of a proven operand.

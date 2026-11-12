@@ -127,9 +127,23 @@ func (o OperatorCollector) catalogDigest(ctx context.Context, catalog v2alpha1.O
 	return o.Manifest.ImageDigest(ctx, sourceCtx, imgSpec.ReferenceWithTransport)
 }
 
+// copyTypeForRepeatedImage returns the type of the copy task kept for an image that is
+// requested more than once. An image that is a bundle image for one bundle and a related
+// image for another is copied as a related image: the batch worker skips bundle images
+// whose related images failed to copy, and that must not drop an image another bundle
+// depends on. Any other combination keeps the type of the copy task already selected.
+// The type keeps the image from being skipped with its own bundle; the batch worker still
+// recognizes it as a bundle image from BundlesByImage and never handles it as an optional operand.
+func copyTypeForRepeatedImage(selected, requested v2alpha1.ImageType) v2alpha1.ImageType {
+	if selected == v2alpha1.TypeOperatorBundle && requested == v2alpha1.TypeOperatorRelatedImage {
+		return v2alpha1.TypeOperatorRelatedImage
+	}
+	return selected
+}
+
 func (o OperatorCollector) prepareD2MCopyBatch(images map[string][]v2alpha1.RelatedImage) ([]v2alpha1.CopyImageSchema, error) {
 	var result []v2alpha1.CopyImageSchema
-	var alreadyIncluded map[string]struct{} = make(map[string]struct{})
+	alreadyIncluded := make(map[string]int) // image -> index of its copy task in result
 	for _, relatedImgs := range images {
 		for _, img := range relatedImgs {
 			var src string
@@ -226,9 +240,11 @@ func (o OperatorCollector) prepareD2MCopyBatch(images map[string][]v2alpha1.Rela
 			if img.Type == v2alpha1.TypeOperatorCatalog && o.Opts.Function == "delete" {
 				o.Log.Debug("delete mode, catalog index %s : SKIPPED", img.Image)
 			} else {
-				if _, found := alreadyIncluded[img.Image]; !found {
+				if idx, found := alreadyIncluded[img.Image]; found {
+					result[idx].Type = copyTypeForRepeatedImage(result[idx].Type, img.Type)
+				} else {
+					alreadyIncluded[img.Image] = len(result)
 					result = append(result, v2alpha1.CopyImageSchema{Origin: imgSpec.ReferenceWithTransport, Source: src, Destination: dest, Type: img.Type, RebuiltTag: img.RebuiltTag})
-					alreadyIncluded[img.Image] = struct{}{}
 				}
 			}
 		}
@@ -238,7 +254,7 @@ func (o OperatorCollector) prepareD2MCopyBatch(images map[string][]v2alpha1.Rela
 
 func (o OperatorCollector) prepareM2DCopyBatch(images map[string][]v2alpha1.RelatedImage) ([]v2alpha1.CopyImageSchema, error) {
 	var result []v2alpha1.CopyImageSchema
-	var alreadyIncluded map[string]struct{} = make(map[string]struct{})
+	alreadyIncluded := make(map[string]int) // image -> index of its copy task in result
 	for _, relatedImgs := range images {
 		for _, img := range relatedImgs {
 			var src string
@@ -287,7 +303,10 @@ func (o OperatorCollector) prepareM2DCopyBatch(images map[string][]v2alpha1.Rela
 			o.Log.Debug("source %s", src)
 			o.Log.Debug("destination %s", dest)
 
-			if _, found := alreadyIncluded[img.Image]; !found {
+			if idx, found := alreadyIncluded[img.Image]; found {
+				result[idx].Type = copyTypeForRepeatedImage(result[idx].Type, img.Type)
+			} else {
+				alreadyIncluded[img.Image] = len(result)
 				result = append(result, v2alpha1.CopyImageSchema{Source: src, Destination: dest, Origin: imgSpec.ReferenceWithTransport, Type: img.Type, RebuiltTag: img.RebuiltTag})
 				// OCPBUGS-37948 + CLID-196
 				// Keep a copy of the catalog image in local cache for delete workflow
@@ -296,7 +315,6 @@ func (o OperatorCollector) prepareM2DCopyBatch(images map[string][]v2alpha1.Rela
 					result = append(result, v2alpha1.CopyImageSchema{Source: src, Destination: cacheDest, Origin: imgSpec.ReferenceWithTransport, Type: img.Type, RebuiltTag: img.RebuiltTag})
 
 				}
-				alreadyIncluded[img.Image] = struct{}{}
 			}
 
 		}
@@ -306,7 +324,7 @@ func (o OperatorCollector) prepareM2DCopyBatch(images map[string][]v2alpha1.Rela
 
 func (o OperatorCollector) dispatchImagesForM2M(images map[string][]v2alpha1.RelatedImage) ([]v2alpha1.CopyImageSchema, error) {
 	var result []v2alpha1.CopyImageSchema
-	var alreadyIncluded map[string]struct{} = make(map[string]struct{})
+	alreadyIncluded := make(map[string]int) // image -> index of its copy task in result
 	for _, relatedImgs := range images {
 		for _, img := range relatedImgs {
 			if img.Image == "" { // OCPBUGS-31622 skipping empty related images
@@ -341,9 +359,11 @@ func (o OperatorCollector) dispatchImagesForM2M(images map[string][]v2alpha1.Rel
 				}
 			}
 
-			if _, found := alreadyIncluded[img.Image]; !found {
+			if idx, found := alreadyIncluded[img.Image]; found {
+				result[idx].Type = copyTypeForRepeatedImage(result[idx].Type, img.Type)
+			} else {
+				alreadyIncluded[img.Image] = len(result)
 				result = append(result, copies...)
-				alreadyIncluded[img.Image] = struct{}{}
 			}
 		}
 	}
