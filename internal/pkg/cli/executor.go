@@ -909,9 +909,6 @@ func (o *ExecutorSchema) RunMirrorToDisk(cmd *cobra.Command, args []string) erro
 	if err != nil {
 		return err
 	}
-	if err := release.ValidatePlatformImageDestinations(o.Config.Mirror.Platform, collectorSchema.AllImages); err != nil {
-		return err
-	}
 
 	regs := mandatoryRegistries(o.Opts)
 

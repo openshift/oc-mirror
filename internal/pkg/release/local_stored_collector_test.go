@@ -91,7 +91,7 @@ func TestReleaseTargetRepoMappings(t *testing.T) {
 					if tc.image.Type == v2alpha1.TypeOCPReleaseContent && target.componentRepo != "" {
 						path = target.componentRepo
 					}
-					require.Equal(t, "docker://localhost:55000/"+path+":"+tc.tag, cached[i].Destination)
+					require.Equal(t, "docker://localhost:55000/"+tc.defaultRepo+":"+tc.tag, cached[i].Destination, "mirrorToDisk must keep the default cache repository")
 					require.Equal(t, cached[i].Destination, restored[i].Source, "diskToMirror must pull the cached reference")
 					require.Equal(t, "docker://mirror.example.com/team/"+path+":"+tc.tag, restored[i].Destination)
 					require.Equal(t, restored[i].Destination, direct[i].Destination)
@@ -116,6 +116,7 @@ func TestReleaseTargetRepoDigestPayload(t *testing.T) {
 	batches, err := o.prepareMonoReleaseBatch(v2alpha1.RelatedImage{Image: "quay.io/release/payload@sha256:" + digest, Type: v2alpha1.TypeOCPRelease})
 	require.NoError(t, err)
 	require.Len(t, batches, 1)
+	require.Equal(t, "docker://localhost:55000/openshift/release-images:"+digest, batches[0].Source)
 	require.Equal(t, "docker://mirror.example.com/openshift4/ocp-release:"+digest, batches[0].Destination)
 }
 

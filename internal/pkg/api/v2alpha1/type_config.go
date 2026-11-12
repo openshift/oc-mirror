@@ -86,11 +86,11 @@ type Delete struct {
 // Platform defines the configuration for OpenShift and OKD platform types.
 type Platform struct {
 	// TargetImageRepo sets the payload repository relative to the destination
-	// (default: openshift/release-images). It also selects the cache path;
-	// use the same value for mirror-to-disk, disk-to-mirror, and deletion.
+	// registry (default: openshift/release-images). It applies to mirror-to-mirror,
+	// disk-to-mirror, and deletion; mirror-to-disk always uses the default repository.
 	TargetImageRepo string `json:"targetImageRepo,omitempty"`
 	// TargetComponentRepo sets the component repository, including kubevirt images
-	// (default: openshift/release), with the same path and cache rules as TargetImageRepo.
+	// (default: openshift/release), with the same rules as TargetImageRepo.
 	// Neither field changes tags or the graph repository.
 	TargetComponentRepo string `json:"targetComponentRepo,omitempty"`
 	// Graph defines whether Cincinnati graph data will

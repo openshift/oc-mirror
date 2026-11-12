@@ -36,6 +36,9 @@ var (
 		{Origin: "quay.io/openshift-release-dev/ocp-release:4.20.8-x86_64", Destination: "docker://mirror.example.com/mirrors/quay.io/openshift-release-dev/ocp-release:4.20.8-x86_64", Type: v2alpha1.TypeOCPRelease},
 		{Origin: "quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:" + strings.Repeat("a", 64), Destination: "docker://mirror.example.com/mirrors/quay.io/openshift-release-dev/ocp-v4.0-art-dev:4.20.8-x86_64-api-server", Type: v2alpha1.TypeOCPReleaseContent},
 	}
+	imageListReleaseSuffixRepository = []v2alpha1.CopyImageSchema{
+		{Origin: "source.example.com/release:4.20.8-x86_64", Destination: "docker://mirror.example.com/team/myrelease:4.20.8-x86_64", Type: v2alpha1.TypeOCPRelease},
+	}
 	imageListRelease = []v2alpha1.CopyImageSchema{
 		{
 			Source:      consts.DockerProtocol + "localhost:55000/openshift/release:4.14.38-x86_64-agent-installer-api-server",
@@ -512,6 +515,15 @@ func TestGenerateIDMS(t *testing.T) {
 				{Source: "quay.io/openshift-release-dev", Mirrors: []confv1.ImageMirror{"mirror.example.com/mirrors/quay.io/openshift-release-dev"}},
 			}},
 		}},
+	}, testCase{
+		caseName: "repository name ending with the source name is not a namespace mirror",
+		imgList:  imageListReleaseSuffixRepository,
+		expectedIdmsList: []confv1.ImageDigestMirrorSet{{
+			ObjectMeta: metav1.ObjectMeta{Name: "idms-release-0"},
+			Spec: confv1.ImageDigestMirrorSetSpec{ImageDigestMirrors: []confv1.ImageDigestMirrors{
+				{Source: "source.example.com/release", Mirrors: []confv1.ImageMirror{"mirror.example.com/team/myrelease"}},
+			}},
+		}},
 	})
 	for _, testCase := range testCases {
 		t.Run(testCase.caseName, func(t *testing.T) {
@@ -650,6 +662,16 @@ func TestGenerateITMS(t *testing.T) {
 			}},
 		})
 	}
+	testCases = append(testCases, testCase{
+		caseName: "repository name ending with the source name is not a namespace mirror",
+		imgList:  imageListReleaseSuffixRepository,
+		expectedItmsList: []confv1.ImageTagMirrorSet{{
+			ObjectMeta: metav1.ObjectMeta{Name: "itms-release-0"},
+			Spec: confv1.ImageTagMirrorSetSpec{ImageTagMirrors: []confv1.ImageTagMirrors{
+				{Source: "source.example.com/release", Mirrors: []confv1.ImageMirror{"mirror.example.com/team/myrelease"}},
+			}},
+		}},
+	})
 	for _, testCase := range testCases {
 		t.Run(testCase.caseName, func(t *testing.T) {
 			tmpDir := t.TempDir()

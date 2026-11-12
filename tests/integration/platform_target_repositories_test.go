@@ -149,27 +149,31 @@ apiVersion: mirror.openshift.io/v2alpha1
 		Entry("archive component override", "", "openshift-release-dev/ocp-v4.0-art-dev", true),
 		Entry("direct separate overrides", "openshift-release-dev/ocp-release", "openshift-release-dev/ocp-v4.0-art-dev", false),
 		Entry("archive separate overrides", "openshift-release-dev/ocp-release", "openshift-release-dev/ocp-v4.0-art-dev", true),
+		Entry("archive overrides containing working-dir", "working-dir/ocp-release", "release/working-dir", true),
 	)
 
 	It("mirrors release payload and components through an archive into a custom repository", func() {
 		isc := filepath.Join(iscDir, "platform_target_repo", "isc.yaml")
 		repo := "openshift4/ocp-release"
 		tags := []string{"v0.0.1", "v0.0.1-alpine"}
+		cacheRepos := map[string]string{"v0.0.1": "openshift/release-images", "v0.0.1-alpine": "openshift/release"}
 
-		By("mirroring payload and components to the custom cache repository")
+		By("mirroring payload and components to the default cache repositories")
 		result, err := runner.MirrorToDisk(ctx, isc, workDir, "--cache-dir", filepath.Join(workDir, "cache"), "--remove-signatures=true")
 		expectOcMirrorCommandSuccess(result, err)
 		cachedDigests := make(map[string]string)
 		for _, tag := range tags {
-			cachedDigests[tag] = localCacheTagDigest(cacheDir, repo, tag)
+			cachedDigests[tag] = localCacheTagDigest(cacheDir, cacheRepos[tag], tag)
 		}
 
-		By("checking the custom repository is included in the archive")
+		By("checking the archive only contains the default repositories")
 		var entries []string
 		for _, archive := range findTarArchives(workDir) {
 			entries = append(entries, listTarEntries(archive)...)
 		}
-		expectTarContainsPath(entries, tarRepositoriesPath+repo)
+		expectTarContainsPath(entries, tarRepositoriesPath+"openshift/release-images")
+		expectTarContainsPath(entries, tarRepositoriesPath+"openshift/release")
+		expectTarDoesNotContainPath(entries, tarRepositoriesPath+repo)
 
 		By("restoring into a fresh cache and pushing to a destination namespace")
 		restoreCache := filepath.Join(workDir, "restore-cache")
@@ -234,7 +238,7 @@ apiVersion: mirror.openshift.io/v2alpha1
 			"--cache-dir", filepath.Join(workDir, "cache"), "--dest-tls-verify=false", "--force-cache-delete=true")
 		expectOcMirrorCommandSuccess(result, err)
 		expectEmptyRegistry(*testRegistry)
-		expectRepositoriesAbsentFromLocalCache(cacheDir, []string{repo})
+		expectRepositoriesAbsentFromLocalCache(cacheDir, []string{"openshift/release-images", "openshift/release"})
 	})
 
 	It("copies directly with signatures and repeats safely", func() {
@@ -269,14 +273,15 @@ apiVersion: mirror.openshift.io/v2alpha1
 		Expect(repos).To(ConsistOf("openshift4/ocp-release"))
 	})
 
-	It("keeps incremental archives and dry-run mappings on the custom repository", func() {
+	It("keeps incremental archives on the default repositories and restores them to the custom repository", func() {
 		isc := filepath.Join(iscDir, "platform_target_repo", "isc.yaml")
 		result, err := runner.MirrorToDisk(ctx, isc, workDir, "--cache-dir", filepath.Join(workDir, "cache"), "--remove-signatures=true")
 		expectOcMirrorCommandSuccess(result, err)
 		Expect(countBlobEntriesInArchives(findTarArchives(workDir))).To(BeNumerically(">", 0))
+		cacheRepos := map[string]string{"v0.0.1": "openshift/release-images", "v0.0.1-alpine": "openshift/release"}
 		cachedDigests := make(map[string]string)
-		for _, tag := range []string{"v0.0.1", "v0.0.1-alpine"} {
-			cachedDigests[tag] = localCacheTagDigest(cacheDir, "openshift4/ocp-release", tag)
+		for tag, cacheRepo := range cacheRepos {
+			cachedDigests[tag] = localCacheTagDigest(cacheDir, cacheRepo, tag)
 		}
 		restoreCache := filepath.Join(workDir, "restore-cache")
 		result, err = runner.DiskToMirror(ctx, isc, workDir, testRegistry.Endpoint(), "--cache-dir", restoreCache, "--remove-signatures=true", "--dest-tls-verify=false")
@@ -287,7 +292,10 @@ apiVersion: mirror.openshift.io/v2alpha1
 		expectOcMirrorCommandSuccess(result, err)
 		destinations := mappingDestinations(workDir)
 		Expect(destinations).To(HaveLen(2))
-		Expect(destinations).To(HaveEach(ContainSubstring("/openshift4/ocp-release:")))
+		Expect(destinations).To(ConsistOf(
+			HaveSuffix("/openshift/release-images:v0.0.1"),
+			HaveSuffix("/openshift/release:v0.0.1-alpine"),
+		), "mirror-to-disk must keep the default cache repositories")
 		Expect(result.Stdout + result.Stderr).To(ContainSubstring("all 2 images required for mirroring are available"))
 
 		By("creating a repeated archive without resending blobs")

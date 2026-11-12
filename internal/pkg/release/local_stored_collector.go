@@ -381,7 +381,10 @@ func (o LocalStorageCollector) prepareM2DCopyBatch(images []v2alpha1.RelatedImag
 		}
 		src = imgSpec.ReferenceWithTransport
 
-		pathComponents := o.releasePathComponents(imgSpec, img.Type, img.Name)
+		pathComponents := preparePathComponents(imgSpec, img.Type, img.Name)
+		if o.Opts.IsMirrorToMirror() {
+			pathComponents = o.destinationPathComponents(imgSpec, img.Type, img.Name)
+		}
 		tag := prepareTag(imgSpec, img.Type, releaseTag, img.Name)
 
 		dest = consts.DockerProtocol + strings.Join([]string{o.destinationRegistry(), pathComponents + ":" + tag}, "/")
@@ -409,11 +412,11 @@ func (o LocalStorageCollector) prepareD2MCopyBatch(images []v2alpha1.RelatedImag
 			return nil, err
 		}
 
-		pathComponents := o.releasePathComponents(imgSpec, img.Type, img.Name)
+		pathComponents := preparePathComponents(imgSpec, img.Type, img.Name)
 		tag := prepareTag(imgSpec, img.Type, releaseTag, img.Name)
 
 		src = consts.DockerProtocol + strings.Join([]string{o.LocalStorageFQDN, pathComponents + ":" + tag}, "/")
-		dest = strings.Join([]string{o.Opts.Destination, pathComponents + ":" + tag}, "/")
+		dest = strings.Join([]string{o.Opts.Destination, o.destinationPathComponents(imgSpec, img.Type, img.Name) + ":" + tag}, "/")
 
 		if src == "" || dest == "" {
 			return result, fmt.Errorf("unable to determine src %s or dst %s for %s", src, dest, img.Name)
@@ -749,25 +752,34 @@ func compareByOriginSourceDest(a, b v2alpha1.CopyImageSchema) int {
 	return strings.Compare(a.Destination, b.Destination)
 }
 
-// releasePathComponents selects release repositories without changing graph paths.
-func (o LocalStorageCollector) releasePathComponents(imgSpec image.ImageSpec, imgType v2alpha1.ImageType, imgName string) string {
+func preparePathComponents(imgSpec image.ImageSpec, imgType v2alpha1.ImageType, imgName string) string {
+	pathComponents := ""
 	switch {
 	case imgType == v2alpha1.TypeOCPRelease:
-		return cmp.Or(o.Config.Mirror.Platform.TargetImageRepo, releaseImagePathComponents)
-	case imgType == v2alpha1.TypeOCPReleaseContent:
-		if repo := o.Config.Mirror.Platform.TargetComponentRepo; repo != "" {
-			return repo
-		}
-		if imgName != "" {
-			return releaseComponentPathComponents
-		}
+		pathComponents = releaseImagePathComponents
 	case imgType == v2alpha1.TypeCincinnatiGraph:
-		return imgSpec.PathComponent
+		pathComponents = imgSpec.PathComponent
+	case imgType == v2alpha1.TypeOCPReleaseContent && imgName != "":
+		pathComponents = releaseComponentPathComponents
+	case imgSpec.IsImageByDigestOnly():
+		pathComponents = imgSpec.PathComponent
 	}
-	if imgSpec.IsImageByDigestOnly() {
-		return imgSpec.PathComponent
+
+	return pathComponents
+}
+
+// destinationPathComponents applies the platform target repositories to references in the
+// destination registry. The cache always keeps the default paths so that archives do not
+// depend on these settings.
+func (o LocalStorageCollector) destinationPathComponents(imgSpec image.ImageSpec, imgType v2alpha1.ImageType, imgName string) string {
+	defaultPath := preparePathComponents(imgSpec, imgType, imgName)
+	if imgType == v2alpha1.TypeOCPRelease {
+		return cmp.Or(o.Config.Mirror.Platform.TargetImageRepo, defaultPath)
 	}
-	return ""
+	if imgType == v2alpha1.TypeOCPReleaseContent {
+		return cmp.Or(o.Config.Mirror.Platform.TargetComponentRepo, defaultPath)
+	}
+	return defaultPath
 }
 
 func prepareTag(imgSpec image.ImageSpec, imgType v2alpha1.ImageType, releaseTag, imgName string) string {

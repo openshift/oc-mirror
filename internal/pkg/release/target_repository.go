@@ -33,15 +33,13 @@ func ValidateTargetRepositories(platform v2alpha1.Platform) []error {
 }
 
 // ValidatePlatformDestination checks full repository names, nesting limits,
-// and graph conflicts against the destination or cache registry.
+// and graph conflicts against the destination registry. Mirror-to-disk is
+// skipped because the cache always uses the default repositories.
 func ValidatePlatformDestination(platform v2alpha1.Platform, opts mirror.CopyOptions) error {
-	if platform.TargetImageRepo == "" && platform.TargetComponentRepo == "" {
+	if opts.IsMirrorToDisk() || (platform.TargetImageRepo == "" && platform.TargetComponentRepo == "") {
 		return nil
 	}
 	destination := strings.TrimPrefix(opts.Destination, consts.DockerProtocol)
-	if opts.IsMirrorToDisk() {
-		destination = opts.LocalStorageFQDN
-	}
 	for _, target := range platformTargetRepositories(platform) {
 		if err := validateTargetRepository(platform, opts, destination, target); err != nil {
 			return err
@@ -71,7 +69,7 @@ func validateTargetRepository(platform v2alpha1.Platform, opts mirror.CopyOption
 func validateGraphRepository(destination, targetRepository, field string, opts mirror.CopyOptions) error {
 	graphRef := destination + "/" + graphImageName + ":latest"
 	graphRefs := []string{graphRef}
-	if !opts.IsMirrorToDisk() && opts.Global.MaxNestedPaths > 0 {
+	if opts.Global.MaxNestedPaths > 0 {
 		flattened, err := image.WithMaxNestedPaths(graphRef, opts.Global.MaxNestedPaths)
 		if err != nil {
 			return err

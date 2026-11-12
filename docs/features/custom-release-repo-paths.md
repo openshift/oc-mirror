@@ -2,8 +2,8 @@
 
 The optional `platform.targetImageRepo` and `platform.targetComponentRepo` fields
 let you configure release payload and component repositories independently.
-They apply to direct registry mirroring, archive workflows, and generation of
-deletion metadata.
+They apply whenever images are pushed to a destination registry (mirror-to-mirror
+and disk-to-mirror) and when generating deletion metadata.
 
 | Field | Images affected | Default repository |
 |-------|-----------------|--------------------|
@@ -72,9 +72,11 @@ that also accommodates its existing `openshift/graph-image` path.
 
 ## Archive workflows and deletion
 
-Use the same values for **each field** in mirror-to-disk and disk-to-mirror
-configurations. The values also determine cache paths; disk-to-mirror must be
-able to find the repositories written by mirror-to-disk.
+Mirror-to-disk ignores both fields: the local cache and the archive always use
+the default repositories. Set the fields in the configuration used for
+disk-to-mirror, which places the images in the requested repositories at the
+destination. The same archive can therefore be pushed to registries with
+different repository layouts.
 
 Use the same fields in the `DeleteImageSetConfiguration` when generating delete
 metadata:

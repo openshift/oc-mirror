@@ -189,6 +189,14 @@ func (o DeleteImages) DeleteRegistryImages(deleteImageList v2alpha1.DeleteImageL
 				cacheDestination = fmt.Sprintf("%s%s:%s", imgSpecRef.Transport, imgSpecRef.Name, originSpec.CacheTag())
 			}
 			cacheDestination = strings.ReplaceAll(cacheDestination, o.Opts.Global.DeleteDestination, consts.DockerProtocol+o.LocalStorageFQDN)
+			// The cache keeps release images in the default repositories, even when
+			// platform target repositories were used at the destination.
+			if img.Type == v2alpha1.TypeOCPRelease {
+				cacheDestination = consts.DockerProtocol + o.LocalStorageFQDN + "/" + releaseImagePathComponents + ":" + imgSpecRef.Tag
+			}
+			if img.Type == v2alpha1.TypeOCPReleaseContent {
+				cacheDestination = consts.DockerProtocol + o.LocalStorageFQDN + "/" + releaseContentPathComponents + ":" + imgSpecRef.Tag
+			}
 			cis := v2alpha1.CopyImageSchema{
 				Origin:      img.ImageName,
 				Destination: cacheDestination,

@@ -69,7 +69,7 @@ func TestPlatformTargetRepoNestingLimit(t *testing.T) {
 				{"single path", "release", "docker://mirror.example.com", 1, false, false},
 				{"default can flatten", "", "docker://mirror.example.com/team", 2, false, false},
 				{"disk fits", "a/b", "file:///tmp/archive", 2, true, false},
-				{"disk too deep", "a/b/c", "file:///tmp/archive", 2, true, true},
+				{"disk not validated", "a/b/c", "file:///tmp/archive", 2, true, false},
 			} {
 				t.Run(tc.name, func(t *testing.T) {
 					opts := mirror.CopyOptions{
@@ -108,8 +108,7 @@ func TestPlatformTargetRepoDestinationValidation(t *testing.T) {
 				{"namespace fits", "docker://" + registry + "/team", reference.NameTotalLengthMax - len(registry+"/team") - 1, 0, false, false},
 				{"namespace makes name too long", "docker://" + registry + "/team", reference.NameTotalLengthMax - len(registry) - 1, 0, false, true},
 				{"invalid namespace", "docker://" + registry + "/UPPER", 1, 0, false, true},
-				{"cache name fits", "file:///tmp/archive", reference.NameTotalLengthMax - len("localhost:55000/"), 0, true, false},
-				{"cache port makes name too long", "file:///tmp/archive", reference.NameTotalLengthMax - len("localhost/"), 0, true, true},
+				{"disk not validated", "file:///tmp/archive", reference.NameTotalLengthMax, 0, true, false},
 			} {
 				t.Run(tc.name, func(t *testing.T) {
 					opts := mirror.CopyOptions{
@@ -166,10 +165,10 @@ func TestPlatformTargetRepoGraphRepositoryConflict(t *testing.T) {
 				conflict   bool
 			}{
 				{"direct", "openshift/graph-image", mirror.MirrorToMirror, 0, true},
-				{"archive", "openshift/graph-image", mirror.MirrorToDisk, 0, true},
+				{"archive not validated", "openshift/graph-image", mirror.MirrorToDisk, 0, false},
 				{"restore", "openshift/graph-image", mirror.DiskToMirror, 0, true},
 				{"flattened graph", "openshift-graph-image", mirror.MirrorToMirror, 2, true},
-				{"unflattened cache", "openshift-graph-image", mirror.MirrorToDisk, 1, false},
+				{"flattened restore", "openshift-graph-image", mirror.DiskToMirror, 2, true},
 				{"separate repositories", "releases", mirror.MirrorToMirror, 1, false},
 			} {
 				t.Run(tc.name, func(t *testing.T) {

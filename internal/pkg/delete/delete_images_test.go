@@ -3,6 +3,7 @@ package delete
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 
 	gcrv1 "github.com/google/go-containerregistry/pkg/v1"
@@ -455,6 +456,8 @@ func TestDeleteImagesWithTargetRepoAndTag(t *testing.T) {
 	}
 
 	genericTypes := []v2alpha1.ImageType{v2alpha1.TypeGeneric}
+	payloadType := []v2alpha1.ImageType{v2alpha1.TypeOCPRelease}
+	componentType := []v2alpha1.ImageType{v2alpha1.TypeOCPReleaseContent}
 	releaseTypes := []v2alpha1.ImageType{v2alpha1.TypeOCPRelease, v2alpha1.TypeOCPReleaseContent}
 	deleteRegistryTests := []struct {
 		name             string
@@ -490,22 +493,34 @@ func TestDeleteImagesWithTargetRepoAndTag(t *testing.T) {
 			imageTypes: genericTypes,
 		},
 		{
-			name: "custom release repository", imageTypes: releaseTypes, forceCacheDelete: true,
+			name: "custom payload repository uses default cache repository", imageTypes: payloadType, forceCacheDelete: true,
 			imageName: "quay.io/source/release:v1",
 			imageRef:  "docker://localhost:5000/myregistry/openshift4/ocp-release:v1",
-			cacheRef:  "docker://localhost:8888/openshift4/ocp-release:v1",
+			cacheRef:  "docker://localhost:8888/openshift/release-images:v1",
 		},
 		{
-			name: "default payload repository", imageTypes: releaseTypes, forceCacheDelete: true,
+			name: "custom component repository uses default cache repository", imageTypes: componentType, forceCacheDelete: true,
+			imageName: "quay.io/source/release:v1",
+			imageRef:  "docker://localhost:5000/myregistry/openshift4/ocp-v4.0-art-dev:v1-component",
+			cacheRef:  "docker://localhost:8888/openshift/release:v1-component",
+		},
+		{
+			name: "default payload repository", imageTypes: payloadType, forceCacheDelete: true,
 			imageName: "quay.io/source/release:v1",
 			imageRef:  "docker://localhost:5000/myregistry/openshift/release-images:v1",
 			cacheRef:  "docker://localhost:8888/openshift/release-images:v1",
 		},
 		{
-			name: "default component repository", imageTypes: releaseTypes, forceCacheDelete: true,
+			name: "default component repository", imageTypes: componentType, forceCacheDelete: true,
 			imageName: "quay.io/source/release:v1",
 			imageRef:  "docker://localhost:5000/myregistry/openshift/release:v1-component",
 			cacheRef:  "docker://localhost:8888/openshift/release:v1-component",
+		},
+		{
+			name: "release signature uses default cache repository", imageTypes: payloadType, forceCacheDelete: true,
+			imageName: "quay.io/source/release:sha256-" + strings.Repeat("a", 64) + ".sig",
+			imageRef:  "docker://localhost:5000/myregistry/openshift4/ocp-release:sha256-" + strings.Repeat("a", 64) + ".sig",
+			cacheRef:  "docker://localhost:8888/openshift/release-images:sha256-" + strings.Repeat("a", 64) + ".sig",
 		},
 		{
 			name: "different registry", imageTypes: releaseTypes, forceCacheDelete: true,

@@ -356,6 +356,7 @@ func testReadConfig(t *testing.T, kind string) {
 	tests := []testCase{
 		{
 			name: "valid", file: file,
+			//nolint:staticcheck // SA1019: the fixture still uses the deprecated architectures field
 			platform: v2alpha1.Platform{Architectures: []string{"amd64"}},
 		},
 		{

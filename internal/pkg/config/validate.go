@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
 
@@ -157,7 +158,7 @@ func validateReleasePlatformFields(cfg *v2alpha1.ImageSetConfiguration) []error 
 }
 
 func validateReleaseTargetRepoDelete(cfg *v2alpha1.DeleteImageSetConfiguration) error {
-	return utilerrors.NewAggregate(release.ValidateTargetRepositories(cfg.Delete.Platform))
+	return errors.Join(release.ValidateTargetRepositories(cfg.Delete.Platform)...)
 }
 
 func validateReleaseChannels(cfg *v2alpha1.ImageSetConfiguration) []error {
