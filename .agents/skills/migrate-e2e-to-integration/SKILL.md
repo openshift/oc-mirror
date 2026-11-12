@@ -18,7 +18,8 @@ The user provides one of:
 
 ### 1. Read project conventions
 
-Read `AGENTS.md` at the project root, and the documents at `docs/testing` for architecture, conventions, and pitfalls.
+Read `AGENTS.md` for agent workflows, `CONTRIBUTING.md` for contributor requirements and test commands,
+`ARCHITECTURE.md` for the system design, and `docs/testing/README.md` for the testing strategy.
 
 ### 2. Locate and analyze the e2e test case
 
@@ -82,17 +83,16 @@ Apply these conversions:
 
 #### Test images
 - **E2E**: Often uses real release images and production operator catalogs.
-- **Integration**: Use the self-hosted test images:
-  - Catalog: `quay.io/oc-mirror/oc-mirror-dev:test-catalog-20261103-2e526488d`
-  - Release: `quay.io/oc-mirror/release/test-release-index:v0.0.1`
-  - Additional: `quay.io/openshifttest/hello-openshift@sha256:61b8f5...`
+- **Integration**: Reuse the complete, pinned fixture references in
+  `tests/integration/testdata/imagesetconfigs/` and the matching test constants. Do not use abbreviated digests
+  or substitute mutable `latest` tags.
 
-Reuse the pinned image tags in existing test data. See `tests/integration/image-builders/README.md` before publishing a new fixture version.
+See `tests/integration/image-builders/README.md` before publishing a new fixture version.
 
 #### Test data configs
 - Check existing ISC/DISC configs in `tests/integration/testdata/imagesetconfigs/` first.
 - Only create new ones if the scenario needs a config that doesn't exist.
-- Use test images (above) instead of production images.
+- Use the existing pinned fixture references described above instead of production images.
 
 ### 6. Write the integration test
 
@@ -111,10 +111,17 @@ Before running, verify:
 
 ### 8. Run the test
 
-Ask permission, then run:
+Ask permission before running tests. Follow the CLI integration test instructions in `CONTRIBUTING.md`.
+The suite is a separate Go module, so run focused tests from `tests/integration/`, not the repository root:
+
 ```bash
-PATH=$PATH:<path-to-registry-bin> go test -v ./tests/integration/ --ginkgo.focus "<test label>"
+make build
+cd tests/integration
+go test -v -count=1 -timeout 30m . -ginkgo.focus '<test description or regex>'
 ```
+
+These commands start at the repository root. The suite starts an in-process registry; no registry executable or
+`PATH` override is needed. Use `make test-integration-cli` from the repository root to build and run the full suite.
 
 ### 9. Recommend e2e disposition
 
