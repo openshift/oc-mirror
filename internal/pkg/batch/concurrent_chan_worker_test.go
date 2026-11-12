@@ -494,3 +494,16 @@ func readMirroringErrors(t *testing.T, logsDir string) string {
 	t.Fatalf("no mirroring errors file written to %s", logsDir)
 	return ""
 }
+
+func TestSortByInputOrder(t *testing.T) {
+	img := func(n string) v2alpha1.CopyImageSchema {
+		return v2alpha1.CopyImageSchema{Source: "docker://r/" + n, Destination: "docker://d/" + n, Origin: "docker://r/" + n}
+	}
+	input := []v2alpha1.CopyImageSchema{img("a"), img("b"), img("c")}
+	// copies complete in scheduling order, not in input order
+	copied := []v2alpha1.CopyImageSchema{img("c"), img("a"), img("b")}
+
+	sortByInputOrder(copied, input)
+
+	assert.Equal(t, input, copied)
+}
