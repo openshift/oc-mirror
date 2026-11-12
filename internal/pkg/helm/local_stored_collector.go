@@ -636,14 +636,10 @@ func getHelmTemplates(ch *helmchart.Chart, valueOpts map[string]any) (string, er
 	out := new(bytes.Buffer)
 	caps := chartutil.DefaultCapabilities
 
-	// Match v1 rendering: use non-empty placeholders so charts that concatenate
-	// .Release.Name into metadata fields still produce valid YAML. Charts that
-	// embed .Release.Name into image references are uncommon; prefer overriding
-	// those image values via values/valuesFiles when needed.
-	relOps := chartutil.ReleaseOptions{
-		Name:      "NAME",
-		Namespace: "RELEASE-NAMESPACE",
-	}
+	// Keep release name and namespace empty, matching historical v2 rendering.
+	// A placeholder such as NAME would turn templates that embed .Release.Name
+	// in an image reference into a pullable-looking image that does not exist.
+	relOps := chartutil.ReleaseOptions{}
 
 	if err := chartutil.ProcessDependencies(ch, valueOpts); err != nil {
 		return "", fmt.Errorf("error processing dependencies: %w", err)

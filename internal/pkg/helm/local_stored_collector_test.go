@@ -14,6 +14,7 @@ import (
 
 	"github.com/otiai10/copy"
 	"github.com/stretchr/testify/assert"
+	"helm.sh/helm/v3/pkg/chart/loader"
 	helmrepo "helm.sh/helm/v3/pkg/repo"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
@@ -1317,6 +1318,7 @@ func TestHelmCopyBatchSameDigestDifferentTags(t *testing.T) {
 		assert.Equal(t, res[0].Source, res[1].Source, "both tags are read from the one shared cache entry")
 		assert.NotEqual(t, res[0].Destination, res[1].Destination, "both distinct tags must be recreated")
 	})
+}
 
 func TestGetImagesWithRequiredValues(t *testing.T) {
 	lsc = &LocalStorageCollector{Log: clog.New("trace")}
@@ -1445,4 +1447,29 @@ func TestPrepareChartValuesFiles(t *testing.T) {
 	_, err = prepareChartValuesFiles(missing, false)
 	assert.Error(t, err)
 	assert.ErrorContains(t, err, "persisted values file")
+}
+
+func TestHelmReleaseOptionsDoNotRewriteImages(t *testing.T) {
+	dir := t.TempDir()
+	assert.NoError(t, os.Mkdir(filepath.Join(dir, "templates"), 0o755))
+	assert.NoError(t, os.WriteFile(filepath.Join(dir, "Chart.yaml"), []byte("apiVersion: v2\nname: release-name-chart\nversion: 0.1.0\n"), 0o644))
+	assert.NoError(t, os.WriteFile(filepath.Join(dir, "values.yaml"), []byte("{}\n"), 0o644))
+	assert.NoError(t, os.WriteFile(filepath.Join(dir, "templates", "deploy.yaml"), []byte(""+
+		"apiVersion: v1\n"+
+		"kind: Pod\n"+
+		"metadata:\n"+
+		"  name: app\n"+
+		"spec:\n"+
+		"  containers:\n"+
+		"    - name: app\n"+
+		"      image: \"quay.io/example/app:{{ .Release.Name }}\"\n"), 0o644))
+
+	ch, err := loader.Load(dir)
+	assert.NoError(t, err)
+
+	rendered, err := getHelmTemplates(ch, map[string]any{})
+	assert.NoError(t, err)
+	assert.NotContains(t, rendered, "NAME")
+	assert.NotContains(t, rendered, "RELEASE-NAMESPACE")
+	assert.Contains(t, rendered, "quay.io/example/app:")
 }

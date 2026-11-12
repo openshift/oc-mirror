@@ -1,10 +1,8 @@
 package integration_test
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -12,8 +10,11 @@ import (
 )
 
 const (
-	requiredHelmImage = "quay.io/openshifttest/hello-openshift@sha256:61b8f5e1a3b5dbd9e2c35fd448dc5106337d7a299873dd3a6f0cd8d4891ecc27"
-	requiredHelmRepo  = "openshifttest/hello-openshift"
+	requiredHelmRepo = "openshifttest/hello-openshift"
+
+	iscHelmValuesMissing = "isc-required-values-missing.yaml"
+	iscHelmValuesFiles   = "isc-required-values-files.yaml"
+	iscHelmValuesInline  = "isc-required-values-inline.yaml"
 )
 
 var _ = Describe("helm chart values for image discovery", func() {
@@ -22,7 +23,7 @@ var _ = Describe("helm chart values for image discovery", func() {
 
 	BeforeEach(func() {
 		workDir = setupWorkDir()
-		chartPath = requiredValuesChartPath()
+		chartPath = filepath.Join(integrationArtifactsDir(), "helm", "required-values-chart-0.1.0.tgz")
 		Expect(chartPath).To(BeAnExistingFile())
 	})
 
@@ -31,7 +32,9 @@ var _ = Describe("helm chart values for image discovery", func() {
 	})
 
 	It("should fail mirror-to-disk when a chart requires values that are not provided", func() {
-		isc := writeHelmValuesISC(workDir, chartPath, nil, "")
+		isc := materializeHelmISC(workDir, iscHelmValuesMissing, map[string]string{
+			"__CHART_PATH__": chartPath,
+		})
 
 		By("running M2D against a chart that uses required() without values")
 		result, err := runner.MirrorToDisk(ctx, isc, workDir)
@@ -42,9 +45,11 @@ var _ = Describe("helm chart values for image discovery", func() {
 	})
 
 	It("should discover and mirror images when required values are provided via valuesFiles", func() {
-		valuesFile := filepath.Join(workDir, "values-for-mirroring.yaml")
-		Expect(os.WriteFile(valuesFile, []byte("secretName: dummy-secret\n"), 0o600)).To(Succeed())
-		isc := writeHelmValuesISC(workDir, chartPath, []string{valuesFile}, "")
+		valuesFile := copyHelmValuesFile(workDir, "values-secret.yaml")
+		isc := materializeHelmISC(workDir, iscHelmValuesFiles, map[string]string{
+			"__CHART_PATH__":  chartPath,
+			"__VALUES_FILE__": valuesFile,
+		})
 
 		By("running mirrorToDisk with valuesFiles")
 		result, err := runner.MirrorToDisk(ctx, isc, workDir, "--remove-signatures=true")
@@ -54,7 +59,7 @@ var _ = Describe("helm chart values for image discovery", func() {
 		expectLocalCacheContains(cacheDir, requiredHelmRepo)
 
 		By("verifying valuesFiles were copied into the working directory for disk-to-mirror")
-		matches, err := filepath.Glob(filepath.Join(workDir, dirWorkingDir, dirHelm, "values", "*", "*-values-for-mirroring.yaml"))
+		matches, err := filepath.Glob(filepath.Join(workDir, dirWorkingDir, dirHelm, "values", "*", "*-values-secret.yaml"))
 		Expect(err).NotTo(HaveOccurred())
 		Expect(matches).NotTo(BeEmpty(), "expected persisted helm values file under working-dir/helm/values")
 
@@ -71,15 +76,11 @@ var _ = Describe("helm chart values for image discovery", func() {
 	})
 
 	It("should let inline values override valuesFiles during dry-run image discovery", func() {
-		valuesFile := filepath.Join(workDir, "values-for-mirroring.yaml")
-		Expect(os.WriteFile(valuesFile, []byte("secretName: from-file\nimage: docker.io/library/nginx:1.16.0\n"), 0o600)).To(Succeed())
-		isc := writeHelmValuesISC(workDir, chartPath, []string{valuesFile}, "")
-		content, err := os.ReadFile(isc)
-		Expect(err).NotTo(HaveOccurred())
-		isc = filepath.Join(workDir, "isc-helm-inline-override.yaml")
-		Expect(os.WriteFile(isc, []byte(string(content)+
-			"        values:\n"+
-			"          image: "+requiredHelmImage+"\n"), 0o644)).To(Succeed())
+		valuesFile := copyHelmValuesFile(workDir, "values-file-image.yaml")
+		isc := materializeHelmISC(workDir, iscHelmValuesInline, map[string]string{
+			"__CHART_PATH__":  chartPath,
+			"__VALUES_FILE__": valuesFile,
+		})
 
 		By("running mirrorToDisk --dry-run")
 		result, err := runner.MirrorToDisk(ctx, isc, workDir, "--remove-signatures=true", "--dry-run")
@@ -94,34 +95,38 @@ var _ = Describe("helm chart values for image discovery", func() {
 	})
 })
 
-func requiredValuesChartPath() string {
-	_, file, _, ok := runtime.Caller(0)
-	Expect(ok).To(BeTrue())
-	return filepath.Join(filepath.Dir(file), "testdata", "helm", "required-values-chart-0.1.0.tgz")
+func integrationArtifactsDir() string {
+	if dir := os.Getenv("ARTIFACTS_DIR"); dir != "" {
+		return dir
+	}
+	return "testdata"
 }
 
-func writeHelmValuesISC(dir, chartPath string, valuesFiles []string, inlineSecret string) string {
-	var b strings.Builder
-	b.WriteString("kind: ImageSetConfiguration\n")
-	b.WriteString("apiVersion: mirror.openshift.io/v2alpha1\n")
-	b.WriteString("mirror:\n")
-	b.WriteString("  helm:\n")
-	b.WriteString("    local:\n")
-	b.WriteString("      - name: required-values-chart\n")
-	fmt.Fprintf(&b, "        path: %s\n", chartPath)
-	if len(valuesFiles) > 0 {
-		b.WriteString("        valuesFiles:\n")
-		for _, vf := range valuesFiles {
-			fmt.Fprintf(&b, "          - %s\n", vf)
-		}
+func copyHelmValuesFile(workDir, name string) string {
+	src := filepath.Join(integrationArtifactsDir(), "helm", name)
+	data, err := os.ReadFile(src)
+	Expect(err).NotTo(HaveOccurred())
+	dst := filepath.Join(workDir, name)
+	Expect(os.WriteFile(dst, data, 0o600)).To(Succeed())
+	return dst
+}
+
+// materializeHelmISC copies a checked-in ImageSetConfiguration and fills in
+// paths that depend on the test workspace. The chart and values structure stays
+// in testdata rather than being assembled in Go.
+func materializeHelmISC(workDir, name string, replacements map[string]string) string {
+	src := filepath.Join(iscDir, "helm_values", name)
+	data, err := os.ReadFile(src)
+	Expect(err).NotTo(HaveOccurred())
+	text := string(data)
+	for key, value := range replacements {
+		text = strings.ReplaceAll(text, key, value)
 	}
-	if inlineSecret != "" {
-		b.WriteString("        values:\n")
-		fmt.Fprintf(&b, "          secretName: %s\n", inlineSecret)
-	}
-	p := filepath.Join(dir, "isc-helm-required-values.yaml")
-	Expect(os.WriteFile(p, []byte(b.String()), 0o644)).To(Succeed())
-	return p
+	Expect(text).NotTo(ContainSubstring("__CHART_PATH__"))
+	Expect(text).NotTo(ContainSubstring("__VALUES_FILE__"))
+	dst := filepath.Join(workDir, name)
+	Expect(os.WriteFile(dst, []byte(text), 0o644)).To(Succeed())
+	return dst
 }
 
 func expectLocalCacheContains(cacheDir, repoSubstring string) {
