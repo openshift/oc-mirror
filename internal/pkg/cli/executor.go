@@ -1493,7 +1493,11 @@ func removeDuplicatedImages(allRelatedImages []v2alpha1.CopyImageSchema, mode st
 	// OCPBUGS-43731 - remove duplicates
 	return slices.CompactFunc(allRelatedImages, func(a, b v2alpha1.CopyImageSchema) bool {
 		if mode == string(mirror.DeleteMode) {
-			return a.Destination == b.Destination
+			// OCPBUGS-130951 - only exact repeats are removed here. Different origins can share
+			// a destination tag (e.g. repo:tag@sha256:a and repo:tag@sha256:b, or digest-only
+			// images addressed as :latest with --delete-v1-images); the delete package decides
+			// how to address each of them, so that none of them is dropped silently.
+			return a.Destination == b.Destination && a.Origin == b.Origin
 		} else {
 			return a.Source == b.Source && a.Destination == b.Destination && a.Origin == b.Origin
 		}
