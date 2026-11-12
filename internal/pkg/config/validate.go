@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
 
@@ -9,6 +10,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/release"
 )
 
 type (
@@ -18,7 +20,7 @@ type (
 
 var (
 	validationChecks       = []validationFunc{validateOperatorOptions, validateReleaseChannels, validateBlockedImages, validateReleasePlatformFields}
-	validationDeleteChecks = []validationDeleteFunc{validateOperatorOptionsDelete, validateReleaseChannelsDelete}
+	validationDeleteChecks = []validationDeleteFunc{validateOperatorOptionsDelete, validateReleaseChannelsDelete, validateReleaseTargetRepoDelete}
 )
 
 // Validate will check an ImagesetConfiguration for input errors.
@@ -142,17 +144,21 @@ func validatePackageChannel(ctlgName string, pkg *v2alpha1.IncludePackage, ch *v
 	return nil
 }
 
-// validateReleasePlatformFields ensures that platform.platforms and platform.architectures
-// are not used together — they are mutually exclusive.
+// validateReleasePlatformFields checks repository syntax and mutually exclusive platform selectors.
 func validateReleasePlatformFields(cfg *v2alpha1.ImageSetConfiguration) []error {
+	errs := release.ValidateTargetRepositories(cfg.Mirror.Platform)
 	//nolint:staticcheck // SA1019: Architectures is deprecated but we check it for mutual exclusivity
 	if len(cfg.Mirror.Platform.Platforms) > 0 && len(cfg.Mirror.Platform.Architectures) > 0 {
-		return []error{fmt.Errorf(
-			"platform.platforms and platform.architectures cannot be used together; " +
+		errs = append(errs, fmt.Errorf(
+			"platform.platforms and platform.architectures cannot be used together; "+
 				"use platform.platforms for sparse manifest filtering (requires disabling manifest list blob checks on container registry side), or platform.architectures (deprecated) for OCP multi payload or single arch payloads",
-		)}
+		))
 	}
-	return nil
+	return errs
+}
+
+func validateReleaseTargetRepoDelete(cfg *v2alpha1.DeleteImageSetConfiguration) error {
+	return errors.Join(release.ValidateTargetRepositories(cfg.Delete.Platform)...)
 }
 
 func validateReleaseChannels(cfg *v2alpha1.ImageSetConfiguration) []error {

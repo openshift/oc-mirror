@@ -3,14 +3,12 @@ package config
 import (
 	"fmt"
 	"os"
-	"path"
 	"path/filepath"
 	"testing"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -332,126 +330,123 @@ mirror:
 }
 
 func TestReadConfig(t *testing.T) {
-	t.Run("Testing ReadConfig : should pass ", func(t *testing.T) {
-		res, err := ReadConfig(filepath.Join(consts.TestFolder, "isc.yaml"), v2alpha1.ImageSetConfigurationKind)
-		assert.NoError(t, err, "should not fail")
-		conv := res.(v2alpha1.ImageSetConfiguration)
-		require.Equal(t, []string{"amd64"}, conv.ImageSetConfigurationSpec.Mirror.Platform.Architectures)
-	})
-	t.Run("ReadConfig : should fail", func(t *testing.T) {
-		t.Run("with unmatched config kinds", func(t *testing.T) {
-			_, err := ReadConfig(filepath.Join(consts.TestFolder, "delete-isc.yaml"), v2alpha1.ImageSetConfigurationKind)
-			assert.EqualError(t, err, fmt.Sprintf("cannot parse %q as %q", v2alpha1.DeleteImageSetConfigurationKind, v2alpha1.ImageSetConfigurationKind))
-		})
-		t.Run("with missing `mirror` stanza", func(t *testing.T) {
-			isc := `
-apiVersion: mirror.openshift.io/v2alpha1
-kind: ImageSetConfiguration
-mirrors:
-  additionalImages:
-    - name: mirror.delete/mirror/delete:mirror
-`
-			iscFile := path.Join(t.TempDir(), "invalid-isc.yaml")
-			err := os.WriteFile(iscFile, []byte(isc), 0o600)
-			assert.NoError(t, err, "failed to write invalid-isc file")
-			_, err = ReadConfig(iscFile, v2alpha1.ImageSetConfigurationKind)
-			assert.EqualError(t, err, errMissingMirrorStanza.Error(), "config accepted with missing stanza")
-		})
-		t.Run("with extra `delete` stanza", func(t *testing.T) {
-			isc := `
-apiVersion: mirror.openshift.io/v2alpha1
-kind: ImageSetConfiguration
-mirror:
-  additionalImages:
-    - name: mirror.delete/mirror/delete:mirror
-delete:
-  additionalImages:
-    - name: mirror.delete/mirror/delete:mirror
-`
-			iscFile := path.Join(t.TempDir(), "invalid-isc.yaml")
-			err := os.WriteFile(iscFile, []byte(isc), 0o600)
-			assert.NoError(t, err, "failed to write invalid-isc file")
-			_, err = ReadConfig(iscFile, v2alpha1.ImageSetConfigurationKind)
-			assert.EqualError(t, err, "delete: is not allowed in ImageSetConfiguration")
-		})
-		t.Run("with duplicated `mirror` stanzas", func(t *testing.T) {
-			isc := `
-apiVersion: mirror.openshift.io/v2alpha1
-kind: ImageSetConfiguration
-mirror:
-  additionalImages:
-    - name: mirror.delete/mirror/delete:mirror
-mirror:
-  operators:
-    - catalog: catalog:latest
-`
-			iscFile := path.Join(t.TempDir(), "invalid-isc.yaml")
-			err := os.WriteFile(iscFile, []byte(isc), 0o600)
-			assert.NoError(t, err, "failed to write invalid-isc file")
-			_, err = ReadConfig(iscFile, v2alpha1.ImageSetConfigurationKind)
-			assert.EqualError(t, err, "failed to unmarshal config: error converting YAML to JSON: yaml: unmarshal errors:\n  line 8: key \"mirror\" already set in map")
-		})
-	})
+	testReadConfig(t, v2alpha1.ImageSetConfigurationKind)
 }
 
 func TestReadConfigDelete(t *testing.T) {
-	t.Run("Testing ReadConfigDelete : should pass ", func(t *testing.T) {
-		res, err := ReadConfig(filepath.Join(consts.TestFolder, "delete-isc.yaml"), v2alpha1.DeleteImageSetConfigurationKind)
-		assert.NoError(t, err, "should not fail")
-		conv := res.(v2alpha1.DeleteImageSetConfiguration)
-		require.Equal(t, []string{"amd64"}, conv.DeleteImageSetConfigurationSpec.Delete.Platform.Architectures)
-	})
-	t.Run("ReadConfig : should fail", func(t *testing.T) {
-		t.Run("with unmatched config kinds", func(t *testing.T) {
-			_, err := ReadConfig(filepath.Join(consts.TestFolder, "isc.yaml"), v2alpha1.DeleteImageSetConfigurationKind)
-			assert.EqualError(t, err, fmt.Sprintf("cannot parse %q as %q", v2alpha1.ImageSetConfigurationKind, v2alpha1.DeleteImageSetConfigurationKind), "parsed unmatched config kinds")
+	testReadConfig(t, v2alpha1.DeleteImageSetConfigurationKind)
+}
+
+func testReadConfig(t *testing.T, kind string) {
+	t.Helper()
+	stanza, otherStanza := "mirror", "delete"
+	file, otherFile := "isc.yaml", "delete-isc.yaml"
+	otherKind := v2alpha1.DeleteImageSetConfigurationKind
+	if kind == v2alpha1.DeleteImageSetConfigurationKind {
+		stanza, otherStanza = otherStanza, stanza
+		file, otherFile = otherFile, file
+		otherKind = v2alpha1.ImageSetConfigurationKind
+	}
+	type testCase struct {
+		name, file, inline, expectedError string
+		errorFields                       []string
+		platform                          v2alpha1.Platform
+	}
+	header := fmt.Sprintf("apiVersion: mirror.openshift.io/v2alpha1\nkind: %s\n", kind)
+	tests := []testCase{
+		{
+			name: "valid", file: file,
+			//nolint:staticcheck // SA1019: the fixture still uses the deprecated architectures field
+			platform: v2alpha1.Platform{Architectures: []string{"amd64"}},
+		},
+		{
+			name: "unmatched config kinds", file: otherFile,
+			expectedError: fmt.Sprintf("cannot parse %q as %q", otherKind, kind),
+		},
+		{
+			name: "missing stanza", inline: header + "unknown:\n  additionalImages: []\n",
+			expectedError: fmt.Sprintf("configuration missing the `%s` stanza", stanza),
+		},
+		{
+			name: "extra stanza", inline: header + stanza + ": {}\n" + otherStanza + ": {}\n",
+			expectedError: fmt.Sprintf("%s: is not allowed in %s", otherStanza, kind),
+		},
+		{
+			name:          "duplicated stanza",
+			inline:        "\n" + header + stanza + ":\n  additionalImages:\n    - name: mirror.delete/mirror/delete:mirror\n" + stanza + ":\n  operators:\n    - catalog: catalog:latest\n",
+			expectedError: fmt.Sprintf("failed to unmarshal config: error converting YAML to JSON: yaml: unmarshal errors:\n  line 8: key %q already set in map", stanza),
+		},
+		{
+			name: "unknown platform field", inline: header + stanza + ":\n  platform:\n    targetRepo: releases\n",
+			expectedError: fmt.Sprintf("decode %s: json: unknown field %q", kind, "targetRepo"),
+		},
+		{name: "default repositories"},
+		{
+			name:     "payload override",
+			platform: v2alpha1.Platform{TargetImageRepo: "openshift4/ocp-release"},
+		},
+		{
+			name:     "component override",
+			platform: v2alpha1.Platform{TargetComponentRepo: "openshift4/components"},
+		},
+		{
+			name:     "separate overrides",
+			platform: v2alpha1.Platform{TargetImageRepo: "openshift4/ocp-release", TargetComponentRepo: "openshift4/components"},
+		},
+		{
+			name: "invalid payload", errorFields: []string{"targetImageRepo"},
+			platform: v2alpha1.Platform{TargetImageRepo: "repo:tag"},
+		},
+		{
+			name: "invalid component", errorFields: []string{"targetComponentRepo"},
+			platform: v2alpha1.Platform{TargetComponentRepo: "repo:tag"},
+		},
+		{
+			name: "both invalid", errorFields: []string{"targetImageRepo", "targetComponentRepo"},
+			platform: v2alpha1.Platform{TargetImageRepo: "repo:tag", TargetComponentRepo: "UPPER"},
+		},
+		{
+			name: "valid payload and invalid component", errorFields: []string{"targetComponentRepo"},
+			platform: v2alpha1.Platform{TargetImageRepo: "openshift4/ocp-release", TargetComponentRepo: "repo:tag"},
+		},
+		{
+			name: "invalid payload and valid component", errorFields: []string{"targetImageRepo"},
+			platform: v2alpha1.Platform{TargetImageRepo: "repo:tag", TargetComponentRepo: "openshift4/components"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			configPath := filepath.Join(consts.TestFolder, tt.file)
+			if tt.file == "" {
+				data := tt.inline
+				if data == "" {
+					data = header + fmt.Sprintf("%s:\n  platform:\n    targetImageRepo: %q\n    targetComponentRepo: %q\n", stanza, tt.platform.TargetImageRepo, tt.platform.TargetComponentRepo)
+				}
+				configPath = filepath.Join(t.TempDir(), "config.yaml")
+				require.NoError(t, os.WriteFile(configPath, []byte(data), 0600))
+			}
+			cfg, err := ReadConfig(configPath, kind)
+			if tt.expectedError != "" {
+				require.EqualError(t, err, tt.expectedError)
+				return
+			}
+			if len(tt.errorFields) > 0 {
+				for _, field := range tt.errorFields {
+					require.ErrorContains(t, err, "platform."+field)
+				}
+				return
+			}
+			require.NoError(t, err)
+			var platform v2alpha1.Platform
+			if kind == v2alpha1.ImageSetConfigurationKind {
+				platform = cfg.(v2alpha1.ImageSetConfiguration).Mirror.Platform
+			} else {
+				platform = cfg.(v2alpha1.DeleteImageSetConfiguration).Delete.Platform
+			}
+			require.Equal(t, tt.platform.TargetImageRepo, platform.TargetImageRepo)
+			require.Equal(t, tt.platform.TargetComponentRepo, platform.TargetComponentRepo)
+			//nolint:staticcheck // SA1019: retain legacy architecture coverage.
+			require.Equal(t, tt.platform.Architectures, platform.Architectures)
 		})
-		t.Run("with missing `delete` stanza", func(t *testing.T) {
-			isc := `
-apiVersion: mirror.openshift.io/v2alpha1
-kind: DeleteImageSetConfiguration
-remove:
-  additionalImages:
-    - name: mirror.delete/mirror/delete:mirror
-`
-			iscFile := path.Join(t.TempDir(), "invalid-isc.yaml")
-			err := os.WriteFile(iscFile, []byte(isc), 0o600)
-			assert.NoError(t, err, "failed to write invalid-isc file")
-			_, err = ReadConfig(iscFile, v2alpha1.DeleteImageSetConfigurationKind)
-			assert.EqualError(t, err, errMissingDeleteStanza.Error(), "config accepted with missing stanza")
-		})
-		t.Run("with extra `mirror` stanza", func(t *testing.T) {
-			isc := `
-apiVersion: mirror.openshift.io/v2alpha1
-kind: DeleteImageSetConfiguration
-delete:
-  additionalImages:
-    - name: mirror.delete/mirror/delete:mirror
-mirror:
-  additionalImages:
-`
-			iscFile := path.Join(t.TempDir(), "invalid-isc.yaml")
-			err := os.WriteFile(iscFile, []byte(isc), 0o600)
-			assert.NoError(t, err, "failed to write invalid-isc file")
-			_, err = ReadConfig(iscFile, v2alpha1.DeleteImageSetConfigurationKind)
-			assert.EqualError(t, err, "mirror: is not allowed in DeleteImageSetConfiguration")
-		})
-		t.Run("with duplicated `delete` stanzas", func(t *testing.T) {
-			isc := `
-apiVersion: mirror.openshift.io/v2alpha1
-kind: ImageSetConfiguration
-delete:
-  additionalImages:
-    - name: mirror.delete/mirror/delete:mirror
-delete:
-  operators:
-    - catalog: catalog:latest
-`
-			iscFile := path.Join(t.TempDir(), "invalid-isc.yaml")
-			err := os.WriteFile(iscFile, []byte(isc), 0o600)
-			assert.NoError(t, err, "failed to write invalid-isc file")
-			_, err = ReadConfig(iscFile, v2alpha1.ImageSetConfigurationKind)
-			assert.EqualError(t, err, "failed to unmarshal config: error converting YAML to JSON: yaml: unmarshal errors:\n  line 8: key \"delete\" already set in map")
-		})
-	})
+	}
 }

@@ -1,6 +1,7 @@
 package release
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"io"
@@ -381,6 +382,9 @@ func (o LocalStorageCollector) prepareM2DCopyBatch(images []v2alpha1.RelatedImag
 		src = imgSpec.ReferenceWithTransport
 
 		pathComponents := preparePathComponents(imgSpec, img.Type, img.Name)
+		if o.Opts.IsMirrorToMirror() {
+			pathComponents = o.destinationPathComponents(imgSpec, img.Type, img.Name)
+		}
 		tag := prepareTag(imgSpec, img.Type, releaseTag, img.Name)
 
 		dest = consts.DockerProtocol + strings.Join([]string{o.destinationRegistry(), pathComponents + ":" + tag}, "/")
@@ -412,7 +416,7 @@ func (o LocalStorageCollector) prepareD2MCopyBatch(images []v2alpha1.RelatedImag
 		tag := prepareTag(imgSpec, img.Type, releaseTag, img.Name)
 
 		src = consts.DockerProtocol + strings.Join([]string{o.LocalStorageFQDN, pathComponents + ":" + tag}, "/")
-		dest = strings.Join([]string{o.Opts.Destination, pathComponents + ":" + tag}, "/")
+		dest = strings.Join([]string{o.Opts.Destination, o.destinationPathComponents(imgSpec, img.Type, img.Name) + ":" + tag}, "/")
 
 		if src == "" || dest == "" {
 			return result, fmt.Errorf("unable to determine src %s or dst %s for %s", src, dest, img.Name)
@@ -762,6 +766,20 @@ func preparePathComponents(imgSpec image.ImageSpec, imgType v2alpha1.ImageType, 
 	}
 
 	return pathComponents
+}
+
+// destinationPathComponents applies the platform target repositories to references in the
+// destination registry. The cache always keeps the default paths so that archives do not
+// depend on these settings.
+func (o LocalStorageCollector) destinationPathComponents(imgSpec image.ImageSpec, imgType v2alpha1.ImageType, imgName string) string {
+	defaultPath := preparePathComponents(imgSpec, imgType, imgName)
+	if imgType == v2alpha1.TypeOCPRelease {
+		return cmp.Or(o.Config.Mirror.Platform.TargetImageRepo, defaultPath)
+	}
+	if imgType == v2alpha1.TypeOCPReleaseContent {
+		return cmp.Or(o.Config.Mirror.Platform.TargetComponentRepo, defaultPath)
+	}
+	return defaultPath
 }
 
 func prepareTag(imgSpec image.ImageSpec, imgType v2alpha1.ImageType, releaseTag, imgName string) string {

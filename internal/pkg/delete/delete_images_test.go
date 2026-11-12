@@ -3,12 +3,14 @@ package delete
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 
 	gcrv1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/opencontainers/go-digest"
 	specv1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.podman.io/image/v5/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 
@@ -453,47 +455,125 @@ func TestDeleteImagesWithTargetRepoAndTag(t *testing.T) {
 		})
 	}
 
+	genericTypes := []v2alpha1.ImageType{v2alpha1.TypeGeneric}
+	payloadType := []v2alpha1.ImageType{v2alpha1.TypeOCPRelease}
+	componentType := []v2alpha1.ImageType{v2alpha1.TypeOCPReleaseContent}
+	releaseTypes := []v2alpha1.ImageType{v2alpha1.TypeOCPRelease, v2alpha1.TypeOCPReleaseContent}
 	deleteRegistryTests := []struct {
-		name      string
-		imageName string
-		imageRef  string
+		name             string
+		imageName        string
+		imageRef         string
+		imageTypes       []v2alpha1.ImageType
+		cacheRef         string
+		expectedError    string
+		forceCacheDelete bool
 	}{
 		{
-			name:      "with targetRepo",
-			imageName: "registry.redhat.io/ubi8/ubi:latest",
-			imageRef:  "docker://localhost:5000/myregistry/custom-namespace/custom-image:latest",
+			name:       "with targetRepo",
+			imageName:  "registry.redhat.io/ubi8/ubi:latest",
+			imageRef:   "docker://localhost:5000/myregistry/custom-namespace/custom-image:latest",
+			imageTypes: genericTypes,
 		},
 		{
-			name:      "with targetTag",
-			imageName: "registry.redhat.io/ubi8/ubi:latest",
-			imageRef:  "docker://localhost:5000/myregistry/ubi8/ubi:v1.0",
+			name:       "with targetTag",
+			imageName:  "registry.redhat.io/ubi8/ubi:latest",
+			imageRef:   "docker://localhost:5000/myregistry/ubi8/ubi:v1.0",
+			imageTypes: genericTypes,
 		},
 		{
-			name:      "with both targetRepo and targetTag",
-			imageName: "registry.redhat.io/ubi8/ubi:latest",
-			imageRef:  "docker://localhost:5000/myregistry/custom-namespace/custom-image:v2.0",
+			name:       "with both targetRepo and targetTag",
+			imageName:  "registry.redhat.io/ubi8/ubi:latest",
+			imageRef:   "docker://localhost:5000/myregistry/custom-namespace/custom-image:v2.0",
+			imageTypes: genericTypes,
 		},
 		{
-			name:      "with targetTag for digest-only image",
-			imageName: "sometest.registry.com/testns/test@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
-			imageRef:  "docker://localhost:5000/myregistry/testns/test:v1.0",
+			name:       "with targetTag for digest-only image",
+			imageName:  "sometest.registry.com/testns/test@sha256:f30638f60452062aba36a26ee6c036feead2f03b28f2c47f2b0a991e41baebea",
+			imageRef:   "docker://localhost:5000/myregistry/testns/test:v1.0",
+			imageTypes: genericTypes,
+		},
+		{
+			name: "custom payload repository uses default cache repository", imageTypes: payloadType, forceCacheDelete: true,
+			imageName: "quay.io/source/release:v1",
+			imageRef:  "docker://localhost:5000/myregistry/openshift4/ocp-release:v1",
+			cacheRef:  "docker://localhost:8888/openshift/release-images:v1",
+		},
+		{
+			name: "custom component repository uses default cache repository", imageTypes: componentType, forceCacheDelete: true,
+			imageName: "quay.io/source/release:v1",
+			imageRef:  "docker://localhost:5000/myregistry/openshift4/ocp-v4.0-art-dev:v1-component",
+			cacheRef:  "docker://localhost:8888/openshift/release:v1-component",
+		},
+		{
+			name: "default payload repository", imageTypes: payloadType, forceCacheDelete: true,
+			imageName: "quay.io/source/release:v1",
+			imageRef:  "docker://localhost:5000/myregistry/openshift/release-images:v1",
+			cacheRef:  "docker://localhost:8888/openshift/release-images:v1",
+		},
+		{
+			name: "default component repository", imageTypes: componentType, forceCacheDelete: true,
+			imageName: "quay.io/source/release:v1",
+			imageRef:  "docker://localhost:5000/myregistry/openshift/release:v1-component",
+			cacheRef:  "docker://localhost:8888/openshift/release:v1-component",
+		},
+		{
+			name: "release signature uses default cache repository", imageTypes: payloadType, forceCacheDelete: true,
+			imageName: "quay.io/source/release:sha256-" + strings.Repeat("a", 64) + ".sig",
+			imageRef:  "docker://localhost:5000/myregistry/openshift4/ocp-release:sha256-" + strings.Repeat("a", 64) + ".sig",
+			cacheRef:  "docker://localhost:8888/openshift/release-images:sha256-" + strings.Repeat("a", 64) + ".sig",
+		},
+		{
+			name: "different registry", imageTypes: releaseTypes, forceCacheDelete: true,
+			imageName:     "quay.io/source/release:v1",
+			imageRef:      "docker://other.example.com/myregistry/openshift4/ocp-release:v1",
+			expectedError: "does not match",
+		},
+		{
+			name: "different namespace", imageTypes: releaseTypes, forceCacheDelete: true,
+			imageName:     "quay.io/source/release:v1",
+			imageRef:      "docker://localhost:5000/other/openshift4/ocp-release:v1",
+			expectedError: "does not match",
+		},
+		{
+			name: "namespace prefix collision", imageTypes: releaseTypes, forceCacheDelete: true,
+			imageName:     "quay.io/source/release:v1",
+			imageRef:      "docker://localhost:5000/myregistry-other/openshift4/ocp-release:v1",
+			expectedError: "does not match",
 		},
 	}
 
 	for _, tt := range deleteRegistryTests {
-		t.Run("DeleteRegistryImages "+tt.name, func(t *testing.T) {
-			deleteImageList := v2alpha1.DeleteImageList{
-				Items: []v2alpha1.DeleteItem{
-					{
-						ImageName:      tt.imageName,
-						ImageReference: tt.imageRef,
-						Type:           v2alpha1.TypeGeneric,
+		for _, imageType := range tt.imageTypes {
+			t.Run("DeleteRegistryImages "+tt.name+"/"+imageType.String(), func(t *testing.T) {
+				var captured v2alpha1.CollectorSchema
+				globalCopy := *global
+				globalCopy.ForceCacheDelete = tt.forceCacheDelete
+				optsCopy := opts
+				optsCopy.Global = &globalCopy
+				di := New(log, optsCopy, &mockBatch{capturedSchema: &captured}, &mockBlobs{}, cfg, &mockManifest{}, tempDir, &mockSignatureHandler{})
+				deleteImageList := v2alpha1.DeleteImageList{
+					Items: []v2alpha1.DeleteItem{
+						{
+							ImageName:      tt.imageName,
+							ImageReference: tt.imageRef,
+							Type:           imageType,
+						},
 					},
-				},
-			}
-			err := di.DeleteRegistryImages(deleteImageList)
-			assert.NoError(t, err)
-		})
+				}
+				err := di.DeleteRegistryImages(deleteImageList)
+				if tt.expectedError != "" {
+					require.ErrorContains(t, err, tt.expectedError)
+					require.Empty(t, captured.AllImages, "out-of-scope images must not reach the worker")
+					return
+				}
+				require.NoError(t, err)
+				expected := []v2alpha1.CopyImageSchema{{Origin: tt.imageName, Destination: tt.imageRef, Type: imageType}}
+				if tt.forceCacheDelete {
+					expected = append(expected, v2alpha1.CopyImageSchema{Origin: tt.imageName, Destination: tt.cacheRef, Type: imageType})
+				}
+				require.Equal(t, expected, captured.AllImages)
+			})
+		}
 	}
 }
 
