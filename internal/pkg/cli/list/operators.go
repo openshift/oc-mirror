@@ -297,7 +297,15 @@ func taggedCatalogExists(ctx context.Context, catalog string, opts mirror.CopyOp
 	if err != nil {
 		return false, fmt.Errorf("failed to parse catalog reference: %w", err)
 	}
-	src, err := ref.NewImageSource(ctx, opts.Global.NewSystemContext())
+
+	// Use the source image options so that --authfile and other source registry
+	// options are honored when checking catalog availability.
+	sysCtx, err := opts.SrcImage.NewSystemContext()
+	if err != nil {
+		return false, fmt.Errorf("failed to create source system context: %w", err)
+	}
+
+	src, err := ref.NewImageSource(ctx, sysCtx)
 	if err != nil {
 		msg := strings.ToLower(err.Error())
 		if strings.Contains(msg, "manifest unknown") || strings.Contains(msg, "not found") {
