@@ -135,6 +135,16 @@ catalogs were not mirrored; coverage uses the local reconstructions described
 above. Full CSV-manifest handling and an actual OpenShift/OLM installation are
 not covered.
 
+At the later watcher-failure milestone, the operator reported
+`Shell.NotFoundError` from the parent event-driven completion watcher and
+`ENOSYS` from the earlier kernel pidfd helper. A single result/process check
+confirmed that original Go PID `96995` and test PID `97184` no longer existed,
+with no matching focused-test or CLI runtime active. The original log contained
+the successful 24/24 terminal result above; the third run's terminal failures
+were also confirmed. No process termination, repeated polling, security-policy
+workaround, additional CLI run, or baseline comparison was needed or attempted.
+These watcher/tooling limitations do not change the recorded test outcomes.
+
 ## Independent review
 
 The operator reported that separate implementation and adversarial reviewer
