@@ -145,7 +145,8 @@ func (o *ChannelConcurrentBatch) Worker(ctx context.Context, collectorSchema v2a
 					default:
 						if !triggered {
 							triggered = true
-							timeoutCtx, _ := opts.Global.CommandTimeoutContext()
+							timeoutCtx, cancelTimeout := opts.Global.CommandTimeoutContext(cancelCtx)
+							defer cancelTimeout()
 
 							options := opts
 							if img.Type.IsOperatorCatalog() && img.RebuiltTag != "" {
@@ -199,10 +200,10 @@ func (o *ChannelConcurrentBatch) Worker(ctx context.Context, collectorSchema v2a
 
 	go runOverallProgress(overallProgress, cancelCtx, progressCh)
 
-	completed := 0
+	received := 0
 collect:
-	for completed < len(collectorSchema.AllImages) {
-		res := <-results
+	for res := range results {
+		received++
 		err := res.err
 		if res.skipped || len(res.platforms) > 0 {
 			if copiedImages.OperandPlatforms == nil {
@@ -236,12 +237,15 @@ collect:
 			}
 		}
 
-		completed++
 		progressCh <- 1
 	}
 	close(progressCh)
 
 	p.Wait()
+
+	if received < total && ctx.Err() != nil {
+		return copiedImages, fmt.Errorf("mirroring interrupted: %w", ctx.Err())
+	}
 
 	logResults(o.Log, opts.Function, &copiedImages, &collectorSchema, skippedCount)
 
