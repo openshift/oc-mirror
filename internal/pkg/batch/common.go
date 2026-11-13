@@ -1,15 +1,27 @@
 package batch
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"maps"
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/errcode"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 )
+
+// imageTimeoutHint is built from DefaultImageTimeout so the hint stays
+// aligned with the --image-timeout flag default (OCPBUGS-111840).
+func imageTimeoutHint() string {
+	return " hint: image mirroring timed out (context deadline exceeded). " +
+		"Retry with a higher --image-timeout (default " +
+		mirror.DefaultImageTimeout.String() + ")."
+}
 
 type BatchError struct {
 	source                 error
@@ -64,13 +76,31 @@ func saveErrors(logger clog.PluggableLoggerInterface, logsDir, timestamp string,
 }
 
 func formatErrorMsg(err mirrorErrorSchema) string {
+	detail := annotateImageTimeoutError(err.err)
 	if len(err.operators) > 0 || len(err.bundles) > 0 {
 		bundles := slices.Sorted(maps.Values(err.bundles))
 		operators := slices.Sorted(maps.Keys(err.operators))
-		return fmt.Sprintf("error mirroring image %s (Operator bundles: %v - Operators: %v) error: %s", err.image.Origin, bundles, operators, err.err.Error())
+		return fmt.Sprintf("error mirroring image %s (Operator bundles: %v - Operators: %v) error: %s", err.image.Origin, bundles, operators, detail)
 	}
 
-	return fmt.Sprintf("error mirroring image %s error: %s", err.image.Origin, err.err.Error())
+	return fmt.Sprintf("error mirroring image %s error: %s", err.image.Origin, detail)
+}
+
+// annotateImageTimeoutError appends remediation guidance when mirroring fails
+// because the per-image --image-timeout budget was exhausted.
+func annotateImageTimeoutError(err error) string {
+	if err == nil {
+		return ""
+	}
+	msg := err.Error()
+	if strings.Contains(msg, "--image-timeout") {
+		return msg
+	}
+	if errors.Is(err, context.DeadlineExceeded) ||
+		strings.Contains(strings.ToLower(msg), "context deadline exceeded") {
+		return msg + imageTimeoutHint()
+	}
+	return msg
 }
 
 func (s StringMap) Has(key string) bool {
