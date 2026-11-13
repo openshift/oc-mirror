@@ -69,59 +69,7 @@ func GetUpdates(ctx context.Context, cs CincinnatiSchema, channel string, versio
 		}
 	}
 
-	edgesByOrigin := make(map[int][]int, len(graph.Nodes))
-	for _, edge := range graph.Edges {
-		edgesByOrigin[edge[0]] = append(edgesByOrigin[edge[0]], edge[1])
-	}
-
-	// Sort destination by semver to ensure deterministic result
-	for origin, destinations := range edgesByOrigin {
-		sort.Slice(destinations, func(i, j int) bool {
-			return graph.Nodes[destinations[i]].Version.GT(graph.Nodes[destinations[j]].Version)
-		})
-		edgesByOrigin[origin] = destinations
-	}
-
-	shortestPath := func(g map[int][]int, start, end int) []int {
-		prev := map[int]int{}
-		visited := map[int]struct{}{}
-		queue := []int{start}
-		visited[start] = struct{}{}
-		prev[start] = -1
-
-		for len(queue) > 0 {
-			node := queue[0]
-			queue = queue[1:]
-			if node == end {
-				break
-			}
-
-			for _, neighbor := range g[node] {
-				if _, ok := visited[neighbor]; !ok {
-					prev[neighbor] = node
-					queue = append(queue, neighbor)
-					visited[neighbor] = struct{}{}
-				}
-			}
-		}
-
-		// No path to end
-		if _, ok := visited[end]; !ok {
-			return []int{}
-		}
-
-		path := []int{end}
-		for next := prev[end]; next != -1; next = prev[next] {
-			path = append(path, next)
-		}
-
-		// Reverse path.
-		for i, j := 0, len(path)-1; i < j; i, j = i+1, j-1 {
-			path[i], path[j] = path[j], path[i]
-		}
-
-		return path
-	}
+	edgesByOrigin := upgradeEdges(graph, nil)
 
 	nextIdxs := shortestPath(edgesByOrigin, currentIdx, destinationIdx)
 
@@ -159,6 +107,12 @@ func CalculateUpgrades(ctx context.Context, cs CincinnatiSchema, sourceChannel, 
 			return GetUpdates(ctx, cs, targetChannel, reqVer, reqVer)
 		}
 		return GetUpdates(ctx, cs, targetChannel, startVer, reqVer)
+	}
+
+	// The next minor version channel can never reach a later major version,
+	// so cross major version upgrades are calculated from the channel graphs.
+	if source.Major < target.Major {
+		return calculateCrossMajor(ctx, cs, sourceChannel, targetChannel, startVer, reqVer)
 	}
 
 	// Perform initial calculation for the source channel and
@@ -250,6 +204,268 @@ func calculate(ctx context.Context, cs CincinnatiSchema, sourceChannel, targetCh
 	return requested, upgrades, nil
 }
 
+// calculateCrossMajor calculates the upgrades from startVer to reqVer when the target channel
+// belongs to a later major version than the source channel.
+//
+// The channel that follows the source channel cannot be derived by incrementing the minor
+// version across a major version boundary, so the channel graphs are used instead:
+//   - When the target channel contains startVer, the shortest path is calculated in the
+//     target channel.
+//   - Otherwise, the target channel is entered from the latest of its releases of an earlier
+//     minor version that leads to reqVer and that is reachable from startVer in the channel of
+//     that release (<source prefix>-<major>.<minor>).
+//
+// When startVer and reqVer are generally available releases, the upgrades only go through
+// generally available releases. When there is no upgrade path, an error naming the source and
+// target channels is returned.
+func calculateCrossMajor(ctx context.Context, cs CincinnatiSchema, sourceChannel, targetChannel string, startVer, reqVer semver.Version) (cincinnati.Update, cincinnati.Update, []cincinnati.Update, error) {
+	source, target, prefix, err := getSemverFromChannels(sourceChannel, targetChannel)
+	if err != nil {
+		return cincinnati.Update{}, cincinnati.Update{}, nil, err
+	}
+
+	targetGraph, err := getChannelGraph(ctx, cs, targetChannel, startVer)
+	if err != nil {
+		return cincinnati.Update{}, cincinnati.Update{}, nil, err
+	}
+	requested, reqIdx, err := targetGraph.GetNodeByVersion(reqVer)
+	if err != nil {
+		return cincinnati.Update{}, cincinnati.Update{}, nil, noUpgradePathError(sourceChannel, targetChannel, startVer, reqVer,
+			fmt.Sprintf("version %s is not in channel %q", reqVer, targetChannel))
+	}
+	include := upgradeFilter(startVer, reqVer)
+	targetEdges := upgradeEdges(targetGraph, include)
+
+	if current, startIdx, err := targetGraph.GetNodeByVersion(startVer); err == nil {
+		cs.Log.Debug("Getting updates for version %s in channel %s", startVer.String(), targetChannel)
+		path := shortestPath(targetEdges, startIdx, reqIdx)
+		if len(path) == 0 {
+			return cincinnati.Update{}, cincinnati.Update{}, nil, noUpgradePathError(sourceChannel, targetChannel, startVer, reqVer,
+				fmt.Sprintf("channel %q has no path from %s to %s%s", targetChannel, startVer, reqVer, filterDescription(include)))
+		}
+		return current, requested, graphUpdates(targetGraph, path), nil
+	}
+
+	minVer := semver.Version{Major: startVer.Major, Minor: startVer.Minor}
+	if minVer.LT(source) {
+		minVer = source
+	}
+	candidates := entryCandidates(targetGraph, targetEdges, minVer, target, startVer, reqIdx)
+	current, entryUpdates, entryIdx, err := enterTargetChannel(ctx, cs, prefix, targetGraph, candidates, include, startVer)
+	if err != nil {
+		return cincinnati.Update{}, cincinnati.Update{}, nil, err
+	}
+	if len(entryUpdates) == 0 {
+		return cincinnati.Update{}, cincinnati.Update{}, nil, noUpgradePathError(sourceChannel, targetChannel, startVer, reqVer,
+			fmt.Sprintf("channel %q contains neither version %s nor a release of an earlier minor version that is reachable from it and leads to %s%s",
+				targetChannel, startVer, reqVer, filterDescription(include)))
+	}
+	cs.Log.Debug("Entering channel %s from version %s", targetChannel, targetGraph.Nodes[entryIdx].Version.String())
+	path := shortestPath(targetEdges, entryIdx, reqIdx)
+	return current, requested, append(entryUpdates, graphUpdates(targetGraph, path[1:])...), nil
+}
+
+// entryCandidates returns the indexes of the target graph releases from which the target
+// channel can be entered, sorted by descending version: releases later than startVer, of a
+// minor version from minVer up to (excluding) target, that lead to the release at reqIdx
+// through edges. As edges only connect accepted releases (see upgradeEdges), so do candidates.
+func entryCandidates(targetGraph cincinnati.Graph, targetEdges map[int][]int, minVer, target, startVer semver.Version, reqIdx int) []int {
+	leadsToReq := reachableTo(targetEdges, reqIdx)
+	var candidates []int
+	for idx, node := range targetGraph.Nodes {
+		minor := semver.Version{Major: node.Version.Major, Minor: node.Version.Minor}
+		if idx == reqIdx || !leadsToReq[idx] || !node.Version.GT(startVer) || minor.LT(minVer) || !minor.LT(target) {
+			continue
+		}
+		candidates = append(candidates, idx)
+	}
+	sort.Slice(candidates, func(i, j int) bool {
+		return targetGraph.Nodes[candidates[i]].Version.GT(targetGraph.Nodes[candidates[j]].Version)
+	})
+	return candidates
+}
+
+// enterTargetChannel tries the entry candidates of the target graph in order and returns the
+// upgrades from startVer to the first candidate that is reachable from startVer in the channel
+// of the candidate's minor version, along with the candidate index. The channel of each minor
+// version is fetched at most once. No upgrades are returned when no candidate is reachable.
+func enterTargetChannel(ctx context.Context, cs CincinnatiSchema, prefix string, targetGraph cincinnati.Graph, candidates []int, include func(cincinnati.Update) bool, startVer semver.Version) (cincinnati.Update, []cincinnati.Update, int, error) {
+	graphs := map[string]cincinnati.Graph{}
+	for _, idx := range candidates {
+		entryVer := targetGraph.Nodes[idx].Version
+		entryChannel := fmt.Sprintf("%s-%d.%d", prefix, entryVer.Major, entryVer.Minor)
+		graph, ok := graphs[entryChannel]
+		if !ok {
+			var err error
+			if graph, err = getChannelGraph(ctx, cs, entryChannel, startVer); err != nil {
+				return cincinnati.Update{}, nil, -1, err
+			}
+			graphs[entryChannel] = graph
+		}
+		if path := versionPath(graph, include, startVer, entryVer); len(path) > 0 {
+			cs.Log.Debug("Getting updates for version %s in channel %s", startVer.String(), entryChannel)
+			return cincinnati.Update(graph.Nodes[path[0]]), graphUpdates(graph, path), idx, nil
+		}
+	}
+	return cincinnati.Update{}, nil, -1, nil
+}
+
+// versionPath returns the shortest path from one version to another in the graph through the
+// releases accepted by include, or nil when the graph does not contain both versions or has no
+// path between them.
+func versionPath(graph cincinnati.Graph, include func(cincinnati.Update) bool, from, to semver.Version) []int {
+	_, fromIdx, err := graph.GetNodeByVersion(from)
+	if err != nil {
+		return nil
+	}
+	_, toIdx, err := graph.GetNodeByVersion(to)
+	if err != nil {
+		return nil
+	}
+	return shortestPath(upgradeEdges(graph, include), fromIdx, toIdx)
+}
+
+// upgradeFilter returns the releases that a cross major version upgrade may go through: only
+// generally available releases when both startVer and reqVer are generally available, and all
+// releases (nil) otherwise.
+func upgradeFilter(startVer, reqVer semver.Version) func(cincinnati.Update) bool {
+	if len(startVer.Pre) > 0 || len(reqVer.Pre) > 0 {
+		return nil
+	}
+	return func(update cincinnati.Update) bool {
+		return len(update.Version.Pre) == 0
+	}
+}
+
+// filterDescription describes the restriction applied by upgradeFilter in error messages.
+func filterDescription(include func(cincinnati.Update) bool) string {
+	if include == nil {
+		return ""
+	}
+	return " through generally available releases"
+}
+
+// noUpgradePathError returns the error for a missing upgrade path from startVer in the source
+// channel to reqVer in the target channel.
+func noUpgradePathError(sourceChannel, targetChannel string, startVer, reqVer semver.Version, detail string) error {
+	return &Error{
+		Reason:  "NoUpgradePath",
+		Message: fmt.Sprintf("no upgrade path from version %s in channel %q to version %s in channel %q: %s", startVer, sourceChannel, reqVer, targetChannel, detail),
+	}
+}
+
+// getChannelGraph fetches the update graph of the channel.
+func getChannelGraph(ctx context.Context, cs CincinnatiSchema, channel string, version semver.Version) (cincinnati.Graph, error) {
+	graph, err := getGraphData(ctx, cs, channel, version.String())
+	if err != nil {
+		return graph, &Error{
+			Reason:  "APIRequestError",
+			Message: fmt.Sprintf(ChannelInfo, channel, err),
+			cause:   err,
+		}
+	}
+	return graph, nil
+}
+
+// graphUpdates returns the updates of the graph nodes on the path.
+func graphUpdates(graph cincinnati.Graph, path []int) []cincinnati.Update {
+	updates := make([]cincinnati.Update, 0, len(path))
+	for _, idx := range path {
+		updates = append(updates, cincinnati.Update(graph.Nodes[idx]))
+	}
+	return updates
+}
+
+// upgradeEdges returns the destinations of the graph edges by origin node index, sorted by
+// descending version to ensure deterministic results. When include is not nil, only edges
+// between releases it accepts are returned.
+func upgradeEdges(graph cincinnati.Graph, include func(cincinnati.Update) bool) map[int][]int {
+	edgesByOrigin := make(map[int][]int, len(graph.Nodes))
+	for _, edge := range graph.Edges {
+		if include != nil && (!include(cincinnati.Update(graph.Nodes[edge[0]])) || !include(cincinnati.Update(graph.Nodes[edge[1]]))) {
+			continue
+		}
+		edgesByOrigin[edge[0]] = append(edgesByOrigin[edge[0]], edge[1])
+	}
+
+	// Sort destination by semver to ensure deterministic result
+	for origin, destinations := range edgesByOrigin {
+		sort.Slice(destinations, func(i, j int) bool {
+			return graph.Nodes[destinations[i]].Version.GT(graph.Nodes[destinations[j]].Version)
+		})
+		edgesByOrigin[origin] = destinations
+	}
+	return edgesByOrigin
+}
+
+// shortestPath returns the node indexes of the shortest path from start to end through the
+// edges, or an empty slice when end cannot be reached from start.
+func shortestPath(g map[int][]int, start, end int) []int {
+	prev := map[int]int{}
+	visited := map[int]struct{}{}
+	queue := []int{start}
+	visited[start] = struct{}{}
+	prev[start] = -1
+
+	for len(queue) > 0 {
+		node := queue[0]
+		queue = queue[1:]
+		if node == end {
+			break
+		}
+
+		for _, neighbor := range g[node] {
+			if _, ok := visited[neighbor]; !ok {
+				prev[neighbor] = node
+				queue = append(queue, neighbor)
+				visited[neighbor] = struct{}{}
+			}
+		}
+	}
+
+	// No path to end
+	if _, ok := visited[end]; !ok {
+		return []int{}
+	}
+
+	path := []int{end}
+	for next := prev[end]; next != -1; next = prev[next] {
+		path = append(path, next)
+	}
+
+	// Reverse path.
+	for i, j := 0, len(path)-1; i < j; i, j = i+1, j-1 {
+		path[i], path[j] = path[j], path[i]
+	}
+
+	return path
+}
+
+// reachableTo returns the indexes of the nodes from which end can be reached through the
+// edges, including end itself.
+func reachableTo(edgesByOrigin map[int][]int, end int) map[int]bool {
+	origins := make(map[int][]int, len(edgesByOrigin))
+	for origin, destinations := range edgesByOrigin {
+		for _, destination := range destinations {
+			origins[destination] = append(origins[destination], origin)
+		}
+	}
+
+	reachable := map[int]bool{end: true}
+	queue := []int{end}
+	for len(queue) > 0 {
+		node := queue[0]
+		queue = queue[1:]
+		for _, origin := range origins[node] {
+			if !reachable[origin] {
+				reachable[origin] = true
+				queue = append(queue, origin)
+			}
+		}
+	}
+	return reachable
+}
+
 // handleBlockedEdges will check for the starting version in the current channel
 // if it does not exist the version is blocked.
 func handleBlockedEdges(ctx context.Context, cs CincinnatiSchema, targetChannel string, startVer semver.Version) (bool, error) {
@@ -279,11 +495,11 @@ func getSemverFromChannels(sourceChannel, targetChannel string) (source, target 
 	}
 	source, err = semver.Parse(fmt.Sprintf("%s.0", sourceChannel[sourceIdx+1:]))
 	if err != nil {
-		return source, target, prefix, err
+		return source, target, prefix, fmt.Errorf("%w", err)
 	}
 	target, err = semver.Parse(fmt.Sprintf("%s.0", targetChannel[targetIdx+1:]))
 	if err != nil {
-		return source, target, prefix, err
+		return source, target, prefix, fmt.Errorf("%w", err)
 	}
 	prefix = sourceChannel[:sourceIdx]
 	return source, target, prefix, nil

@@ -260,3 +260,128 @@ func (o mockManifest) ImageManifest(ctx context.Context, sourceCtx *types.System
 func (o mockManifest) GetManifestListDigests(ctx context.Context, sourceCtx *types.SystemContext, source string) ([]string, error) {
 	return nil, nil
 }
+
+// OCPBUGS-136257: release channels of two major versions in the same image set configuration.
+func TestCollectChannelImagesCrossMajor(t *testing.T) {
+	tests := []struct {
+		name        string
+		graphs      map[string]string
+		channels    []v2alpha1.ReleaseChannel
+		expVersions []string
+		expRequests []string
+	}{{
+		name: "CandidateChannels",
+		graphs: map[string]string{
+			"candidate-4.22": testGraph(t, []string{"4.22.19", "4.22.20", "4.22.21", "4.22.23"}, [][2]int{{0, 1}, {1, 2}, {2, 3}}),
+			"candidate-4.23": testGraph(t, []string{"4.22.21", "4.23.0-ec.1"}, [][2]int{{0, 1}}),
+			"candidate-5.0": testGraph(t, []string{"4.22.19", "4.22.20", "4.22.21", "4.22.23", "5.0.0-rc.1", "5.0.0"},
+				[][2]int{{0, 1}, {1, 2}, {1, 5}, {2, 5}, {4, 5}}),
+		},
+		channels: []v2alpha1.ReleaseChannel{
+			{Name: "candidate-4.22", Type: v2alpha1.TypeOCP, MinVersion: "4.22.20", MaxVersion: "4.22.21"},
+			{Name: "candidate-5.0", Type: v2alpha1.TypeOCP, MinVersion: "5.0.0", MaxVersion: "5.0.0"},
+		},
+		expVersions: []string{"4.22.20", "4.22.21", "5.0.0"},
+		expRequests: []string{"candidate-4.22", "candidate-5.0", "candidate-5.0"},
+	}, {
+		name: "StableChannels",
+		graphs: map[string]string{
+			"stable-4.22": testGraph(t, []string{"4.22.19", "4.22.20"}, [][2]int{{0, 1}}),
+			"stable-5.0":  testGraph(t, []string{"4.22.19", "4.22.20", "5.0.0"}, [][2]int{{0, 1}, {1, 2}}),
+		},
+		channels: []v2alpha1.ReleaseChannel{
+			{Name: "stable-4.22", Type: v2alpha1.TypeOCP, MinVersion: "4.22.20", MaxVersion: "4.22.20"},
+			{Name: "stable-5.0", Type: v2alpha1.TypeOCP, MinVersion: "5.0.0", MaxVersion: "5.0.0"},
+		},
+		expVersions: []string{"4.22.20", "5.0.0"},
+		expRequests: []string{"stable-4.22", "stable-5.0", "stable-5.0"},
+	}}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			endpoint, requestedChannels := newChannelGraphServer(t, tt.graphs)
+			t.Setenv("UPDATE_URL_OVERRIDE", endpoint.String())
+			o := &CincinnatiSchema{Log: clog.New("trace"), CincinnatiParams: CincinnatiParams{Arch: "amd64", GraphDataDir: t.TempDir()}}
+			flagReport := false
+
+			images, errs := o.collectChannelImages(context.Background(), tt.channels, &flagReport)
+			assert.Empty(t, errs)
+
+			expImages := make([]string, 0, len(tt.expVersions))
+			for _, v := range tt.expVersions {
+				expImages = append(expImages, testUpdate(v).Image)
+			}
+			// Images of the channels and of the cross channel upgrades are not deduplicated here.
+			unique := map[string]bool{}
+			sources := make([]string, 0, len(images))
+			for _, img := range images {
+				if !unique[img.Source] {
+					unique[img.Source] = true
+					sources = append(sources, img.Source)
+				}
+			}
+			assert.ElementsMatch(t, expImages, sources)
+			assert.Equal(t, tt.expRequests, requestedChannels())
+		})
+	}
+}
+
+// warnRecorder records the warning messages logged through it.
+type warnRecorder struct {
+	clog.PluggableLoggerInterface
+	warnings []string
+}
+
+func (l *warnRecorder) Warn(msg string, _ ...interface{}) {
+	l.warnings = append(l.warnings, msg)
+}
+
+func TestWarnEUSChannel(t *testing.T) {
+	tests := []struct {
+		name            string
+		channel         v2alpha1.ReleaseChannel
+		alreadyReported bool
+		expReported     bool
+	}{{
+		name:        "EUSTwoMinorVersions",
+		channel:     v2alpha1.ReleaseChannel{Name: "eus-4.22", MinVersion: "4.20.0", MaxVersion: "4.22.0"},
+		expReported: true,
+	}, {
+		name:    "EUSOneMinorVersion",
+		channel: v2alpha1.ReleaseChannel{Name: "eus-4.22", MinVersion: "4.21.0", MaxVersion: "4.22.5"},
+	}, {
+		name:    "EUSPatchVersions",
+		channel: v2alpha1.ReleaseChannel{Name: "eus-4.22", MinVersion: "4.22.0", MaxVersion: "4.22.9"},
+	}, {
+		// OCPBUGS-136257: the number of minor versions between two major versions is unknown.
+		name:    "EUSAcrossMajorVersions",
+		channel: v2alpha1.ReleaseChannel{Name: "eus-4.22", MinVersion: "4.22.20", MaxVersion: "5.0.0"},
+	}, {
+		name:    "NonEUSAcrossMajorVersions",
+		channel: v2alpha1.ReleaseChannel{Name: "stable-5.0", MinVersion: "4.22.20", MaxVersion: "5.0.0"},
+	}, {
+		name:    "EUSReversedRange",
+		channel: v2alpha1.ReleaseChannel{Name: "eus-4.22", MinVersion: "4.22.0", MaxVersion: "4.20.0"},
+	}, {
+		name:            "AlreadyReported",
+		channel:         v2alpha1.ReleaseChannel{Name: "eus-4.22", MinVersion: "4.20.0", MaxVersion: "4.22.0"},
+		alreadyReported: true,
+		expReported:     true,
+	}, {
+		name:    "NoMinVersion",
+		channel: v2alpha1.ReleaseChannel{Name: "eus-4.22", MaxVersion: "4.22.0"},
+	}}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			log := &warnRecorder{PluggableLoggerInterface: clog.New("trace")}
+			o := &CincinnatiSchema{Log: log}
+
+			reported := o.warnEUSChannel(tt.channel, tt.alreadyReported)
+			assert.Equal(t, tt.expReported, reported)
+			if tt.expReported && !tt.alreadyReported {
+				assert.Len(t, log.warnings, 1)
+			} else {
+				assert.Empty(t, log.warnings)
+			}
+		})
+	}
+}
