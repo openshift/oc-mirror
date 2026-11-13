@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/operator-framework/operator-registry/alpha/declcfg"
 	"github.com/vbauerster/mpb/v8"
 	"go.podman.io/image/v5/types"
 
@@ -51,6 +52,8 @@ func (o *FilterCollector) OperatorImageCollector(ctx context.Context) (v2alpha1.
 	// found during the preparation of the images.
 	allErrs := []error{}
 
+	var pendingShared []sharedDeletePending
+
 	p := mpb.New(mpb.PopCompletedMode(), mpb.ContainerOptional(mpb.WithOutput(io.Discard), !o.Opts.Global.IsTerminal))
 	for _, op := range o.Config.Mirror.Operators {
 		// download the operator index image
@@ -75,7 +78,7 @@ func (o *FilterCollector) OperatorImageCollector(ctx context.Context) (v2alpha1.
 		// catalog contributed — needed to populate platform filters correctly when the
 		// same bundle appears in multiple catalogs with different platform requirements.
 		localRelatedImages := make(map[string][]v2alpha1.RelatedImage)
-		result, err := o.collectOperator(ctx, op, localRelatedImages, copyImageSchemaMap)
+		result, err := o.collectOperator(ctx, op, localRelatedImages, copyImageSchemaMap, &pendingShared)
 		if err != nil {
 			spinner.Abort(true)
 			spinner.Wait()
@@ -122,6 +125,10 @@ func (o *FilterCollector) OperatorImageCollector(ctx context.Context) (v2alpha1.
 		}
 	}
 	p.Wait()
+
+	if err := o.applySharedDeleteFilters(ctx, relatedImages, pendingShared); err != nil {
+		allErrs = append(allErrs, err)
+	}
 
 	o.Log.Debug(collectorPrefix+"related images length %d ", len(relatedImages))
 	count := 0
@@ -253,6 +260,7 @@ func (o FilterCollector) collectOperator( //nolint:cyclop // TODO: this needs fu
 	op v2alpha1.Operator,
 	relatedImages map[string][]v2alpha1.RelatedImage,
 	copyImageSchemaMap *v2alpha1.CopyImageSchemaMap,
+	pendingShared *[]sharedDeletePending,
 ) (v2alpha1.CatalogFilterResult, error) {
 	// CLID-47 double check that targetCatalog is valid
 	if op.TargetCatalog != "" && !v2alpha1.IsValidPathComponent(op.TargetCatalog) {
@@ -281,6 +289,18 @@ func (o FilterCollector) collectOperator( //nolint:cyclop // TODO: this needs fu
 		return v2alpha1.CatalogFilterResult{}, err
 	}
 	o.Log.Debug("Found %d related images for catalog %q", len(ri), op.Catalog)
+
+	// OCPBUGS-61236: defer shared-image filtering until every catalog entry in
+	// this request has been collected, so split version filters share one delete set.
+	if pendingShared != nil && o.Opts.IsDeleteMode() && hasVersionConstraints(op) && !isFullCatalog(op) && result.DeclConfig != nil {
+		*pendingShared = append(*pendingShared, sharedDeletePending{
+			op:            op,
+			imgSpec:       imgSpec,
+			catalogDigest: catalogDigest,
+			deleteDC:      result.DeclConfig,
+			deleteRelated: ri,
+		})
+	}
 
 	// OCPBUGS-45059
 	// TODO: remove me when the migration from oc-mirror v1 to v2 ends
@@ -366,6 +386,100 @@ func (o FilterCollector) getCatalogDigest(ctx context.Context, op v2alpha1.Opera
 	}
 
 	return o.Manifest.ImageDigest(ctx, srcCtx, imgSpec.ReferenceWithTransport)
+}
+
+type sharedDeletePending struct {
+	op            v2alpha1.Operator
+	imgSpec       image.ImageSpec
+	catalogDigest string
+	deleteDC      *declcfg.DeclarativeConfig
+	deleteRelated map[string][]v2alpha1.RelatedImage
+}
+
+func (o FilterCollector) applySharedDeleteFilters(
+	ctx context.Context,
+	relatedImages map[string][]v2alpha1.RelatedImage,
+	pending []sharedDeletePending,
+) error {
+	if len(pending) == 0 {
+		return nil
+	}
+	unionDelete := make(map[string]struct{})
+	for _, p := range pending {
+		names, _ := deleteBundleIdentity(p.deleteDC)
+		for name := range names {
+			unionDelete[name] = struct{}{}
+		}
+	}
+	for _, p := range pending {
+		filtered, err := o.excludeSharedRelatedForDelete(ctx, p.op, p.imgSpec, p.catalogDigest, p.deleteDC, p.deleteRelated, unionDelete)
+		if err != nil {
+			return err
+		}
+		for bundleName := range p.deleteRelated {
+			delete(relatedImages, bundleName)
+		}
+		maps.Copy(relatedImages, filtered)
+	}
+	return nil
+}
+
+// excludeSharedRelatedForDelete reloads the package-wide catalog view and drops
+// related images from the delete set that sibling versions still reference.
+func (o FilterCollector) excludeSharedRelatedForDelete(
+	ctx context.Context,
+	op v2alpha1.Operator,
+	imgSpec image.ImageSpec,
+	catalogDigest string,
+	deleteDC *declcfg.DeclarativeConfig,
+	deleteRelated map[string][]v2alpha1.RelatedImage,
+	unionDeleteBundles map[string]struct{},
+) (map[string][]v2alpha1.RelatedImage, error) {
+	imageIndexDir := filepath.Join(o.Opts.Global.WorkingDir, operatorCatalogsDir, imgSpec.ComponentName(), catalogDigest)
+	dcPath, err := o.ctlgHandler.ExtractOCIConfigLayers(imgSpec, imageIndexDir)
+	if err != nil {
+		return nil, fmt.Errorf("load catalog for shared-image delete filtering: %w", err)
+	}
+	originalDC, err := o.ctlgHandler.GetDeclarativeConfig(ctx, dcPath)
+	if err != nil {
+		return nil, fmt.Errorf("parse catalog for shared-image delete filtering: %w", err)
+	}
+	packageDC, err := filterCatalog(ctx, *originalDC, packagesWithoutVersionBounds(op))
+	if err != nil {
+		return nil, fmt.Errorf("filter package-wide catalog for shared-image delete filtering: %w", err)
+	}
+	return excludeRelatedImagesSharedWithSiblingBundles(
+		o.Log, deleteRelated, deleteDC, packageDC, unionDeleteBundles, o.siblingOnDestination(ctx),
+	), nil
+}
+
+func (o FilterCollector) siblingOnDestination(ctx context.Context) func(declcfg.Bundle) bool {
+	h, ok := o.ctlgHandler.(CatalogHandler)
+	if !ok || h.Mirror == nil {
+		return nil
+	}
+	return func(b declcfg.Bundle) bool {
+		if b.Image == "" {
+			return true
+		}
+		spec, err := image.ParseRef(b.Image)
+		if err != nil {
+			return true
+		}
+		dest := consts.DockerProtocol + strings.Join([]string{o.destinationRegistry(), spec.PathComponent}, "/")
+		switch {
+		case spec.IsImageByDigestOnly():
+			dest += ":" + spec.Algorithm + "-" + spec.Digest
+		case spec.Tag != "":
+			dest += ":" + spec.Tag
+		}
+		present, err := h.Mirror.Check(ctx, dest, &o.Opts, false)
+		if err != nil {
+			o.Log.Debug("could not confirm sibling bundle %s on destination: %v; keeping shared images", b.Name, err)
+			return true
+		}
+		return present
+	}
 }
 
 func (o FilterCollector) filterOperator(ctx context.Context, op v2alpha1.Operator, imgSpec image.ImageSpec, catalogDigest string) (v2alpha1.CatalogFilterResult, error) { //nolint:cyclop // TODO: this needs further refactoring
