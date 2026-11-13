@@ -263,22 +263,9 @@ func (o *ClusterResourcesGenerator) generateCatalogSource(catalogRef string, cat
 
 	var csSuffix string
 	if catalogSpec.IsImageByDigestOnly() {
-		if len(catalogSpec.Digest) >= hashTruncLen {
-			csSuffix = catalogSpec.Digest[:hashTruncLen]
-		} else {
-			csSuffix = catalogSpec.Digest
-		}
+		csSuffix = sanitizeRFC1035Suffix(catalogSpec.Digest)
 	} else {
-		tag := catalogSpec.Tag
-		if len(tag) >= hashTruncLen {
-			csSuffix = strings.Map(toRFC1035, tag[:hashTruncLen])
-		} else {
-			csSuffix = strings.Map(toRFC1035, tag)
-		}
-	}
-
-	if csSuffix == "" {
-		csSuffix = "0" // default value
+		csSuffix = sanitizeRFC1035Suffix(catalogSpec.Tag)
 	}
 
 	pathComponents := strings.Split(catalogSpec.PathComponent, "/")
@@ -411,22 +398,9 @@ func (o *ClusterResourcesGenerator) generateClusterCatalog(catalogRef string) er
 
 	var ccSuffix string
 	if catalogSpec.IsImageByDigestOnly() {
-		if len(catalogSpec.Digest) >= hashTruncLen {
-			ccSuffix = catalogSpec.Digest[:hashTruncLen]
-		} else {
-			ccSuffix = catalogSpec.Digest
-		}
+		ccSuffix = sanitizeRFC1035Suffix(catalogSpec.Digest)
 	} else {
-		tag := catalogSpec.Tag
-		if len(tag) >= hashTruncLen {
-			ccSuffix = strings.Map(toRFC1035, tag[:hashTruncLen])
-		} else {
-			ccSuffix = strings.Map(toRFC1035, tag)
-		}
-	}
-
-	if ccSuffix == "" {
-		ccSuffix = "0" // default value
+		ccSuffix = sanitizeRFC1035Suffix(catalogSpec.Tag)
 	}
 
 	pathComponents := strings.Split(catalogSpec.PathComponent, "/")
@@ -730,6 +704,34 @@ func isValidRFC1123(name string) bool {
 	rfc1123Regex := "^[a-zA-Z0-9][-a-zA-Z0-9]*[a-zA-Z0-9]$"
 	match, _ := regexp.MatchString(rfc1123Regex, name)
 	return match && len(name) <= 63
+}
+
+// sanitizeRFC1035Suffix builds a truncated DNS-1035-safe suffix from a tag or digest.
+// Truncation alone can leave a trailing '-' (OCPBUGS-69908: targetTag
+// "logging-clo-v6.2.7-coo-v1.3.1" → first 12 chars "logging-clo-"), which fails
+// IsDNS1035Label. Skip hyphens that would lead or trail the window so the suffix
+// stays alphanumeric and distinct tags (logging-clo vs logging-clo-v6.2.7…) do
+// not collapse to the same generated CatalogSource/ClusterCatalog name.
+// Internal repeated hyphens are kept (DNS-1035 allows them) so tags like v1--0
+// and v1-0 stay distinct.
+func sanitizeRFC1035Suffix(raw string) string {
+	mapped := strings.Map(toRFC1035, raw)
+	var b strings.Builder
+	b.Grow(hashTruncLen)
+	for _, r := range mapped {
+		if b.Len() >= hashTruncLen {
+			break
+		}
+		if r == '-' && (b.Len() == 0 || b.Len() == hashTruncLen-1) {
+			continue
+		}
+		b.WriteRune(r)
+	}
+	out := strings.TrimRight(b.String(), "-")
+	if out == "" {
+		return "0"
+	}
+	return out
 }
 
 func toRFC1035(r rune) rune {
