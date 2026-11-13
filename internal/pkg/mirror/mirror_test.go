@@ -2,6 +2,7 @@ package mirror
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -165,6 +166,54 @@ func TestMirrorCheck(t *testing.T) {
 		_, err := m.Check(context.Background(), "broken", &opts, false)
 		assert.Equal(t, "invalid source name broken: Invalid image name \"broken\", expected colon-separated transport:reference", err.Error())
 	})
+}
+
+func TestIsConfirmedAbsence(t *testing.T) {
+	t.Parallel()
+	tests := map[string]struct {
+		err  error
+		want bool
+	}{
+		"nil": {err: nil, want: false},
+		"typed NAME_UNKNOWN": {
+			err:  errcode.Error{Code: errcodev2.ErrorCodeNameUnknown, Message: "repository name not known to registry"},
+			want: true,
+		},
+		"typed MANIFEST_UNKNOWN": {
+			err:  errcode.Error{Code: errcodev2.ErrorCodeManifestUnknown, Message: "manifest unknown"},
+			want: true,
+		},
+		"wrapped NAME_UNKNOWN": {
+			err:  fmt.Errorf("reading image: %w", errcode.Error{Code: errcodev2.ErrorCodeNameUnknown}),
+			want: true,
+		},
+		"error list with NAME_UNKNOWN": {
+			err:  errcode.Errors{errcode.Error{Code: errcodev2.ErrorCodeNameUnknown}},
+			want: true,
+		},
+		"unauthorized is not absence": {
+			err:  errcode.Error{Code: errcode.ErrorCodeUnauthorized, Message: "unauthorized"},
+			want: false,
+		},
+		"network error is not absence": {
+			err:  errors.New("dial tcp: i/o timeout"),
+			want: false,
+		},
+		"string manifest unknown": {
+			err:  errors.New("reading manifest sha256:abc: manifest unknown"),
+			want: true,
+		},
+		"string name unknown": {
+			err:  errors.New("name unknown: repository name not known to registry"),
+			want: true,
+		},
+	}
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			assert.Equal(t, tt.want, isConfirmedAbsence(tt.err))
+		})
+	}
 }
 
 // TestMirrorDelete
