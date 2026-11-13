@@ -78,13 +78,7 @@ func (o *LocalStorageCollector) graphImageInWorkingDir(ctx context.Context) (str
 }
 
 func (o LocalStorageCollector) imageExists(ctx context.Context, ref string) (bool, error) {
-	sourceCtx, err := o.Opts.SrcImage.NewSystemContext()
-	if err != nil {
-		return false, err
-	}
-	// local cache is http protocol
-	sourceCtx.DockerInsecureSkipTLSVerify = types.OptionalBoolTrue
-	digest, err := o.Manifest.ImageDigest(ctx, sourceCtx, ref)
+	digest, err := o.cachedImageDigest(ctx, ref)
 	if err != nil {
 		return false, err
 	}
@@ -92,4 +86,19 @@ func (o LocalStorageCollector) imageExists(ctx context.Context, ref string) (boo
 		return false, nil
 	}
 	return true, nil
+}
+
+// cachedImageDigest returns the encoded manifest digest of an image of the local cache.
+func (o LocalStorageCollector) cachedImageDigest(ctx context.Context, ref string) (string, error) {
+	sourceCtx, err := o.Opts.SrcImage.NewSystemContext()
+	if err != nil {
+		return "", err
+	}
+	// local cache is http protocol
+	sourceCtx.DockerInsecureSkipTLSVerify = types.OptionalBoolTrue
+	digest, err := o.Manifest.ImageDigest(ctx, sourceCtx, ref)
+	if err != nil {
+		return "", fmt.Errorf("get digest of cached image: %w", err)
+	}
+	return digest, nil
 }

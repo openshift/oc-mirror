@@ -2,10 +2,13 @@ package release
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -176,6 +179,7 @@ func (o *LocalStorageCollector) collectImageFromMirror(ctx context.Context) ([]v
 func (o *LocalStorageCollector) collectReleaseImages(ctx context.Context, release v2alpha1.CopyImageSchema) ([]v2alpha1.RelatedImage, error) {
 	hld := strings.Split(release.Source, "/")
 	releaseRepoAndTag := hld[len(hld)-1]
+	releaseTag := releaseRepoAndTag[strings.Index(releaseRepoAndTag, ":")+1:]
 	imageIndexDir := strings.ReplaceAll(releaseRepoAndTag, ":", "/")
 	cacheDir := filepath.Join(o.Opts.Global.WorkingDir, releaseImageExtractDir, imageIndexDir)
 	dir := filepath.Join(o.Opts.Global.WorkingDir, releaseImageDir, imageIndexDir)
@@ -208,11 +212,16 @@ func (o *LocalStorageCollector) collectReleaseImages(ctx context.Context, releas
 	}
 
 	if o.Config.Mirror.Platform.KubeVirtContainer {
-		kvImages, err := o.getKubeVirtImages(cacheDir)
+		kvImages, err := o.collectKubeVirtImages(cacheDir)
 		if err != nil {
 			return []v2alpha1.RelatedImage{}, err
 		}
-		allRelatedImages = append(allRelatedImages, kvImages...)
+		if err := checkKubeVirtStreamTags(kvImages, releaseTag); err != nil {
+			return []v2alpha1.RelatedImage{}, err
+		}
+		for _, kvImage := range kvImages {
+			allRelatedImages = append(allRelatedImages, kvImage.RelatedImage)
+		}
 	}
 
 	return allRelatedImages, nil
@@ -270,7 +279,7 @@ func (o *LocalStorageCollector) collectImageFromDisk(ctx context.Context) ([]v2a
 	}
 
 	for _, releaseDir := range releaseFolders {
-		releaseCopyImages, err := o.prepareReleaseBatchFromDir(releaseDir)
+		releaseCopyImages, err := o.prepareReleaseBatchFromDir(ctx, releaseDir)
 		if err != nil {
 			return []v2alpha1.CopyImageSchema{}, fmt.Errorf(errMsg, err.Error())
 		}
@@ -307,7 +316,7 @@ func (o *LocalStorageCollector) prepareMonoReleaseBatch(releaseImg v2alpha1.Rela
 	return o.prepareD2MCopyBatch([]v2alpha1.RelatedImage{releaseImg}, tag)
 }
 
-func (o *LocalStorageCollector) prepareReleaseBatchFromDir(releaseDir string) ([]v2alpha1.CopyImageSchema, error) {
+func (o *LocalStorageCollector) prepareReleaseBatchFromDir(ctx context.Context, releaseDir string) ([]v2alpha1.CopyImageSchema, error) {
 	releaseTag := filepath.Base(releaseDir)
 
 	// get all release images from manifest (json)
@@ -317,15 +326,111 @@ func (o *LocalStorageCollector) prepareReleaseBatchFromDir(releaseDir string) ([
 		return []v2alpha1.CopyImageSchema{}, err
 	}
 
-	if o.Config.Mirror.Platform.KubeVirtContainer {
-		kvImages, err := o.getKubeVirtImages(releaseDir)
-		if err != nil {
-			return []v2alpha1.CopyImageSchema{}, err
-		}
-		releaseRelatedImages = append(releaseRelatedImages, kvImages...)
+	releaseCopies, err := o.prepareD2MCopyBatch(releaseRelatedImages, releaseTag)
+	if err != nil || !o.Config.Mirror.Platform.KubeVirtContainer {
+		return releaseCopies, err
 	}
 
-	return o.prepareD2MCopyBatch(releaseRelatedImages, releaseTag)
+	kvImages, err := o.collectKubeVirtImages(releaseDir)
+	if err != nil {
+		return []v2alpha1.CopyImageSchema{}, err
+	}
+	if err := checkKubeVirtStreamTags(kvImages, releaseTag); err != nil {
+		return []v2alpha1.CopyImageSchema{}, err
+	}
+	kvCopies, err := o.prepareKubeVirtD2MCopyBatch(ctx, kvImages, releaseTag)
+	if err != nil {
+		return []v2alpha1.CopyImageSchema{}, err
+	}
+	return append(releaseCopies, kvCopies...), nil
+}
+
+// prepareKubeVirtD2MCopyBatch prepares the disk to mirror copies of the kubevirt images.
+// Archives created before stream collections were supported only hold the images of the
+// legacy single stream, under their legacy names. When the cache does not hold the image
+// of a stream under the name of the stream, the image held under its legacy name is copied
+// instead, but only when its digest is the digest of the image of the stream: the
+// destination keeps the name of the stream, so that it always matches its content.
+// Otherwise the copy is kept unchanged and fails, like for any image missing from the archive.
+// The cache is not read in delete mode.
+func (o LocalStorageCollector) prepareKubeVirtD2MCopyBatch(ctx context.Context, images []kubeVirtImage, releaseTag string) ([]v2alpha1.CopyImageSchema, error) {
+	relatedImages := make([]v2alpha1.RelatedImage, 0, len(images))
+	for _, img := range images {
+		relatedImages = append(relatedImages, img.RelatedImage)
+	}
+	copies, err := o.prepareD2MCopyBatch(relatedImages, releaseTag)
+	if err != nil {
+		return nil, err
+	}
+	// The copies are matched with their images by position.
+	if len(copies) != len(images) {
+		return nil, fmt.Errorf("kubevirt: %d disk to mirror copies prepared for %d images", len(copies), len(images))
+	}
+	if o.Opts.IsDeleteMode() {
+		return copies, nil
+	}
+
+	// legacySources maps the legacy names to the sources of the legacy single stream images.
+	legacySources := map[string]string{}
+	for i, img := range images {
+		if img.stream == "" {
+			legacySources[img.Name] = copies[i].Source
+		}
+	}
+	for i, img := range images {
+		if img.stream != "" {
+			copies[i].Source = o.kubeVirtD2MSource(ctx, img, copies[i].Source, legacySources[img.legacyName])
+		}
+	}
+	return copies, nil
+}
+
+// kubeVirtD2MSource returns the source, in the local cache, of the disk to mirror copy of
+// the image of a stream collection (see prepareKubeVirtD2MCopyBatch). legacySource is the
+// source of the legacy single stream image with the same legacy name, if any.
+func (o LocalStorageCollector) kubeVirtD2MSource(ctx context.Context, img kubeVirtImage, streamSource, legacySource string) string {
+	if exists, err := o.imageExists(ctx, streamSource); err == nil && exists {
+		return streamSource
+	}
+	outcome := kubeVirtLegacyImageUnavailable
+	if legacySource != "" {
+		matches, err := o.cachedImageMatchesDigestRef(ctx, legacySource, img.Image)
+		switch {
+		case err == nil && matches:
+			o.Log.Info("kubevirt: copying %s, archived under the legacy name, for stream %q (arch: %v, %s)",
+				legacySource, img.stream, img.arch, kubeVirtLegacyDigestMatched)
+			return legacySource
+		case err == nil:
+			outcome = kubeVirtLegacyDigestNotMatched
+		}
+	}
+	o.Log.Warn("kubevirt: the archive has no image %s for stream %q (arch: %v, %s): "+
+		"the archive was probably created by an older version of oc-mirror", streamSource, img.stream, img.arch, outcome)
+	return streamSource
+}
+
+// Outcome codes of the lookup of a stream collection image archived under its legacy name.
+const (
+	kubeVirtLegacyDigestMatched    = "legacy-digest-matched"
+	kubeVirtLegacyDigestNotMatched = "legacy-digest-not-matched"
+	kubeVirtLegacyImageUnavailable = "legacy-image-unavailable"
+)
+
+// cachedImageMatchesDigestRef reports whether the image of the local cache has the
+// sha256 manifest digest of the digest reference.
+func (o LocalStorageCollector) cachedImageMatchesDigestRef(ctx context.Context, cachedRef, digestRef string) (bool, error) {
+	spec, err := image.ParseRef(digestRef)
+	if err != nil {
+		return false, err
+	}
+	if spec.Algorithm != "sha256" || spec.Digest == "" {
+		return false, nil
+	}
+	cachedDigest, err := o.cachedImageDigest(ctx, cachedRef)
+	if err != nil {
+		return false, err
+	}
+	return cachedDigest == spec.Digest, nil
 }
 
 func (o *LocalStorageCollector) prepareGraphImage(ctx context.Context) (v2alpha1.CopyImageSchema, error) {
@@ -554,10 +659,56 @@ var kubeVirtArchName = map[string]string{
 // workflow (platform.platforms) so that every supported arch is mirrored.
 var allKubeVirtArchKeys = []string{"x86_64", "s390x"}
 
+// kubeVirtStream is a CoreOS stream document of the bootimages ConfigMap.
+type kubeVirtStream struct {
+	// name is the stream name in the stream collection (data.streams).
+	// It is empty for the legacy single stream (data.stream).
+	name   string
+	images v2alpha1.InstallerBootableImages
+}
+
+// kubeVirtStreamNameRegexp matches the stream names that only contain characters
+// allowed in an image tag, so that they can be appended to the destination tag.
+var kubeVirtStreamNameRegexp = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]*$`)
+
+// kubeVirtTagRegexp matches valid image tags: the tag grammar of
+// github.com/distribution/reference ([\w][\w.-]{0,127}), anchored.
+var kubeVirtTagRegexp = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$`)
+
+// kubeVirtImage is a kubevirt image to mirror.
+type kubeVirtImage struct {
+	v2alpha1.RelatedImage
+	// arch is the bootimages architecture key of the image.
+	arch string
+	// stream is the name of the stream of the image in the stream collection.
+	// It is empty for the images of the legacy single stream.
+	stream string
+	// legacyName is the name that the image has in archives created before stream
+	// collections were supported. It is only set for the images of a stream collection.
+	legacyName string
+}
+
 // getKubeVirtImages - CLID-179 : include coreos-bootable container images
 // for all requested architectures. Returns one RelatedImage per architecture
-// whose kubevirt digest-ref is non-empty in the bootimages ConfigMap.
+// whose kubevirt digest-ref is non-empty in the bootimages ConfigMap, for every
+// CoreOS stream: the images of the legacy single stream (data.stream) keep their
+// legacy names, even when a stream of the stream collection (data.streams) has the
+// same image, and the images of the stream collection get the name of their stream.
 func (o LocalStorageCollector) getKubeVirtImages(releaseArtifactsDir string) ([]v2alpha1.RelatedImage, error) {
+	kvImages, err := o.collectKubeVirtImages(releaseArtifactsDir)
+	if err != nil {
+		return nil, err
+	}
+	images := make([]v2alpha1.RelatedImage, 0, len(kvImages))
+	for _, img := range kvImages {
+		images = append(images, img.RelatedImage)
+	}
+	return images, nil
+}
+
+// collectKubeVirtImages returns the kubevirt images described by getKubeVirtImages,
+// together with their architectures, stream names and legacy names.
+func (o LocalStorageCollector) collectKubeVirtImages(releaseArtifactsDir string) ([]kubeVirtImage, error) {
 	// parse the main yaml file
 	biFile := strings.Join([]string{releaseArtifactsDir, releaseBootableImagesFullPath}, "/")
 	icm, err := parser.ParseYamlFile[v2alpha1.InstallerConfigMap](biFile)
@@ -567,14 +718,12 @@ func (o LocalStorageCollector) getKubeVirtImages(releaseArtifactsDir string) ([]
 		return nil, fmt.Errorf("marshalling kubevirt yaml file %w", err)
 	}
 
-	o.Log.Trace("data %v", icm.Data.Stream)
-	// now parse the json section
-	ibi, err := parser.ParseJsonReader[v2alpha1.InstallerBootableImages](strings.NewReader(icm.Data.Stream))
+	// now parse the json section(s)
+	streams, err := parseKubeVirtStreams(icm)
 	if err != nil {
-		// this should not break the release process
-		// we just report the error and continue
-		return nil, fmt.Errorf("parsing json from kubevirt configmap data %w", err)
+		return nil, err
 	}
+	o.Log.Debug("kubevirt: %d CoreOS stream document(s) found in the bootimages ConfigMap", len(streams))
 
 	// Build the set of bootimages JSON architecture keys to collect.
 	// When the user chose platform.platforms (the "multi" payload path) we
@@ -583,15 +732,55 @@ func (o LocalStorageCollector) getKubeVirtImages(releaseArtifactsDir string) ([]
 	// JSON key. Defaults to x86_64 for backward compatibility.
 	archKeys := o.requestedKubeVirtArchKeys()
 
-	// archImages maps a bootimages JSON key to its ArchImages struct.
-	archImages := map[string]v2alpha1.ArchImages{
-		"x86_64":  ibi.Architectures.X86_64,
-		"aarch64": ibi.Architectures.Aarch64,
-		"ppc64le": ibi.Architectures.Ppc64le,
-		"s390x":   ibi.Architectures.S390x,
+	var images []kubeVirtImage
+	for _, stream := range streams {
+		images = append(images, o.kubeVirtStreamImages(stream, archKeys)...)
+	}
+	images, err = dedupeKubeVirtImages(images)
+	if err != nil {
+		return nil, err
 	}
 
-	var images []v2alpha1.RelatedImage
+	if len(images) == 0 {
+		return nil, fmt.Errorf("could not find kubevirt image in this release")
+	}
+	return images, nil
+}
+
+// dedupeKubeVirtImages removes the images already present with the same digest-ref and
+// the same name, so the same destination. The images with the same digest-ref and
+// different names are all kept, as each name is a destination that must exist: for
+// example the legacy name of an image of the legacy single stream and the name of its
+// stream in the stream collection. Two different images with the same name, that would
+// be copied to the same destination, are an error.
+func dedupeKubeVirtImages(images []kubeVirtImage) ([]kubeVirtImage, error) {
+	digestRefByName := make(map[string]string, len(images))
+	result := make([]kubeVirtImage, 0, len(images))
+	for _, img := range images {
+		if digestRef, ok := digestRefByName[img.Name]; ok {
+			if digestRef == img.Image {
+				continue
+			}
+			return nil, fmt.Errorf("kubevirt: images %s and %s have the same name %q", digestRef, img.Image, img.Name)
+		}
+		digestRefByName[img.Name] = img.Image
+		result = append(result, img)
+	}
+	return result, nil
+}
+
+// kubeVirtStreamImages returns the kubevirt images of a CoreOS stream for the given
+// bootimages architecture keys.
+func (o LocalStorageCollector) kubeVirtStreamImages(stream kubeVirtStream, archKeys []string) []kubeVirtImage {
+	// archImages maps a bootimages JSON key to its ArchImages struct.
+	archImages := map[string]v2alpha1.ArchImages{
+		"x86_64":  stream.images.Architectures.X86_64,
+		"aarch64": stream.images.Architectures.Aarch64,
+		"ppc64le": stream.images.Architectures.Ppc64le,
+		"s390x":   stream.images.Architectures.S390x,
+	}
+
+	var images []kubeVirtImage
 	for _, archKey := range archKeys {
 		ai, ok := archImages[archKey]
 		if !ok {
@@ -600,30 +789,92 @@ func (o LocalStorageCollector) getKubeVirtImages(releaseArtifactsDir string) ([]
 		}
 		digestRef := ai.Images.Kubevirt.DigestRef
 		if digestRef == "" {
-			o.Log.Debug("kubevirt: no digest-ref for architecture %q in this release — skipping", archKey)
+			if stream.name != "" {
+				o.Log.Debug("kubevirt: no digest-ref for architecture %q in stream %q — skipping", archKey, stream.name)
+			} else {
+				o.Log.Debug("kubevirt: no digest-ref for architecture %q in this release — skipping", archKey)
+			}
 			continue
 		}
-		o.Log.Info("kubeVirtContainer set to true [ including : %v (arch: %v) ]", digestRef, archKey)
-
-		// For backward compatibility, only append the architecture suffix when
-		// mirroring multiple architectures. Single-arch mirrors retain the legacy
-		// tag name "kube-virt-container".
-		imageName := "kube-virt-container"
-		if len(archKeys) > 1 {
-			imageName += "-" + archKey
+		if stream.name != "" {
+			o.Log.Info("kubeVirtContainer set to true [ including : %v (arch: %v, stream: %v) ]", digestRef, archKey, stream.name)
+		} else {
+			o.Log.Info("kubeVirtContainer set to true [ including : %v (arch: %v) ]", digestRef, archKey)
 		}
 
-		images = append(images, v2alpha1.RelatedImage{
+		img := kubeVirtImage{arch: archKey, stream: stream.name, RelatedImage: v2alpha1.RelatedImage{
 			Image: digestRef,
-			Name:  imageName,
+			Name:  kubeVirtImageName(archKey, len(archKeys) > 1, stream.name),
 			Type:  v2alpha1.TypeOCPReleaseContent,
-		})
+		}}
+		if stream.name != "" {
+			img.legacyName = kubeVirtImageName(archKey, len(archKeys) > 1, "")
+		}
+		images = append(images, img)
+	}
+	return images
+}
+
+// checkKubeVirtStreamTags returns an error when the destination tag of an image of a
+// stream collection, made of the release tag, the image name and the stream name, is
+// not a valid image tag. The destination tags of the legacy single stream are unchanged.
+func checkKubeVirtStreamTags(images []kubeVirtImage, releaseTag string) error {
+	for _, img := range images {
+		if img.stream == "" {
+			continue
+		}
+		if tag := prepareTag(image.ImageSpec{}, img.Type, releaseTag, img.Name); !kubeVirtTagRegexp.MatchString(tag) {
+			return fmt.Errorf("kubevirt: the destination tag %q of the image of stream %q (arch: %v) is not a valid image tag: "+
+				"tags have at most 128 letters, digits, '_', '.' and '-'", tag, img.stream, img.arch)
+		}
+	}
+	return nil
+}
+
+// parseKubeVirtStreams returns the CoreOS stream documents of the bootimages ConfigMap:
+// every stream of the stream collection (data.streams), sorted by name so that the
+// result is deterministic, followed by the legacy single stream (data.stream), which
+// has no name. The legacy single stream is required when the stream collection is
+// absent or empty, and optional otherwise.
+func parseKubeVirtStreams(icm v2alpha1.InstallerConfigMap) ([]kubeVirtStream, error) {
+	var streams []kubeVirtStream
+	if strings.TrimSpace(icm.Data.Streams) != "" {
+		collection, err := parser.ParseJsonReader[map[string]v2alpha1.InstallerBootableImages](strings.NewReader(icm.Data.Streams))
+		if err != nil {
+			return nil, fmt.Errorf("parsing json from kubevirt configmap streams data: %w", err)
+		}
+		for _, name := range slices.Sorted(maps.Keys(collection)) {
+			if !kubeVirtStreamNameRegexp.MatchString(name) {
+				return nil, errors.New("invalid stream name in kubevirt configmap streams data: names may only contain letters, digits, '_', '.' and '-'")
+			}
+			streams = append(streams, kubeVirtStream{name: name, images: collection[name]})
+		}
 	}
 
-	if len(images) == 0 {
-		return nil, fmt.Errorf("could not find kubevirt image in this release")
+	if len(streams) > 0 && strings.TrimSpace(icm.Data.Stream) == "" {
+		return streams, nil
 	}
-	return images, nil
+	ibi, err := parser.ParseJsonReader[v2alpha1.InstallerBootableImages](strings.NewReader(icm.Data.Stream))
+	if err != nil {
+		return nil, fmt.Errorf("parsing json from kubevirt configmap data %w", err)
+	}
+	return append(streams, kubeVirtStream{images: ibi}), nil
+}
+
+// kubeVirtImageName returns the name used to build the destination tag of a kubevirt image.
+// For backward compatibility, the image of the legacy single stream keeps the legacy name
+// "kube-virt-container" in single-arch mirrors. The architecture is appended when mirroring
+// multiple architectures, and the stream name is appended for every stream of a stream
+// collection, so that each image gets its own destination.
+func kubeVirtImageName(archKey string, multiArch bool, streamName string) string {
+	imageName := "kube-virt-container"
+	if multiArch {
+		imageName += "-" + archKey
+	}
+	if streamName != "" {
+		imageName += "-" + streamName
+	}
+	return imageName
 }
 
 // requestedKubeVirtArchKeys returns the bootimages JSON architecture keys

@@ -2,7 +2,9 @@ package release
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -16,7 +18,9 @@ import (
 	"github.com/otiai10/copy"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 	"go.podman.io/image/v5/types"
+	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
@@ -1062,6 +1066,743 @@ func TestGetKubeVirtImages(t *testing.T) {
 			}
 		}
 	})
+}
+
+// Synthetic kubevirt images and release used by the OCPBUGS-138157 tests.
+const (
+	// kubeVirtTestReleaseTag is the release directory name, used as release tag, of the
+	// synthetic release written by writeKubeVirtTestBootImages.
+	kubeVirtTestReleaseTag = "1.0.0-x86_64"
+	// kubeVirtTestMockRelease is the release tag of the release returned by MockCincinnati.
+	kubeVirtTestMockRelease = "4.13.10-x86_64"
+	kubeVirtTestRepo        = "registry.example.test/coreos"
+	kubeVirtTestDigest1     = "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+	kubeVirtTestDigest2     = "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+	kubeVirtTestDigest3     = "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+	kubeVirtTestDigest4     = "sha256:4444444444444444444444444444444444444444444444444444444444444444"
+)
+
+// OCPBUGS-138157: bootimages ConfigMaps can hold a collection of CoreOS streams
+// (data.streams) in addition to the legacy single stream (data.stream).
+func TestGetKubeVirtImagesStreamCollection(t *testing.T) {
+	// The legacy single stream is usually one of the streams of the collection.
+	legacyStream := kubeVirtTestStream(t, map[string]string{"x86_64": kubeVirtTestDigest1})
+	// The stream names are intentionally not sorted in the JSON document.
+	streamCollection := `{"rhel-9":` + kubeVirtTestStream(t, map[string]string{"x86_64": kubeVirtTestDigest1, "s390x": kubeVirtTestDigest3}) +
+		`,"rhel-10":` + kubeVirtTestStream(t, map[string]string{"x86_64": kubeVirtTestDigest2}) + `}`
+	// rhel9 is the rhel-9 stream with images for x86_64 and s390x. Like in the release
+	// payloads that ship a stream collection, it is also the legacy single stream.
+	rhel9 := kubeVirtTestStream(t, map[string]string{"x86_64": kubeVirtTestDigest1, "s390x": kubeVirtTestDigest3})
+	twoStreams := `{"rhel-10":` + kubeVirtTestStream(t, map[string]string{"x86_64": kubeVirtTestDigest2, "s390x": kubeVirtTestDigest4}) +
+		`,"rhel-9":` + rhel9 + `}`
+	// In twoStreamsMissingArch, the rhel-10 stream has no s390x image.
+	twoStreamsMissingArch := `{"rhel-10":` + kubeVirtTestStream(t, map[string]string{"x86_64": kubeVirtTestDigest2}) +
+		`,"rhel-9":` + rhel9 + `}`
+
+	defaultPlatform := v2alpha1.Platform{KubeVirtContainer: true}
+	multiArchPlatform := kubeVirtTestMultiArchPlatform()
+
+	tests := []struct {
+		name     string
+		platform v2alpha1.Platform
+		stream   string
+		streams  string
+		expected []v2alpha1.RelatedImage
+		err      string
+	}{
+		{
+			name:     "stream collection returns one image per stream sorted by stream name, and the legacy stream image under its legacy name",
+			platform: defaultPlatform,
+			stream:   legacyStream,
+			streams:  streamCollection,
+			expected: []v2alpha1.RelatedImage{
+				kubeVirtTestImage(kubeVirtTestDigest2, "kube-virt-container-rhel-10"),
+				kubeVirtTestImage(kubeVirtTestDigest1, "kube-virt-container-rhel-9"),
+				kubeVirtTestImage(kubeVirtTestDigest1, "kube-virt-container"),
+			},
+		},
+		{
+			name:     "stream collection without legacy stream",
+			platform: defaultPlatform,
+			streams:  streamCollection,
+			expected: []v2alpha1.RelatedImage{
+				kubeVirtTestImage(kubeVirtTestDigest2, "kube-virt-container-rhel-10"),
+				kubeVirtTestImage(kubeVirtTestDigest1, "kube-virt-container-rhel-9"),
+			},
+		},
+		{
+			name:     "legacy stream image missing from the stream collection is kept with the legacy name",
+			platform: defaultPlatform,
+			stream:   kubeVirtTestStream(t, map[string]string{"x86_64": kubeVirtTestDigest4}),
+			streams:  streamCollection,
+			expected: []v2alpha1.RelatedImage{
+				kubeVirtTestImage(kubeVirtTestDigest2, "kube-virt-container-rhel-10"),
+				kubeVirtTestImage(kubeVirtTestDigest1, "kube-virt-container-rhel-9"),
+				kubeVirtTestImage(kubeVirtTestDigest4, "kube-virt-container"),
+			},
+		},
+		{
+			name:     "stream collection with multiple architectures skips streams without an image for an architecture",
+			platform: multiArchPlatform,
+			stream:   legacyStream,
+			streams:  streamCollection,
+			expected: []v2alpha1.RelatedImage{
+				kubeVirtTestImage(kubeVirtTestDigest2, "kube-virt-container-x86_64-rhel-10"),
+				kubeVirtTestImage(kubeVirtTestDigest1, "kube-virt-container-x86_64-rhel-9"),
+				kubeVirtTestImage(kubeVirtTestDigest3, "kube-virt-container-s390x-rhel-9"),
+				kubeVirtTestImage(kubeVirtTestDigest1, "kube-virt-container-x86_64"),
+			},
+		},
+		{
+			name:     "multiple architectures keep the legacy name of every legacy stream image",
+			platform: multiArchPlatform,
+			stream:   kubeVirtTestStream(t, map[string]string{"x86_64": kubeVirtTestDigest1, "s390x": kubeVirtTestDigest4}),
+			streams:  `{"rhel-9":` + kubeVirtTestStream(t, map[string]string{"x86_64": kubeVirtTestDigest1}) + `}`,
+			expected: []v2alpha1.RelatedImage{
+				kubeVirtTestImage(kubeVirtTestDigest1, "kube-virt-container-x86_64-rhel-9"),
+				kubeVirtTestImage(kubeVirtTestDigest1, "kube-virt-container-x86_64"),
+				kubeVirtTestImage(kubeVirtTestDigest4, "kube-virt-container-s390x"),
+			},
+		},
+		{
+			name:     "two streams and two architectures, the legacy stream being one of the streams",
+			platform: multiArchPlatform,
+			stream:   rhel9,
+			streams:  twoStreams,
+			expected: []v2alpha1.RelatedImage{
+				kubeVirtTestImage(kubeVirtTestDigest2, "kube-virt-container-x86_64-rhel-10"),
+				kubeVirtTestImage(kubeVirtTestDigest4, "kube-virt-container-s390x-rhel-10"),
+				kubeVirtTestImage(kubeVirtTestDigest1, "kube-virt-container-x86_64-rhel-9"),
+				kubeVirtTestImage(kubeVirtTestDigest3, "kube-virt-container-s390x-rhel-9"),
+				kubeVirtTestImage(kubeVirtTestDigest1, "kube-virt-container-x86_64"),
+				kubeVirtTestImage(kubeVirtTestDigest3, "kube-virt-container-s390x"),
+			},
+		},
+		{
+			name:     "two streams and two architectures, a stream without an image for an architecture",
+			platform: multiArchPlatform,
+			stream:   rhel9,
+			streams:  twoStreamsMissingArch,
+			expected: []v2alpha1.RelatedImage{
+				kubeVirtTestImage(kubeVirtTestDigest2, "kube-virt-container-x86_64-rhel-10"),
+				kubeVirtTestImage(kubeVirtTestDigest1, "kube-virt-container-x86_64-rhel-9"),
+				kubeVirtTestImage(kubeVirtTestDigest3, "kube-virt-container-s390x-rhel-9"),
+				kubeVirtTestImage(kubeVirtTestDigest1, "kube-virt-container-x86_64"),
+				kubeVirtTestImage(kubeVirtTestDigest3, "kube-virt-container-s390x"),
+			},
+		},
+		{
+			name:     "two streams, single architecture",
+			platform: defaultPlatform,
+			stream:   rhel9,
+			streams:  twoStreams,
+			expected: []v2alpha1.RelatedImage{
+				kubeVirtTestImage(kubeVirtTestDigest2, "kube-virt-container-rhel-10"),
+				kubeVirtTestImage(kubeVirtTestDigest1, "kube-virt-container-rhel-9"),
+				kubeVirtTestImage(kubeVirtTestDigest1, "kube-virt-container"),
+			},
+		},
+		{
+			name:     "invalid legacy stream json next to a stream collection",
+			platform: defaultPlatform,
+			stream:   `{"architectures":`,
+			streams:  streamCollection,
+			err:      "parsing json from kubevirt configmap data",
+		},
+		{
+			name:     "legacy stream only keeps the legacy name",
+			platform: defaultPlatform,
+			stream:   legacyStream,
+			expected: []v2alpha1.RelatedImage{kubeVirtTestImage(kubeVirtTestDigest1, "kube-virt-container")},
+		},
+		{
+			name:     "legacy stream only with multiple architectures keeps the legacy names",
+			platform: multiArchPlatform,
+			stream:   rhel9,
+			expected: []v2alpha1.RelatedImage{
+				kubeVirtTestImage(kubeVirtTestDigest1, "kube-virt-container-x86_64"),
+				kubeVirtTestImage(kubeVirtTestDigest3, "kube-virt-container-s390x"),
+			},
+		},
+		{
+			name:     "empty stream collection falls back to the legacy stream",
+			platform: defaultPlatform,
+			stream:   legacyStream,
+			streams:  `{}`,
+			expected: []v2alpha1.RelatedImage{kubeVirtTestImage(kubeVirtTestDigest1, "kube-virt-container")},
+		},
+		{
+			name:     "null stream collection falls back to the legacy stream",
+			platform: defaultPlatform,
+			stream:   legacyStream,
+			streams:  `null`,
+			expected: []v2alpha1.RelatedImage{kubeVirtTestImage(kubeVirtTestDigest1, "kube-virt-container")},
+		},
+		{
+			name:     "blank stream collection falls back to the legacy stream",
+			platform: defaultPlatform,
+			stream:   legacyStream,
+			streams:  "  \n",
+			expected: []v2alpha1.RelatedImage{kubeVirtTestImage(kubeVirtTestDigest1, "kube-virt-container")},
+		},
+		{
+			name:     "empty stream collection without legacy stream",
+			platform: defaultPlatform,
+			streams:  `{}`,
+			err:      "parsing json from kubevirt configmap data",
+		},
+		{
+			name:     "invalid stream collection json",
+			platform: defaultPlatform,
+			stream:   legacyStream,
+			streams:  `{"rhel-9":`,
+			err:      "parsing json from kubevirt configmap streams data",
+		},
+		{
+			name:     "stream name that cannot be used in an image tag",
+			platform: defaultPlatform,
+			streams:  `{"rhel/9":` + kubeVirtTestStream(t, map[string]string{"x86_64": kubeVirtTestDigest1}) + `}`,
+			err:      "invalid stream name in kubevirt configmap streams data",
+		},
+		{
+			name:     "stream collection without kubevirt images",
+			platform: defaultPlatform,
+			streams:  `{"rhel-9":` + kubeVirtTestStream(t, nil) + `}`,
+			err:      "could not find kubevirt image in this release",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := kubeVirtTestConfig(tt.platform)
+			col := LocalStorageCollector{Log: clog.New("trace"), Config: cfg}
+
+			images, err := col.getKubeVirtImages(writeKubeVirtTestBootImages(t, tt.stream, tt.streams))
+			if tt.err != "" {
+				require.ErrorContains(t, err, tt.err)
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, tt.expected, images)
+		})
+	}
+}
+
+// OCPBUGS-138157: an image is only removed when the same image is already present under
+// the same name: the same image under other names is kept, and two different images
+// never get the same name, so the same destination.
+func TestDedupeKubeVirtImages(t *testing.T) {
+	legacy := kubeVirtImage{RelatedImage: kubeVirtTestImage(kubeVirtTestDigest1, "kube-virt-container"), arch: "x86_64"}
+	rhel9 := kubeVirtImage{
+		RelatedImage: kubeVirtTestImage(kubeVirtTestDigest1, "kube-virt-container-rhel-9"),
+		arch:         "x86_64",
+		stream:       "rhel-9",
+		legacyName:   "kube-virt-container",
+	}
+	rhel10 := kubeVirtImage{
+		RelatedImage: kubeVirtTestImage(kubeVirtTestDigest2, "kube-virt-container-rhel-10"),
+		arch:         "x86_64",
+		stream:       "rhel-10",
+		legacyName:   "kube-virt-container",
+	}
+
+	t.Run("same image under the same name is kept once, same image under other names is kept", func(t *testing.T) {
+		images, err := dedupeKubeVirtImages([]kubeVirtImage{rhel10, rhel9, legacy, rhel9, legacy})
+		require.NoError(t, err)
+		require.Equal(t, []kubeVirtImage{rhel10, rhel9, legacy}, images)
+	})
+
+	t.Run("different images with the same name", func(t *testing.T) {
+		conflict := rhel10
+		conflict.Name = rhel9.Name
+		_, err := dedupeKubeVirtImages([]kubeVirtImage{rhel9, conflict})
+		require.ErrorContains(t, err, `have the same name "kube-virt-container-rhel-9"`)
+	})
+}
+
+// OCPBUGS-138157: the destination tag of an image of a stream collection, made of the
+// release tag, the image name and the stream name, must be a valid image tag.
+func TestCheckKubeVirtStreamTags(t *testing.T) {
+	// The destination tag is "1.0.0-x86_64-kube-virt-container-<stream>": 33 characters
+	// and the stream name.
+	streamImage := func(stream string) kubeVirtImage {
+		return kubeVirtImage{
+			RelatedImage: kubeVirtTestImage(kubeVirtTestDigest1, kubeVirtImageName("x86_64", false, stream)),
+			arch:         "x86_64",
+			stream:       stream,
+			legacyName:   "kube-virt-container",
+		}
+	}
+
+	t.Run("longest valid tag", func(t *testing.T) {
+		require.NoError(t, checkKubeVirtStreamTags([]kubeVirtImage{streamImage(strings.Repeat("s", 95))}, kubeVirtTestReleaseTag))
+	})
+
+	t.Run("tag longer than 128 characters", func(t *testing.T) {
+		err := checkKubeVirtStreamTags([]kubeVirtImage{streamImage(strings.Repeat("s", 96))}, kubeVirtTestReleaseTag)
+		require.ErrorContains(t, err, "is not a valid image tag")
+	})
+
+	t.Run("legacy single stream images are not checked", func(t *testing.T) {
+		legacy := kubeVirtImage{RelatedImage: kubeVirtTestImage(kubeVirtTestDigest1, "kube-virt-container"), arch: "x86_64"}
+		require.NoError(t, checkKubeVirtStreamTags([]kubeVirtImage{legacy}, strings.Repeat("r", 128)))
+	})
+
+	// A stream name of 96 characters is valid, but makes the destination tag too long.
+	longStream := strings.Repeat("s", 96)
+	stream := kubeVirtTestStream(t, map[string]string{"x86_64": kubeVirtTestDigest1})
+	cfg := kubeVirtTestConfig(v2alpha1.Platform{KubeVirtContainer: true})
+
+	t.Run("mirror to disk", func(t *testing.T) {
+		workingDir := t.TempDir()
+		writeKubeVirtTestBootImagesTo(t, filepath.Join(workingDir, releaseImageExtractDir, "ocp-release", kubeVirtTestMockRelease),
+			stream, `{"`+longStream+`":`+stream+`}`)
+		require.NoError(t, os.MkdirAll(filepath.Join(workingDir, releaseImageDir, "ocp-release", kubeVirtTestMockRelease), 0o755))
+		col := kubeVirtTestCollector(cfg, mirror.MirrorToDisk, workingDir, &kubeVirtTestCache{})
+
+		_, err := col.collectImageFromMirror(context.Background())
+		require.ErrorContains(t, err, "is not a valid image tag")
+	})
+
+	t.Run("disk to mirror", func(t *testing.T) {
+		col := kubeVirtTestCollector(cfg, mirror.DiskToMirror, t.TempDir(), &kubeVirtTestCache{})
+
+		_, err := col.prepareReleaseBatchFromDir(context.Background(), writeKubeVirtTestBootImages(t, stream, `{"`+longStream+`":`+stream+`}`))
+		require.ErrorContains(t, err, "is not a valid image tag")
+	})
+}
+
+// OCPBUGS-138157: mirror to disk, mirror to mirror, disk to mirror and delete prepare the
+// same destinations for the kubevirt images: one per stream and architecture with an
+// image, and one per legacy single stream image under its legacy name. Each destination
+// tag is a valid tag that receives a single image.
+func TestGetKubeVirtImagesStreamCollectionDestinations(t *testing.T) {
+	rhel9 := kubeVirtTestStream(t, map[string]string{"x86_64": kubeVirtTestDigest1, "s390x": kubeVirtTestDigest3})
+	rhel10 := kubeVirtTestStream(t, map[string]string{"x86_64": kubeVirtTestDigest2, "s390x": kubeVirtTestDigest4})
+	rhel10MissingArch := kubeVirtTestStream(t, map[string]string{"x86_64": kubeVirtTestDigest2})
+	defaultPlatform := v2alpha1.Platform{KubeVirtContainer: true}
+	multiArchPlatform := kubeVirtTestMultiArchPlatform()
+
+	tests := []struct {
+		name     string
+		platform v2alpha1.Platform
+		stream   string
+		streams  string
+		// expected maps the image name in the destination tag to the digest of the image.
+		expected map[string]string
+	}{
+		{
+			name:     "two streams, single architecture",
+			platform: defaultPlatform,
+			stream:   rhel9,
+			streams:  `{"rhel-9":` + rhel9 + `,"rhel-10":` + rhel10 + `}`,
+			expected: map[string]string{
+				"kube-virt-container":         kubeVirtTestDigest1,
+				"kube-virt-container-rhel-9":  kubeVirtTestDigest1,
+				"kube-virt-container-rhel-10": kubeVirtTestDigest2,
+			},
+		},
+		{
+			name:     "two streams, two architectures",
+			platform: multiArchPlatform,
+			stream:   rhel9,
+			streams:  `{"rhel-9":` + rhel9 + `,"rhel-10":` + rhel10 + `}`,
+			expected: map[string]string{
+				"kube-virt-container-x86_64":         kubeVirtTestDigest1,
+				"kube-virt-container-s390x":          kubeVirtTestDigest3,
+				"kube-virt-container-x86_64-rhel-9":  kubeVirtTestDigest1,
+				"kube-virt-container-s390x-rhel-9":   kubeVirtTestDigest3,
+				"kube-virt-container-x86_64-rhel-10": kubeVirtTestDigest2,
+				"kube-virt-container-s390x-rhel-10":  kubeVirtTestDigest4,
+			},
+		},
+		{
+			name:     "two streams, two architectures, a stream without an image for an architecture",
+			platform: multiArchPlatform,
+			stream:   rhel9,
+			streams:  `{"rhel-9":` + rhel9 + `,"rhel-10":` + rhel10MissingArch + `}`,
+			expected: map[string]string{
+				"kube-virt-container-x86_64":         kubeVirtTestDigest1,
+				"kube-virt-container-s390x":          kubeVirtTestDigest3,
+				"kube-virt-container-x86_64-rhel-9":  kubeVirtTestDigest1,
+				"kube-virt-container-s390x-rhel-9":   kubeVirtTestDigest3,
+				"kube-virt-container-x86_64-rhel-10": kubeVirtTestDigest2,
+			},
+		},
+		{
+			name:     "legacy stream only, single architecture",
+			platform: defaultPlatform,
+			stream:   rhel9,
+			expected: map[string]string{"kube-virt-container": kubeVirtTestDigest1},
+		},
+		{
+			name:     "legacy stream only, two architectures",
+			platform: multiArchPlatform,
+			stream:   rhel9,
+			expected: map[string]string{
+				"kube-virt-container-x86_64": kubeVirtTestDigest1,
+				"kube-virt-container-s390x":  kubeVirtTestDigest3,
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := kubeVirtTestConfig(tt.platform)
+			// Mirror to disk and mirror to mirror collect the release of MockCincinnati: its
+			// manifests are already extracted and its OCI layout already exists.
+			workingDir := t.TempDir()
+			writeKubeVirtTestBootImagesTo(t, filepath.Join(workingDir, releaseImageExtractDir, "ocp-release", kubeVirtTestMockRelease), tt.stream, tt.streams)
+			require.NoError(t, os.MkdirAll(filepath.Join(workingDir, releaseImageDir, "ocp-release", kubeVirtTestMockRelease), 0o755))
+			// Disk to mirror and delete read the same release from the archive.
+			releaseDir := filepath.Join(t.TempDir(), kubeVirtTestMockRelease)
+			writeKubeVirtTestBootImagesTo(t, releaseDir, tt.stream, tt.streams)
+
+			// The streams are read into a map, whose iteration order is random:
+			// the images must be the same on every call.
+			col := kubeVirtTestCollector(cfg, mirror.DiskToMirror, workingDir, &kubeVirtTestCache{})
+			images, err := col.getKubeVirtImages(releaseDir)
+			require.NoError(t, err)
+			for range 10 {
+				again, err := col.getKubeVirtImages(releaseDir)
+				require.NoError(t, err)
+				require.Equal(t, images, again)
+			}
+
+			// imageDigests maps the image name of the destination tag of each kubevirt copy
+			// to the digest of the image, checking that each tag is valid and receives one image.
+			imageDigests := func(t *testing.T, copies []v2alpha1.CopyImageSchema, repository string) map[string]string {
+				t.Helper()
+				prefix := repository + ":" + kubeVirtTestMockRelease + "-"
+				digests := map[string]string{}
+				for _, c := range kubeVirtTestCopies(copies) {
+					require.True(t, strings.HasPrefix(c.Destination, prefix), c.Destination)
+					require.Regexp(t, kubeVirtTagRegexp, strings.TrimPrefix(c.Destination, repository+":"))
+					name := strings.TrimPrefix(c.Destination, prefix)
+					require.NotContains(t, digests, name, "more than one copy to %s", c.Destination)
+					digests[name] = strings.TrimPrefix(c.Origin, kubeVirtTestRepo+"@")
+				}
+				return digests
+			}
+
+			for _, mode := range []string{mirror.MirrorToDisk, mirror.MirrorToMirror} {
+				mirrorCol := kubeVirtTestCollector(cfg, mode, workingDir, &kubeVirtTestCache{})
+				copies, err := mirrorCol.collectImageFromMirror(context.Background())
+				require.NoError(t, err)
+				repository := consts.DockerProtocol + "localhost:9999/openshift/release"
+				if mode == mirror.MirrorToMirror {
+					repository = consts.DockerProtocol + "localhost:5000/test/openshift/release"
+				}
+				require.Equal(t, tt.expected, imageDigests(t, copies, repository), mode)
+			}
+
+			for _, deleteMode := range []bool{false, true} {
+				diskCol := kubeVirtTestCollector(cfg, mirror.DiskToMirror, workingDir, &kubeVirtTestCache{})
+				if deleteMode {
+					diskCol.Opts.Function = string(mirror.DeleteMode)
+				}
+				copies, err := diskCol.prepareReleaseBatchFromDir(context.Background(), releaseDir)
+				require.NoError(t, err)
+				require.Equal(t, tt.expected, imageDigests(t, copies, consts.DockerProtocol+"localhost:5000/test/openshift/release"), "delete mode: %v", deleteMode)
+			}
+		})
+	}
+}
+
+// OCPBUGS-138157: archives created before stream collections were supported only hold
+// the images of the legacy stream, under their legacy names. Disk to mirror copies such an
+// image to the destination of a stream only when its digest is the digest of the image of
+// that stream. The images of the legacy stream are always copied to their legacy names.
+func TestPrepareReleaseBatchFromDirKubeVirtLegacyArchive(t *testing.T) {
+	encoded := func(dgst string) string { return strings.TrimPrefix(dgst, "sha256:") }
+	cacheRef := func(name string) string {
+		return consts.DockerProtocol + "localhost:9999/openshift/release:" + kubeVirtTestReleaseTag + "-" + name
+	}
+	kubeVirtCopy := func(dgst, sourceName, destinationName string) v2alpha1.CopyImageSchema {
+		return v2alpha1.CopyImageSchema{
+			Origin:      kubeVirtTestRepo + "@" + dgst,
+			Source:      cacheRef(sourceName),
+			Destination: consts.DockerProtocol + "localhost:5000/test/openshift/release:" + kubeVirtTestReleaseTag + "-" + destinationName,
+			Type:        v2alpha1.TypeOCPReleaseContent,
+		}
+	}
+	// ownCopy is the copy of an image from the cache under the name of its destination.
+	ownCopy := func(dgst, name string) v2alpha1.CopyImageSchema { return kubeVirtCopy(dgst, name, name) }
+
+	singleArchRelease := writeKubeVirtTestBootImages(t,
+		kubeVirtTestStream(t, map[string]string{"x86_64": kubeVirtTestDigest1}),
+		`{"rhel-9":`+kubeVirtTestStream(t, map[string]string{"x86_64": kubeVirtTestDigest1})+
+			`,"rhel-10":`+kubeVirtTestStream(t, map[string]string{"x86_64": kubeVirtTestDigest2})+`}`)
+	multiArchRelease := writeKubeVirtTestBootImages(t,
+		kubeVirtTestStream(t, map[string]string{"x86_64": kubeVirtTestDigest1, "s390x": kubeVirtTestDigest3}),
+		`{"rhel-9":`+kubeVirtTestStream(t, map[string]string{"x86_64": kubeVirtTestDigest1, "s390x": kubeVirtTestDigest3})+`}`)
+	// sha512Digest is a valid digest whose algorithm is not sha256.
+	sha512Digest := "sha512:" + strings.Repeat("5", 128)
+	sha512Release := writeKubeVirtTestBootImages(t,
+		kubeVirtTestStream(t, map[string]string{"x86_64": sha512Digest}),
+		`{"rhel-9":`+kubeVirtTestStream(t, map[string]string{"x86_64": sha512Digest})+`}`)
+	streamsOnlyRelease := writeKubeVirtTestBootImages(t, "",
+		`{"rhel-9":`+kubeVirtTestStream(t, map[string]string{"x86_64": kubeVirtTestDigest1})+`}`)
+	multiArchPlatform := kubeVirtTestMultiArchPlatform()
+	singleArchCopies := []v2alpha1.CopyImageSchema{
+		ownCopy(kubeVirtTestDigest2, "kube-virt-container-rhel-10"),
+		ownCopy(kubeVirtTestDigest1, "kube-virt-container-rhel-9"),
+		ownCopy(kubeVirtTestDigest1, "kube-virt-container"),
+	}
+	multiArchLegacyCopies := []v2alpha1.CopyImageSchema{
+		ownCopy(kubeVirtTestDigest1, "kube-virt-container-x86_64"),
+		ownCopy(kubeVirtTestDigest3, "kube-virt-container-s390x"),
+	}
+
+	tests := []struct {
+		name       string
+		platform   v2alpha1.Platform
+		releaseDir string
+		deleteMode bool
+		cache      map[string]string
+		expected   []v2alpha1.CopyImageSchema
+		lookups    int
+	}{
+		{
+			name:       "archive with the images of the streams",
+			releaseDir: singleArchRelease,
+			cache: map[string]string{
+				cacheRef("kube-virt-container-rhel-10"): encoded(kubeVirtTestDigest2),
+				cacheRef("kube-virt-container-rhel-9"):  encoded(kubeVirtTestDigest1),
+				cacheRef("kube-virt-container"):         encoded(kubeVirtTestDigest1),
+			},
+			expected: singleArchCopies,
+			lookups:  2,
+		},
+		{
+			name:       "older archive: the legacy image is copied to the destination of its stream only",
+			releaseDir: singleArchRelease,
+			cache:      map[string]string{cacheRef("kube-virt-container"): encoded(kubeVirtTestDigest1)},
+			expected: []v2alpha1.CopyImageSchema{
+				ownCopy(kubeVirtTestDigest2, "kube-virt-container-rhel-10"),
+				kubeVirtCopy(kubeVirtTestDigest1, "kube-virt-container", "kube-virt-container-rhel-9"),
+				ownCopy(kubeVirtTestDigest1, "kube-virt-container"),
+			},
+			lookups: 4,
+		},
+		{
+			name:       "legacy image with another digest is not copied to the destination of a stream",
+			releaseDir: singleArchRelease,
+			cache:      map[string]string{cacheRef("kube-virt-container"): encoded(kubeVirtTestDigest4)},
+			expected:   singleArchCopies,
+			lookups:    4,
+		},
+		{
+			name:       "archive without the legacy image",
+			releaseDir: singleArchRelease,
+			cache:      map[string]string{},
+			expected:   singleArchCopies,
+			lookups:    4,
+		},
+		{
+			name:       "older multi-arch archive: the legacy image of each architecture is used",
+			platform:   multiArchPlatform,
+			releaseDir: multiArchRelease,
+			cache: map[string]string{
+				cacheRef("kube-virt-container-x86_64"): encoded(kubeVirtTestDigest1),
+				cacheRef("kube-virt-container-s390x"):  encoded(kubeVirtTestDigest3),
+			},
+			expected: append([]v2alpha1.CopyImageSchema{
+				kubeVirtCopy(kubeVirtTestDigest1, "kube-virt-container-x86_64", "kube-virt-container-x86_64-rhel-9"),
+				kubeVirtCopy(kubeVirtTestDigest3, "kube-virt-container-s390x", "kube-virt-container-s390x-rhel-9"),
+			}, multiArchLegacyCopies...),
+			lookups: 4,
+		},
+		{
+			name:       "older multi-arch archive: the legacy image of another architecture is not used",
+			platform:   multiArchPlatform,
+			releaseDir: multiArchRelease,
+			cache:      map[string]string{cacheRef("kube-virt-container-x86_64"): encoded(kubeVirtTestDigest3)},
+			expected: append([]v2alpha1.CopyImageSchema{
+				ownCopy(kubeVirtTestDigest1, "kube-virt-container-x86_64-rhel-9"),
+				ownCopy(kubeVirtTestDigest3, "kube-virt-container-s390x-rhel-9"),
+			}, multiArchLegacyCopies...),
+			lookups: 4,
+		},
+		{
+			name:       "release without legacy stream: no image archived under a legacy name is used",
+			releaseDir: streamsOnlyRelease,
+			cache:      map[string]string{cacheRef("kube-virt-container"): encoded(kubeVirtTestDigest1)},
+			expected:   []v2alpha1.CopyImageSchema{ownCopy(kubeVirtTestDigest1, "kube-virt-container-rhel-9")},
+			lookups:    1,
+		},
+		{
+			name:       "stream image without a sha256 digest is never replaced by the legacy image",
+			releaseDir: sha512Release,
+			cache:      map[string]string{cacheRef("kube-virt-container"): strings.TrimPrefix(sha512Digest, "sha512:")},
+			expected: []v2alpha1.CopyImageSchema{
+				ownCopy(sha512Digest, "kube-virt-container-rhel-9"),
+				ownCopy(sha512Digest, "kube-virt-container"),
+			},
+			lookups: 1,
+		},
+		{
+			name:       "delete mode does not read the cache",
+			releaseDir: singleArchRelease,
+			deleteMode: true,
+			cache:      map[string]string{cacheRef("kube-virt-container"): encoded(kubeVirtTestDigest1)},
+			expected:   singleArchCopies,
+			lookups:    0,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			platform := tt.platform
+			if !platform.KubeVirtContainer {
+				platform = v2alpha1.Platform{KubeVirtContainer: true}
+			}
+			cfg := kubeVirtTestConfig(platform)
+			cache := &kubeVirtTestCache{digests: tt.cache}
+			col := kubeVirtTestCollector(cfg, mirror.DiskToMirror, t.TempDir(), cache)
+			if tt.deleteMode {
+				col.Opts.Function = string(mirror.DeleteMode)
+			}
+
+			batch, err := col.prepareReleaseBatchFromDir(context.Background(), tt.releaseDir)
+			require.NoError(t, err)
+			require.Equal(t, tt.expected, kubeVirtTestCopies(batch))
+			require.Equal(t, tt.lookups, cache.lookups)
+		})
+	}
+}
+
+// kubeVirtTestConfig returns an ImageSetConfiguration that mirrors releases for the given platform.
+func kubeVirtTestConfig(platform v2alpha1.Platform) v2alpha1.ImageSetConfiguration {
+	return v2alpha1.ImageSetConfiguration{
+		ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
+			Mirror: v2alpha1.Mirror{Platform: platform},
+		},
+	}
+}
+
+// kubeVirtTestMultiArchPlatform returns a platform that mirrors the kubevirt images of
+// x86_64 and s390x.
+func kubeVirtTestMultiArchPlatform() v2alpha1.Platform {
+	return v2alpha1.Platform{
+		Platforms: []v2alpha1.InstancePlatformFilter{
+			{OS: "linux", Architecture: "amd64"},
+			{OS: "linux", Architecture: "s390x"},
+		},
+		KubeVirtContainer: true,
+	}
+}
+
+// kubeVirtTestCollector returns a collector of the given mode for the kubevirt tests:
+// the local cache is localhost:9999 and the mirror registry is localhost:5000/test.
+func kubeVirtTestCollector(cfg v2alpha1.ImageSetConfiguration, mode, workingDir string, cache *kubeVirtTestCache) LocalStorageCollector {
+	opts := kubeVirtTestD2MOptions()
+	opts.Mode = mode
+	opts.Global.WorkingDir = workingDir
+	return LocalStorageCollector{
+		Log:              clog.New("error"),
+		Config:           cfg,
+		Manifest:         cache,
+		Mirror:           MockMirror{},
+		Cincinnati:       MockCincinnati{},
+		LocalStorageFQDN: "localhost:9999",
+		Opts:             opts,
+	}
+}
+
+// kubeVirtTestCache serves the manifest digests of the images of a synthetic local cache.
+type kubeVirtTestCache struct {
+	MockManifest
+	digests map[string]string
+	lookups int
+}
+
+// GetReleaseSchema returns no release payload images, so that only the release image
+// itself and the kubevirt images are collected.
+func (c *kubeVirtTestCache) GetReleaseSchema(string) ([]v2alpha1.RelatedImage, error) {
+	return nil, nil
+}
+
+func (c *kubeVirtTestCache) ImageDigest(_ context.Context, _ *types.SystemContext, imgRef string) (string, error) {
+	c.lookups++
+	if dgst, ok := c.digests[imgRef]; ok {
+		return dgst, nil
+	}
+	return "", fmt.Errorf("manifest unknown: %s", imgRef)
+}
+
+// kubeVirtTestD2MOptions returns the copy options of a disk to mirror run to localhost:5000/test.
+func kubeVirtTestD2MOptions() mirror.CopyOptions {
+	global := &mirror.GlobalOptions{}
+	_, sharedOpts := mirror.SharedImageFlags()
+	_, deprecatedTLSVerifyOpt := mirror.DeprecatedTLSVerifyFlags()
+	_, srcOpts := mirror.ImageSrcFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "src-", "screds")
+	return mirror.CopyOptions{
+		Global:      global,
+		SrcImage:    srcOpts,
+		Destination: consts.DockerProtocol + "localhost:5000/test",
+		Mode:        mirror.DiskToMirror,
+	}
+}
+
+// kubeVirtTestCopies returns the copies of the synthetic kubevirt images of a copy batch.
+func kubeVirtTestCopies(batch []v2alpha1.CopyImageSchema) []v2alpha1.CopyImageSchema {
+	var copies []v2alpha1.CopyImageSchema
+	for _, c := range batch {
+		if strings.HasPrefix(c.Origin, kubeVirtTestRepo+"@") {
+			copies = append(copies, c)
+		}
+	}
+	return copies
+}
+
+// kubeVirtTestStream returns the JSON document of a synthetic CoreOS stream with a
+// kubevirt image digest for each given bootimages architecture key.
+func kubeVirtTestStream(t *testing.T, digestByArch map[string]string) string {
+	t.Helper()
+	architectures := map[string]v2alpha1.ArchImages{}
+	for arch, dgst := range digestByArch {
+		architectures[arch] = v2alpha1.ArchImages{
+			Images: v2alpha1.Images{Kubevirt: v2alpha1.Kubevirt{DigestRef: kubeVirtTestRepo + "@" + dgst}},
+		}
+	}
+	data, err := json.Marshal(map[string]any{"architectures": architectures})
+	require.NoError(t, err)
+	return string(data)
+}
+
+// writeKubeVirtTestBootImages writes a synthetic bootimages ConfigMap with the given
+// data.stream and data.streams values to a temporary release directory and returns
+// the directory. Empty values are left out of the ConfigMap.
+func writeKubeVirtTestBootImages(t *testing.T, stream, streams string) string {
+	t.Helper()
+	dir := filepath.Join(t.TempDir(), kubeVirtTestReleaseTag)
+	writeKubeVirtTestBootImagesTo(t, dir, stream, streams)
+	return dir
+}
+
+// writeKubeVirtTestBootImagesTo writes the synthetic bootimages ConfigMap of
+// writeKubeVirtTestBootImages to the given release directory.
+func writeKubeVirtTestBootImagesTo(t *testing.T, dir, stream, streams string) {
+	t.Helper()
+	data := map[string]string{"releaseVersion": "0.0.1"}
+	if stream != "" {
+		data["stream"] = stream
+	}
+	if streams != "" {
+		data["streams"] = streams
+	}
+	configMap, err := yaml.Marshal(map[string]any{
+		"apiVersion": "v1",
+		"kind":       "ConfigMap",
+		"metadata":   map[string]string{"name": "coreos-bootimages"},
+		"data":       data,
+	})
+	require.NoError(t, err)
+
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, releaseManifests), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, releaseBootableImagesFullPath), configMap, 0o600))
+}
+
+func kubeVirtTestImage(dgst, name string) v2alpha1.RelatedImage {
+	return v2alpha1.RelatedImage{Image: kubeVirtTestRepo + "@" + dgst, Name: name, Type: v2alpha1.TypeOCPReleaseContent}
 }
 
 func TestBuildReleasePlatformFilters(t *testing.T) {

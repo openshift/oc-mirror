@@ -54,7 +54,9 @@ type Architectures struct {
 
 // InstallerConfigMap - this is the yaml structure
 // in the form of a configmap that hold the json formatted
-// structure of interest in the Data.Stream field
+// structure of interest in the Data.Stream field and,
+// for releases that ship more than one CoreOS stream,
+// in the Data.Streams field
 type InstallerConfigMap struct {
 	Kind     string `yaml:"kind"`
 	Metadata struct {
@@ -70,6 +72,10 @@ type InstallerConfigMap struct {
 	APIVersion string `yaml:"apiVersion"`
 	Data       struct {
 		ReleaseVersion string `yaml:"releaseVersion"`
-		Stream         string `yaml:"stream"`
+		// Stream holds a single CoreOS stream document (InstallerBootableImages) in JSON.
+		Stream string `yaml:"stream"`
+		// Streams, when present, holds a JSON object that maps each CoreOS stream name
+		// to a stream document with the same layout as Stream.
+		Streams string `yaml:"streams"`
 	} `yaml:"data"`
 }
