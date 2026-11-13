@@ -72,6 +72,102 @@ func GetWorkingDirRegistrydConfigPath(workingDir string) string {
 	return filepath.Join(workingDir, containersSubPath, registriesDSubPath)
 }
 
+// GetWorkingDirLookasideOnlyRegistrydConfigPath is a sibling of the working-dir
+// registries.d that keeps lookaside/GPG settings but turns off sigstore
+// attachment handling.
+func GetWorkingDirLookasideOnlyRegistrydConfigPath(workingDir string) string {
+	return filepath.Join(workingDir, containersSubPath, registriesDSubPath+"-lookaside")
+}
+
+// PrepareLookasideOnlyDir writes a registries.d clone of the working-dir config
+// with use-sigstore-attachments forced off so copy.Image will not rebuild
+// sha256-*.sig tags via PutSignatures. Lookaside (GPG) entries are preserved.
+func PrepareLookasideOnlyDir(workingDir string) (string, error) {
+	src := GetWorkingDirRegistrydConfigPath(workingDir)
+	dst := GetWorkingDirLookasideOnlyRegistrydConfigPath(workingDir)
+	if err := os.MkdirAll(dst, 0755); err != nil {
+		return "", fmt.Errorf("error creating lookaside-only registries.d: %w", err)
+	}
+	if _, err := os.Stat(src); errors.Is(err, os.ErrNotExist) {
+		return dst, nil
+	} else if err != nil {
+		return "", fmt.Errorf("error reading registries.d %s: %w", src, err)
+	}
+
+	files, err := os.ReadDir(src)
+	if err != nil {
+		return "", fmt.Errorf("error reading registries.d %s: %w", src, err)
+	}
+	for _, file := range files {
+		if file.IsDir() {
+			continue
+		}
+		if err := writeLookasideOnlyFile(src, dst, file.Name()); err != nil {
+			return "", err
+		}
+	}
+	return dst, nil
+}
+
+func writeLookasideOnlyFile(srcDir, dstDir, name string) error {
+	name = filepath.Base(name)
+	if name == "." || name == ".." {
+		return nil
+	}
+	if !strings.HasSuffix(name, ".yaml") && !strings.HasSuffix(name, ".yml") {
+		return nil
+	}
+	srcPath := filepath.Join(srcDir, name)
+	cfg, err := parser.ParseYamlFile[registryConfiguration](srcPath)
+	if err != nil {
+		return fmt.Errorf("error parsing %s: %w", srcPath, err)
+	}
+	disableSigstoreAttachments(&cfg)
+	body, err := yaml.Marshal(cfg)
+	if err != nil {
+		return fmt.Errorf("error marshaling %s: %w", name, err)
+	}
+	return writeFileAtomic(filepath.Join(dstDir, name), body)
+}
+
+func writeFileAtomic(path string, body []byte) (err error) {
+	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".tmp-*")
+	if err != nil {
+		return fmt.Errorf("error creating temp file for %s: %w", path, err)
+	}
+	tmpName := tmp.Name()
+	defer func() {
+		if rmErr := os.Remove(tmpName); rmErr != nil && !errors.Is(rmErr, os.ErrNotExist) {
+			err = errors.Join(err, fmt.Errorf("error removing temp file %s: %w", tmpName, rmErr))
+		}
+	}()
+	if chmodErr := tmp.Chmod(0o600); chmodErr != nil {
+		return errors.Join(fmt.Errorf("error setting permissions on %s: %w", path, chmodErr), tmp.Close())
+	}
+	if _, writeErr := tmp.Write(body); writeErr != nil {
+		return errors.Join(fmt.Errorf("error writing %s: %w", path, writeErr), tmp.Close())
+	}
+	if closeErr := tmp.Close(); closeErr != nil {
+		return fmt.Errorf("error closing %s: %w", path, closeErr)
+	}
+	if renameErr := os.Rename(tmpName, path); renameErr != nil { //#nosec G703 -- dest is filepath.Join(dir, filepath.Base(name))
+		return fmt.Errorf("error writing %s: %w", path, renameErr)
+	}
+	return nil
+}
+
+func disableSigstoreAttachments(cfg *registryConfiguration) {
+	if cfg.DefaultDocker != nil {
+		ns := *cfg.DefaultDocker
+		ns.UseSigstoreAttachments = boolPtr(false)
+		cfg.DefaultDocker = &ns
+	}
+	for name, ns := range cfg.Docker {
+		ns.UseSigstoreAttachments = boolPtr(false)
+		cfg.Docker[name] = ns
+	}
+}
+
 func copyDefaultConfigsToWorkingDir(defaultRegistrydConfigPath, customRegistrydConfigPath string) error {
 	if err := os.MkdirAll(filepath.Dir(customRegistrydConfigPath), 0755); err != nil {
 		return fmt.Errorf("error creating folder %s %w", filepath.Dir(customRegistrydConfigPath), err)
