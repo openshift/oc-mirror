@@ -7,17 +7,22 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"path/filepath"
+	"strconv"
+	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/docker/distribution/registry/api/errcode"
 	errcodev2 "github.com/docker/distribution/registry/api/v2"
 	"github.com/google/go-containerregistry/pkg/registry"
+	digest "github.com/opencontainers/go-digest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.podman.io/common/pkg/retry"
 	"go.podman.io/image/v5/copy"
 	"go.podman.io/image/v5/docker"
+	"go.podman.io/image/v5/manifest"
 	"go.podman.io/image/v5/signature"
 	"go.podman.io/image/v5/types"
 
@@ -453,4 +458,44 @@ func (o *mockMirrorCopy) CopyImage(ctx context.Context, pc *signature.PolicyCont
 
 func (o *mockMirrorDelete) DeleteImage(ctx context.Context, dest string, opts *CopyOptions) error {
 	return nil
+}
+
+func TestBlobCheckerUsesReadOnlyRequests(t *testing.T) {
+	for _, status := range []int{http.StatusOK, http.StatusNotFound, http.StatusUnauthorized, http.StatusForbidden, http.StatusInternalServerError} {
+		t.Run(strconv.Itoa(status), func(t *testing.T) {
+			blob := types.BlobInfo{Digest: digest.FromString("blob"), Size: 100}
+			var contentChecks atomic.Int32
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == "/v2/" {
+					w.WriteHeader(http.StatusOK)
+					return
+				}
+				require.Equal(t, http.MethodHead, r.Method, "dry-run must never upload, mount or fetch blob bodies")
+				contentChecks.Add(1)
+				w.Header().Set("Content-Length", "100")
+				w.Header().Set("Content-Type", manifest.DockerV2Schema2MediaType)
+				w.Header().Set("Docker-Content-Digest", blob.Digest.String())
+				w.WriteHeader(status)
+			}))
+			defer server.Close()
+			_, shared := SharedImageFlags()
+			_, deprecated := DeprecatedTLSVerifyFlags()
+			_, destination := ImageDestFlags(&GlobalOptions{}, shared, deprecated, "dest-", "")
+			destination.TlsVerify = false
+			checker, close := NewBlobChecker(&CopyOptions{DestImage: destination})
+			t.Cleanup(close)
+			ref := "docker://" + strings.TrimPrefix(server.URL, "http://") + "/ns/image:latest"
+			for _, media := range []string{"application/vnd.oci.image.layer.v1.tar+gzip", manifest.DockerV2Schema2MediaType} {
+				blob.MediaType = media
+				present, err := checker(context.Background(), ref, blob)
+				if status == http.StatusOK || status == http.StatusNotFound {
+					require.NoError(t, err)
+					require.Equal(t, status == http.StatusOK, present)
+				} else {
+					require.Error(t, err, "authorization and server failures must not become missing blobs")
+				}
+			}
+			require.GreaterOrEqual(t, contentChecks.Load(), int32(2))
+		})
+	}
 }

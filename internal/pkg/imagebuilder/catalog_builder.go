@@ -32,9 +32,9 @@ const (
 	c_ISGID = 02000 // Set gid
 	c_ISVTX = 01000 // Save text (sticky bit)
 
-	operatorCatalogFilteredImageDir = "filtered-catalog-image"
-	operatorCatalogImageDir         = "catalog-image"
-	operatorCatalogConfigDir        = "catalog-config"
+	FilteredCatalogImageDir  = "filtered-catalog-image"
+	operatorCatalogImageDir  = "catalog-image"
+	operatorCatalogConfigDir = "catalog-config"
 )
 
 type GCRCatalogBuilder struct {
@@ -46,6 +46,7 @@ type GCRCatalogBuilder struct {
 
 func NewGCRCatalogBuilder(logger log.PluggableLoggerInterface, opts mirror.CopyOptions) CatalogBuilderInterface {
 	builder := NewBuilder(logger, opts)
+	builder.skipPush = opts.IsDryRun
 	return &GCRCatalogBuilder{
 		Logger:     logger,
 		imgBuilder: builder,
@@ -88,7 +89,7 @@ func (c GCRCatalogBuilder) RebuildCatalog(ctx context.Context, catalogCopyRef v2
 	layers = append(layers, layersToDelete...)
 	layers = append(layers, layersToAdd...)
 
-	layoutDir := strings.Replace(configPath, operatorCatalogConfigDir, operatorCatalogFilteredImageDir, -1)
+	layoutDir := filepath.Join(filepath.Dir(configPath), FilteredCatalogImageDir)
 
 	err = copy.Copy(originCatalogLayoutDir, layoutDir)
 	if err != nil {
@@ -118,7 +119,9 @@ func (c GCRCatalogBuilder) RebuildCatalog(ctx context.Context, catalogCopyRef v2
 			return err
 		}
 		srcCache = destRef.SetTag(filepath.Base(filteredDir)).Reference
-		c.CopyOpts.DestImage.TlsVerify = false
+		if !c.CopyOpts.IsDryRun {
+			c.CopyOpts.DestImage.TlsVerify = false
+		}
 	case mirror.DiskToMirror:
 		srcCache = catalogCopyRef.Source
 		c.CopyOpts.SrcImage.TlsVerify = false

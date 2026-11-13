@@ -77,6 +77,24 @@ func TestUnArchiver_NoArchive(t *testing.T) {
 	assert.ErrorContains(t, err, "no tar archives matching")
 }
 
+func TestNewArchiveExtractor_IgnoresTarBackupSuffix(t *testing.T) {
+	testFolder := t.TempDir()
+	assert.NoError(t, os.WriteFile(filepath.Join(testFolder, "mirror_000001.tar.backup"), []byte("backup"), 0o600))
+
+	_, err := NewArchiveExtractor(testFolder, filepath.Join(testFolder, "wd"), filepath.Join(testFolder, "cache"))
+	assert.ErrorContains(t, err, "no tar archives matching")
+
+	archiveFileName := fmt.Sprintf(archiveFileNameFormat, archiveFilePrefix, 1)
+	archivePath := filepath.Join(testFolder, archiveFileName)
+	archiveFile, err := os.Create(archivePath)
+	assert.NoError(t, err)
+	assert.NoError(t, prepareFakeTar(archiveFile))
+
+	ae, err := NewArchiveExtractor(testFolder, filepath.Join(testFolder, "wd"), filepath.Join(testFolder, "cache"))
+	assert.NoError(t, err)
+	assert.Equal(t, []string{archivePath}, ae.archiveFiles)
+}
+
 func TestUnArchiver_WorkingDirError(t *testing.T) {
 	testFolder := t.TempDir()
 

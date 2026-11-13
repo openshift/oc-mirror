@@ -43,5 +43,5 @@ var _ = Describe("Clear error message from invalid --from", func() {
 func expectOcMirrorCommandInvalidFrom(result *ocmirror.Result, err error) {
 	Expect(err).ToNot(HaveOccurred())
 	Expect(result.ExitCode).ToNot(BeZero(), "should be non-zero exit status")
-	Expect(result.Stdout).To(ContainSubstring(`no tar archives matching "mirror_[0-9]{6}\\.tar"`))
+	Expect(result.Stdout).To(ContainSubstring(`no tar archives matching "^mirror_[0-9]{6}\\.tar$"`))
 }

@@ -24,8 +24,6 @@ type MirrorUnArchiver struct {
 	archiveFiles []string
 }
 
-const mirrorTarRegex = archiveFilePrefix + "_[0-9]{6}\\.tar"
-
 func NewArchiveExtractor(archivePath, workingDir, cacheDir string) (MirrorUnArchiver, error) {
 	ae := MirrorUnArchiver{
 		workingDir: workingDir,
@@ -36,14 +34,14 @@ func NewArchiveExtractor(archivePath, workingDir, cacheDir string) (MirrorUnArch
 		return MirrorUnArchiver{}, err
 	}
 
-	rxp := regexp.MustCompile(mirrorTarRegex)
+	rxp := regexp.MustCompile(MirrorArchiveFileRegexp)
 	for _, chunk := range files {
 		if rxp.MatchString(chunk.Name()) {
 			ae.archiveFiles = append(ae.archiveFiles, filepath.Join(archivePath, chunk.Name()))
 		}
 	}
 	if len(ae.archiveFiles) == 0 {
-		return MirrorUnArchiver{}, fmt.Errorf("no tar archives matching %q found in %q", mirrorTarRegex, archivePath)
+		return MirrorUnArchiver{}, fmt.Errorf("no tar archives matching %q found in %q", MirrorArchiveFileRegexp, archivePath)
 	}
 	return ae, nil
 }
