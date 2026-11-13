@@ -115,49 +115,78 @@ func (o *CincinnatiSchema) GetReleaseReferenceImages(ctx context.Context) ([]v2a
 		GraphDataDir: filepath.Join(o.Opts.Global.WorkingDir, releaseImageExtractDir, cincinnatiGraphDataDir),
 	}
 
+	// before making a deep copy
+	// check that the "platform.release" field is not empty
+	if len(o.Config.Mirror.Platform.Release) > 0 {
+		return o.releaseImageByReference(ctx)
+	}
+
+	filterCopy := o.Config.Mirror.Platform.DeepCopy()
+	allImages, errs := o.collectPlatformImages(ctx, &filterCopy, cincinnatiParams)
+
+	// OCPBUGS-51157
+	if len(allImages) == 0 && (len(filterCopy.Release) > 0 || len(filterCopy.Channels) > 0) {
+		return []v2alpha1.CopyImageSchema{}, fmt.Errorf("[GetReleaseReferenceImages] no release images found")
+	}
+
+	imgs, err := o.Signature.GenerateReleaseSignatures(ctx, allImages)
+	if err != nil {
+		return []v2alpha1.CopyImageSchema{}, fmt.Errorf("%w", err)
+	}
+
+	errorArray := []string{}
+	for _, e := range errs {
+		errorArray = append(errorArray, e.Error())
+	}
+	if len(errs) > 0 {
+		return imgs, fmt.Errorf("[GetReleaseReferenceImages] error list %v", errorArray)
+	}
+	return imgs, nil
+}
+
+// releaseImageByReference returns the release image set in the "platform.release" field with
+// its signature.
+func (o *CincinnatiSchema) releaseImageByReference(ctx context.Context) ([]v2alpha1.CopyImageSchema, error) {
+	// OCPBUGS-50617
+	// include signature verify and download for ga releases, rc (release candidate)
+	// and ec Iengineering candidate) by tag or digest
+	imgSpec, err := image.ParseRef(o.Config.Mirror.Platform.Release)
+	if err != nil {
+		return []v2alpha1.CopyImageSchema{}, err
+	}
+	var copyImage v2alpha1.CopyImageSchema
+
+	if imgSpec.Digest == "" {
+		imgSpec.Digest, err = o.Manifest.ImageDigest(ctx, o.Opts.Global.NewSystemContext(), imgSpec.ReferenceWithTransport)
+		if err != nil {
+			return []v2alpha1.CopyImageSchema{}, fmt.Errorf("retrieving digest %w", err)
+		}
+	}
+	if imgSpec.Algorithm == "" {
+		imgSpec.Algorithm = "sha256"
+	}
+	copyImage = v2alpha1.CopyImageSchema{
+		Source:      imgSpec.Name + "@" + imgSpec.Algorithm + ":" + imgSpec.Digest,
+		Destination: "",
+		Origin:      o.Config.Mirror.Platform.Release,
+	}
+
+	imgs, err := o.Signature.GenerateReleaseSignatures(ctx, []v2alpha1.CopyImageSchema{copyImage})
+	if err != nil {
+		return []v2alpha1.CopyImageSchema{}, err
+	}
+	return imgs, nil
+}
+
+// collectPlatformImages queries the Cincinnati API for the release images of the configured
+// channels, for the multi-arch payload (Platforms field) or for each architecture (deprecated
+// Architectures field), returning collected images and errors.
+func (o *CincinnatiSchema) collectPlatformImages(ctx context.Context, filterCopy *v2alpha1.Platform, cincinnatiParams CincinnatiParams) ([]v2alpha1.CopyImageSchema, []error) {
 	var (
 		allImages  []v2alpha1.CopyImageSchema
 		errs       = []error{}
 		flagReport = false
 	)
-
-	// before making a deep copy
-	// check that the "platform.release" field is not empty
-	if len(o.Config.Mirror.Platform.Release) > 0 {
-		// OCPBUGS-50617
-		// include signature verify and download for ga releases, rc (release candidate)
-		// and ec Iengineering candidate) by tag or digest
-		imgSpec, err := image.ParseRef(o.Config.Mirror.Platform.Release)
-		if err != nil {
-			return []v2alpha1.CopyImageSchema{}, err
-		}
-		var copyImage v2alpha1.CopyImageSchema
-
-		if imgSpec.Digest == "" {
-			imgSpec.Digest, err = o.Manifest.ImageDigest(ctx, o.Opts.Global.NewSystemContext(), imgSpec.ReferenceWithTransport)
-			if err != nil {
-				return []v2alpha1.CopyImageSchema{}, fmt.Errorf("retrieving digest %w", err)
-			}
-		}
-		if imgSpec.Algorithm == "" {
-			imgSpec.Algorithm = "sha256"
-		}
-		copyImage = v2alpha1.CopyImageSchema{
-			Source:      imgSpec.Name + "@" + imgSpec.Algorithm + ":" + imgSpec.Digest,
-			Destination: "",
-			Origin:      o.Config.Mirror.Platform.Release,
-		}
-
-		allImages = append(allImages, copyImage)
-		imgs, err := o.Signature.GenerateReleaseSignatures(ctx, allImages)
-		if err != nil {
-			return []v2alpha1.CopyImageSchema{}, err
-		}
-		return imgs, nil
-
-	}
-
-	filterCopy := o.Config.Mirror.Platform.DeepCopy()
 
 	if len(filterCopy.Platforms) > 0 {
 		// New Platforms field: always use the multi-arch payload. It is the only manifest
@@ -190,25 +219,7 @@ func (o *CincinnatiSchema) GetReleaseReferenceImages(ctx context.Context) ([]v2a
 			errs = append(errs, channelErrs...)
 		}
 	}
-
-	// OCPBUGS-51157
-	if len(allImages) == 0 && (len(filterCopy.Release) > 0 || len(filterCopy.Channels) > 0) {
-		return []v2alpha1.CopyImageSchema{}, fmt.Errorf("[GetReleaseReferenceImages] no release images found")
-	}
-
-	imgs, err := o.Signature.GenerateReleaseSignatures(ctx, allImages)
-	if err != nil {
-		return []v2alpha1.CopyImageSchema{}, fmt.Errorf("%w", err)
-	}
-
-	errorArray := []string{}
-	for _, e := range errs {
-		errorArray = append(errorArray, e.Error())
-	}
-	if len(errs) > 0 {
-		return imgs, fmt.Errorf("[GetReleaseReferenceImages] error list %v", errorArray)
-	}
-	return imgs, nil
+	return allImages, errs
 }
 
 // collectChannelImages queries the Cincinnati API for all configured channels with
@@ -273,7 +284,8 @@ func (o *CincinnatiSchema) initCincinnatiClient(ch v2alpha1.ReleaseChannel) erro
 	}
 }
 
-// warnEUSChannel emits a one-time warning when an EUS channel spans two or more minor versions.
+// warnEUSChannel emits a one-time warning when an EUS channel spans two or more minor versions
+// of the same major version.
 // It returns true if the warning was printed, or the value of alreadyReported if the warning
 // was skipped (either because it was already printed or the channel does not qualify).
 func (o *CincinnatiSchema) warnEUSChannel(ch v2alpha1.ReleaseChannel, alreadyReported bool) bool {
@@ -283,7 +295,10 @@ func (o *CincinnatiSchema) warnEUSChannel(ch v2alpha1.ReleaseChannel, alreadyRep
 	// CLID-135: detect and log as early as possible
 	max := semver.MustParse(ch.MaxVersion)
 	min := semver.MustParse(ch.MinVersion)
-	if strings.Contains(ch.Name, "eus") && (max.Minor-min.Minor) >= 2 {
+	// The minor version distance is only known within a major version: the number of minor
+	// versions between releases of different major versions is unknown, so no warning is
+	// emitted for them.
+	if strings.Contains(ch.Name, "eus") && max.Major == min.Major && max.Minor > min.Minor && max.Minor-min.Minor >= 2 {
 		o.Log.Warn("Extended Update Support (EUS) channel detected with minor version range >= 2\n" +
 			"\t\t\t\tPlease refer to the web console https://access.redhat.com/labs/ocpupgradegraph/update_path\n" +
 			"\t\t\t\tTo correctly determine the upgrade path for EUS releases")
@@ -329,8 +344,6 @@ func (o *CincinnatiSchema) resolveChannelVersions(ctx context.Context, ch v2alph
 
 // getDownloads will prepare the downloads map for mirroring
 func getChannelDownloads(ctx context.Context, cs CincinnatiSchema, lastChannels []v2alpha1.ReleaseChannel, channel v2alpha1.ReleaseChannel) ([]v2alpha1.CopyImageSchema, error) {
-	var allImages []v2alpha1.CopyImageSchema
-
 	var prevChannel v2alpha1.ReleaseChannel
 	for _, ch := range lastChannels {
 		if ch.Name == channel.Name {
@@ -341,39 +354,46 @@ func getChannelDownloads(ctx context.Context, cs CincinnatiSchema, lastChannels 
 	// Plot between min and max of channel
 	first, err := semver.Parse(channel.MinVersion)
 	if err != nil {
-		return allImages, fmt.Errorf("min semver parsing %w", err)
+		return nil, fmt.Errorf("min semver parsing %w", err)
 	}
 	last, err := semver.Parse(channel.MaxVersion)
 	if err != nil {
-		return allImages, fmt.Errorf("max semver parsing %w", err)
+		return nil, fmt.Errorf("max semver parsing %w", err)
 	}
 
 	var newDownloads []v2alpha1.CopyImageSchema
 	if channel.ShortestPath {
 		current, newest, updates, err := CalculateUpgrades(ctx, cs, channel.Name, channel.Name, first, last)
 		if err != nil {
-			return allImages, err
+			return nil, err
 		}
 		newDownloads = gatherUpdates(cs.Log, current, newest, updates)
 
 	} else {
-		lowRange, err := semver.ParseRange(fmt.Sprintf(">=%s", first))
+		newDownloads, err = getChannelDownloadsInRange(ctx, cs, channel.Name, first, last)
 		if err != nil {
-			return allImages, fmt.Errorf("low range semver parsing %w", err)
+			return nil, err
 		}
-		highRange, err := semver.ParseRange(fmt.Sprintf("<=%s", last))
-		if err != nil {
-			return allImages, fmt.Errorf("high range semver parsing %w", err)
-		}
-		versions, err := GetUpdatesInRange(ctx, cs, channel.Name, highRange.AND(lowRange))
-		if err != nil {
-			return allImages, fmt.Errorf("getting update in range %w", err)
-		}
-		newDownloads = gatherUpdates(cs.Log, cincinnati.Update{}, cincinnati.Update{}, versions)
 	}
-	allImages = append(allImages, newDownloads...)
 
-	return allImages, nil
+	return newDownloads, nil
+}
+
+// getChannelDownloadsInRange prepares the downloads of all the channel releases from first to last.
+func getChannelDownloadsInRange(ctx context.Context, cs CincinnatiSchema, channel string, first, last semver.Version) ([]v2alpha1.CopyImageSchema, error) {
+	lowRange, err := semver.ParseRange(fmt.Sprintf(">=%s", first))
+	if err != nil {
+		return nil, fmt.Errorf("low range semver parsing %w", err)
+	}
+	highRange, err := semver.ParseRange(fmt.Sprintf("<=%s", last))
+	if err != nil {
+		return nil, fmt.Errorf("high range semver parsing %w", err)
+	}
+	versions, err := GetUpdatesInRange(ctx, cs, channel, highRange.AND(lowRange))
+	if err != nil {
+		return nil, fmt.Errorf("getting update in range %w", err)
+	}
+	return gatherUpdates(cs.Log, cincinnati.Update{}, cincinnati.Update{}, versions), nil
 }
 
 // getCrossChannelDownloads will determine required downloads between channel versions (for OCP only)
@@ -408,7 +428,6 @@ func getCrossChannelDownloads(ctx context.Context, cs CincinnatiSchema, channels
 
 // gatherUpdates
 func gatherUpdates(log clog.PluggableLoggerInterface, current, newest cincinnati.Update, updates []cincinnati.Update) []v2alpha1.CopyImageSchema {
-	allImages := []v2alpha1.CopyImageSchema{}
 	uniqueImages := make(map[v2alpha1.CopyImageSchema]bool)
 
 	for _, update := range updates {
@@ -424,6 +443,7 @@ func gatherUpdates(log clog.PluggableLoggerInterface, current, newest cincinnati
 		uniqueImages[v2alpha1.CopyImageSchema{Source: newest.Image, Destination: ""}] = true
 	}
 
+	allImages := make([]v2alpha1.CopyImageSchema, 0, len(uniqueImages))
 	for img := range uniqueImages {
 		allImages = append(allImages, img)
 	}
