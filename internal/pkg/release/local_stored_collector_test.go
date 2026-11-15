@@ -3,11 +3,14 @@ package release
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	gcrv1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/fake"
@@ -1690,6 +1693,184 @@ func kubeVirtTestMultiArchPlatform() v2alpha1.Platform {
 	}
 }
 
+// OCPBUGS-138157: a cancelled or expired context stops the disk to mirror preparation of the
+// kubevirt images. The context error reaches the caller, no partial batch is returned and no
+// further cache lookup is made. Any other lookup error still means that the image is not in
+// the cache, so the digest-gated use of an image archived under its legacy name is unchanged.
+func TestPrepareReleaseBatchFromDirKubeVirtContextErrors(t *testing.T) {
+	encoded := func(dgst string) string { return strings.TrimPrefix(dgst, "sha256:") }
+	cacheRef := func(name string) string {
+		return consts.DockerProtocol + "localhost:9999/openshift/release:" + kubeVirtTestReleaseTag + "-" + name
+	}
+	kubeVirtCopy := func(dgst, sourceName, destinationName string) v2alpha1.CopyImageSchema {
+		return v2alpha1.CopyImageSchema{
+			Origin:      kubeVirtTestRepo + "@" + dgst,
+			Source:      cacheRef(sourceName),
+			Destination: consts.DockerProtocol + "localhost:5000/test/openshift/release:" + kubeVirtTestReleaseTag + "-" + destinationName,
+			Type:        v2alpha1.TypeOCPReleaseContent,
+		}
+	}
+	// The images are prepared in this order: rhel-10, rhel-9, then the legacy image (digest 1).
+	release := writeKubeVirtTestBootImages(t,
+		kubeVirtTestStream(t, map[string]string{"x86_64": kubeVirtTestDigest1}),
+		`{"rhel-9":`+kubeVirtTestStream(t, map[string]string{"x86_64": kubeVirtTestDigest1})+
+			`,"rhel-10":`+kubeVirtTestStream(t, map[string]string{"x86_64": kubeVirtTestDigest2})+`}`)
+	rhel10, legacy := cacheRef("kube-virt-container-rhel-10"), cacheRef("kube-virt-container")
+	// olderArchive only holds the legacy image, as archives created before stream collections.
+	olderArchive := map[string]string{legacy: encoded(kubeVirtTestDigest1)}
+
+	// cancelOn returns a lookup hook that cancels the context when ref is looked up, and makes
+	// that lookup fail with the context error, like a registry client does.
+	cancelOn := func(ref string) func(context.CancelFunc) func(context.Context, string) error {
+		return func(cancel context.CancelFunc) func(context.Context, string) error {
+			return func(ctx context.Context, imgRef string) error {
+				if imgRef != ref {
+					return nil
+				}
+				cancel()
+				return fmt.Errorf("pinging container registry localhost:9999: %w", ctx.Err())
+			}
+		}
+	}
+
+	tests := []struct {
+		name  string
+		cache map[string]string
+		// newContext returns the context of the batch; it is cancelled at the end of the test.
+		newContext func() (context.Context, context.CancelFunc)
+		// hook, when set, returns the lookup hook of the cache for the cancel function of the context.
+		hook     func(context.CancelFunc) func(context.Context, string) error
+		wantErr  error
+		expected []v2alpha1.CopyImageSchema
+		lookups  int
+	}{
+		{
+			name:  "context cancelled before the batch",
+			cache: olderArchive,
+			newContext: func() (context.Context, context.CancelFunc) {
+				ctx, cancel := context.WithCancel(context.Background())
+				cancel()
+				return ctx, cancel
+			},
+			wantErr: context.Canceled,
+			lookups: 0,
+		},
+		{
+			name:  "deadline exceeded before the batch",
+			cache: olderArchive,
+			newContext: func() (context.Context, context.CancelFunc) {
+				return context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+			},
+			wantErr: context.DeadlineExceeded,
+			lookups: 0,
+		},
+		{
+			name:    "context cancelled during the lookup of a stream image",
+			cache:   olderArchive,
+			hook:    cancelOn(rhel10),
+			wantErr: context.Canceled,
+			lookups: 1,
+		},
+		{
+			name:  "context cancelled after a successful lookup of a stream image",
+			cache: map[string]string{rhel10: encoded(kubeVirtTestDigest2), legacy: encoded(kubeVirtTestDigest1)},
+			hook: func(cancel context.CancelFunc) func(context.Context, string) error {
+				return func(_ context.Context, imgRef string) error {
+					if imgRef == rhel10 {
+						cancel()
+					}
+					return nil
+				}
+			},
+			wantErr: context.Canceled,
+			lookups: 1,
+		},
+		{
+			name:    "context cancelled during the lookup of the legacy image",
+			cache:   olderArchive,
+			hook:    cancelOn(legacy),
+			wantErr: context.Canceled,
+			lookups: 2,
+		},
+		{
+			name:  "deadline exceeded during the lookup of the legacy image",
+			cache: olderArchive,
+			newContext: func() (context.Context, context.CancelFunc) {
+				ctx := &kubeVirtExpiringContext{done: make(chan struct{})}
+				return ctx, ctx.expire
+			},
+			hook:    cancelOn(legacy),
+			wantErr: context.DeadlineExceeded,
+			lookups: 2,
+		},
+		{
+			name:  "other lookup errors still use the legacy image only when its digest matches",
+			cache: olderArchive,
+			hook: func(context.CancelFunc) func(context.Context, string) error {
+				return func(_ context.Context, imgRef string) error {
+					if imgRef == rhel10 {
+						return errors.New("connection reset by peer")
+					}
+					return nil
+				}
+			},
+			expected: []v2alpha1.CopyImageSchema{
+				kubeVirtCopy(kubeVirtTestDigest2, "kube-virt-container-rhel-10", "kube-virt-container-rhel-10"),
+				kubeVirtCopy(kubeVirtTestDigest1, "kube-virt-container", "kube-virt-container-rhel-9"),
+				kubeVirtCopy(kubeVirtTestDigest1, "kube-virt-container", "kube-virt-container"),
+			},
+			lookups: 4,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			newContext := tt.newContext
+			if newContext == nil {
+				newContext = func() (context.Context, context.CancelFunc) { return context.WithCancel(context.Background()) }
+			}
+			ctx, cancel := newContext()
+			defer cancel()
+			cache := &kubeVirtTestCache{digests: tt.cache}
+			if tt.hook != nil {
+				cache.lookupHook = tt.hook(cancel)
+			}
+			col := kubeVirtTestCollector(kubeVirtTestConfig(v2alpha1.Platform{KubeVirtContainer: true}), mirror.DiskToMirror, t.TempDir(), cache)
+
+			batch, err := col.prepareReleaseBatchFromDir(ctx, release)
+			if tt.wantErr != nil {
+				require.ErrorIs(t, err, tt.wantErr)
+				require.Empty(t, batch)
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, tt.expected, kubeVirtTestCopies(batch))
+			}
+			require.Equal(t, tt.lookups, cache.lookups)
+		})
+	}
+}
+
+// kubeVirtExpiringContext is a context whose deadline is exceeded when expire is called, so
+// that a test can make it expire at an exact point. It has no deadline time and no values.
+type kubeVirtExpiringContext struct {
+	done chan struct{}
+	once sync.Once
+}
+
+func (c *kubeVirtExpiringContext) Deadline() (time.Time, bool) { return time.Time{}, false }
+func (c *kubeVirtExpiringContext) Done() <-chan struct{}       { return c.done }
+func (c *kubeVirtExpiringContext) Value(any) any               { return nil }
+
+func (c *kubeVirtExpiringContext) Err() error {
+	select {
+	case <-c.done:
+		return context.DeadlineExceeded
+	default:
+		return nil
+	}
+}
+
+func (c *kubeVirtExpiringContext) expire() { c.once.Do(func() { close(c.done) }) }
+
 // kubeVirtTestCollector returns a collector of the given mode for the kubevirt tests:
 // the local cache is localhost:9999 and the mirror registry is localhost:5000/test.
 func kubeVirtTestCollector(cfg v2alpha1.ImageSetConfiguration, mode, workingDir string, cache *kubeVirtTestCache) LocalStorageCollector {
@@ -1712,6 +1893,8 @@ type kubeVirtTestCache struct {
 	MockManifest
 	digests map[string]string
 	lookups int
+	// lookupHook, when set, runs at the start of each lookup; a non-nil error is returned by the lookup.
+	lookupHook func(ctx context.Context, imgRef string) error
 }
 
 // GetReleaseSchema returns no release payload images, so that only the release image
@@ -1720,8 +1903,13 @@ func (c *kubeVirtTestCache) GetReleaseSchema(string) ([]v2alpha1.RelatedImage, e
 	return nil, nil
 }
 
-func (c *kubeVirtTestCache) ImageDigest(_ context.Context, _ *types.SystemContext, imgRef string) (string, error) {
+func (c *kubeVirtTestCache) ImageDigest(ctx context.Context, _ *types.SystemContext, imgRef string) (string, error) {
 	c.lookups++
+	if c.lookupHook != nil {
+		if err := c.lookupHook(ctx, imgRef); err != nil {
+			return "", err
+		}
+	}
 	if dgst, ok := c.digests[imgRef]; ok {
 		return dgst, nil
 	}

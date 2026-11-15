@@ -378,9 +378,14 @@ func (o LocalStorageCollector) prepareKubeVirtD2MCopyBatch(ctx context.Context, 
 		}
 	}
 	for i, img := range images {
-		if img.stream != "" {
-			copies[i].Source = o.kubeVirtD2MSource(ctx, img, copies[i].Source, legacySources[img.legacyName])
+		if img.stream == "" {
+			continue
 		}
+		source, err := o.kubeVirtD2MSource(ctx, img, copies[i].Source, legacySources[img.legacyName])
+		if err != nil {
+			return nil, err
+		}
+		copies[i].Source = source
 	}
 	return copies, nil
 }
@@ -388,25 +393,68 @@ func (o LocalStorageCollector) prepareKubeVirtD2MCopyBatch(ctx context.Context, 
 // kubeVirtD2MSource returns the source, in the local cache, of the disk to mirror copy of
 // the image of a stream collection (see prepareKubeVirtD2MCopyBatch). legacySource is the
 // source of the legacy single stream image with the same legacy name, if any.
-func (o LocalStorageCollector) kubeVirtD2MSource(ctx context.Context, img kubeVirtImage, streamSource, legacySource string) string {
-	if exists, err := o.imageExists(ctx, streamSource); err == nil && exists {
-		return streamSource
+// It only returns an error when ctx is cancelled or its deadline is exceeded: a missing image
+// is also reported as a lookup error, so any other lookup error means "not in the cache".
+func (o LocalStorageCollector) kubeVirtD2MSource(ctx context.Context, img kubeVirtImage, streamSource, legacySource string) (string, error) {
+	if err := kubeVirtLookupInterrupted(ctx, img); err != nil {
+		return "", err
 	}
-	outcome := kubeVirtLegacyImageUnavailable
-	if legacySource != "" {
-		matches, err := o.cachedImageMatchesDigestRef(ctx, legacySource, img.Image)
-		switch {
-		case err == nil && matches:
-			o.Log.Info("kubevirt: copying %s, archived under the legacy name, for stream %q (arch: %v, %s)",
-				legacySource, img.stream, img.arch, kubeVirtLegacyDigestMatched)
-			return legacySource
-		case err == nil:
-			outcome = kubeVirtLegacyDigestNotMatched
-		}
+	exists, err := o.imageExists(ctx, streamSource)
+	if ctxErr := kubeVirtLookupInterrupted(ctx, img); ctxErr != nil {
+		return "", ctxErr
+	}
+	if err == nil && exists {
+		return streamSource, nil
+	}
+	if err != nil {
+		o.Log.Debug("kubevirt: lookup of %s in the local cache failed: %v", streamSource, err)
+	}
+	outcome, err := o.kubeVirtLegacyLookup(ctx, img, legacySource)
+	if err != nil {
+		return "", err
+	}
+	if outcome == kubeVirtLegacyDigestMatched {
+		o.Log.Info("kubevirt: copying %s, archived under the legacy name, for stream %q (arch: %v, %s)",
+			legacySource, img.stream, img.arch, outcome)
+		return legacySource, nil
 	}
 	o.Log.Warn("kubevirt: the archive has no image %s for stream %q (arch: %v, %s): "+
 		"the archive was probably created by an older version of oc-mirror", streamSource, img.stream, img.arch, outcome)
-	return streamSource
+	return streamSource, nil
+}
+
+// kubeVirtLegacyLookup returns the outcome code of the lookup of legacySource, the image of the
+// local cache archived under the legacy name of img: kubeVirtLegacyDigestMatched only when it has
+// the sha256 digest of img. Like kubeVirtD2MSource, it only returns an error when ctx is
+// cancelled or its deadline is exceeded.
+func (o LocalStorageCollector) kubeVirtLegacyLookup(ctx context.Context, img kubeVirtImage, legacySource string) (string, error) {
+	if legacySource == "" {
+		return kubeVirtLegacyImageUnavailable, nil
+	}
+	matches, err := o.cachedImageMatchesDigestRef(ctx, legacySource, img.Image)
+	if ctxErr := kubeVirtLookupInterrupted(ctx, img); ctxErr != nil {
+		return "", ctxErr
+	}
+	switch {
+	case err != nil:
+		o.Log.Debug("kubevirt: lookup of %s in the local cache failed: %v", legacySource, err)
+		return kubeVirtLegacyImageUnavailable, nil
+	case matches:
+		return kubeVirtLegacyDigestMatched, nil
+	default:
+		return kubeVirtLegacyDigestNotMatched, nil
+	}
+}
+
+// kubeVirtLookupInterrupted returns the error of ctx, wrapped with the stream and the
+// architecture of the image looked up in the local cache, when ctx is cancelled or its
+// deadline is exceeded. It returns nil otherwise.
+func kubeVirtLookupInterrupted(ctx context.Context, img kubeVirtImage) error {
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("kubevirt: lookup in the local cache of the image of stream %q (arch: %v) interrupted: %w",
+			img.stream, img.arch, err)
+	}
+	return nil
 }
 
 // Outcome codes of the lookup of a stream collection image archived under its legacy name.
