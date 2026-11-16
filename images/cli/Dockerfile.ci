@@ -9,7 +9,7 @@ WORKDIR /go/src/github.com/openshift/oc-mirror
 COPY . .
 RUN make build
 
-FROM registry.ci.openshift.org/ocp/builder:rhel-9-golang-1.25-openshift-4.22 AS test-extension-builder
+FROM registry.ci.openshift.org/ocp/builder:rhel-9-golang-1.26-openshift-5.0 AS test-extension-builder
 WORKDIR /go/src/github.com/openshift/oc-mirror
 COPY . .
 RUN cd tests/e2e && \
