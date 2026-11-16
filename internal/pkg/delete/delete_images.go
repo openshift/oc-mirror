@@ -169,28 +169,9 @@ func (o DeleteImages) DeleteRegistryImages(deleteImageList v2alpha1.DeleteImageL
 			continue
 		}
 		deleteDestBase := name[1]
-		// Release content is always mirrored to standardized paths and Platform type does not support targetRepo/tag.
-		// For these types, we use strict equality checking with the expected paths.
-		// For other types that support targetRepo/targetTag, we only verify the image is under the correct
-		// registry tree for flexibility needed with targetRepo/targetTag.
-		switch img.Type {
-		case v2alpha1.TypeOCPReleaseContent:
-			expectedPath := deleteDestBase + "/" + releaseContentPathComponents
-			if imgSpecRef.Name != expectedPath {
-				allErrs = append(allErrs, fmt.Errorf("delete destination %s does not match values found in the delete-images yaml file (expected release content at %s, got %s)", o.Opts.Global.DeleteDestination, expectedPath, imgSpecRef.Name))
-				continue
-			}
-		case v2alpha1.TypeOCPRelease:
-			expectedPath := deleteDestBase + "/" + releaseImagePathComponents
-			if imgSpecRef.Name != expectedPath {
-				allErrs = append(allErrs, fmt.Errorf("delete destination %s does not match values found in the delete-images yaml file (expected release at %s, got %s)", o.Opts.Global.DeleteDestination, expectedPath, imgSpecRef.Name))
-				continue
-			}
-		default:
-			if !strings.HasPrefix(imgSpecRef.Name, deleteDestBase+"/") {
-				allErrs = append(allErrs, fmt.Errorf("delete destination %s does not match values found in the delete-images yaml file (expected prefix %s/, got %s)", o.Opts.Global.DeleteDestination, deleteDestBase, imgSpecRef.Name))
-				continue
-			}
+		if !strings.HasPrefix(imgSpecRef.Name, deleteDestBase+"/") {
+			allErrs = append(allErrs, fmt.Errorf("delete destination %s does not match values found in the delete-images yaml file (expected prefix %s/, got %s)", o.Opts.Global.DeleteDestination, deleteDestBase, imgSpecRef.Name))
+			continue
 		}
 		cis := v2alpha1.CopyImageSchema{
 			Origin:      img.ImageName,
@@ -208,6 +189,14 @@ func (o DeleteImages) DeleteRegistryImages(deleteImageList v2alpha1.DeleteImageL
 				cacheDestination = fmt.Sprintf("%s%s:%s", imgSpecRef.Transport, imgSpecRef.Name, originSpec.CacheTag())
 			}
 			cacheDestination = strings.ReplaceAll(cacheDestination, o.Opts.Global.DeleteDestination, consts.DockerProtocol+o.LocalStorageFQDN)
+			// The cache keeps release images in the default repositories, even when
+			// platform target repositories were used at the destination.
+			if img.Type == v2alpha1.TypeOCPRelease {
+				cacheDestination = consts.DockerProtocol + o.LocalStorageFQDN + "/" + releaseImagePathComponents + ":" + imgSpecRef.Tag
+			}
+			if img.Type == v2alpha1.TypeOCPReleaseContent {
+				cacheDestination = consts.DockerProtocol + o.LocalStorageFQDN + "/" + releaseContentPathComponents + ":" + imgSpecRef.Tag
+			}
 			cis := v2alpha1.CopyImageSchema{
 				Origin:      img.ImageName,
 				Destination: cacheDestination,

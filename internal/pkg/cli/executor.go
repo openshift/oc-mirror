@@ -584,6 +584,9 @@ func (o *ExecutorSchema) Complete(args []string) error {
 		return fmt.Errorf("%d is already bound and cannot be used", o.Opts.Global.Port)
 	}
 	o.Opts.LocalStorageFQDN = localStorageHost + ":" + strconv.Itoa(int(o.Opts.Global.Port))
+	if err := release.ValidatePlatformDestination(o.Config.Mirror.Platform, *o.Opts); err != nil {
+		return err
+	}
 
 	err = o.setupWorkingDir()
 	if err != nil {
@@ -991,6 +994,9 @@ func (o *ExecutorSchema) RunMirrorToMirror(cmd *cobra.Command, args []string) er
 			return err
 		}
 	}
+	if err := release.ValidatePlatformImageDestinations(o.Config.Mirror.Platform, collectorSchema.AllImages); err != nil {
+		return err
+	}
 
 	if o.Opts.IsDryRun {
 		return o.DryRun(cmd.Context(), collectorSchema.AllImages)
@@ -1060,6 +1066,9 @@ func (o *ExecutorSchema) RunDiskToMirror(cmd *cobra.Command, args []string) erro
 		if err != nil {
 			return err
 		}
+	}
+	if err := release.ValidatePlatformImageDestinations(o.Config.Mirror.Platform, collectorSchema.AllImages); err != nil {
+		return err
 	}
 
 	if o.Opts.IsDryRun {
