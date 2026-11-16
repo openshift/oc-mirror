@@ -588,6 +588,55 @@ func TestPrepareCopyBatchSameDigestDifferentTags(t *testing.T) {
 	})
 }
 
+// TestCopyBatchKeepsCatalogRole covers a bundle that references the catalog image as a
+// related image. Images are deduplicated by reference, and the bundle key sorts before the
+// catalog key, so without special handling the related-image entry wins. The catalog must
+// keep its role: RebuildCatalogs and CatalogSource generation select images by this type.
+func TestCopyBatchKeepsCatalogRole(t *testing.T) {
+	log := clog.New("trace")
+	tempDir := t.TempDir()
+
+	const catalogImage = "registry.redhat.io/redhat/redhat-operator-index:v4.18"
+	relatedImages := map[string][]v2alpha1.RelatedImage{
+		"aaa-operator.v1.0.0": {
+			{Name: "index", Image: catalogImage, Type: v2alpha1.TypeOperatorRelatedImage},
+		},
+		"redhat-operator-index.abc123": {
+			{Name: "redhat-operator-index", Image: catalogImage, Type: v2alpha1.TypeOperatorCatalog},
+		},
+	}
+	assertOnlyCatalogs := func(t *testing.T, res []v2alpha1.CopyImageSchema) {
+		t.Helper()
+		assert.NotEmpty(t, res)
+		for _, img := range res {
+			assert.Equal(t, v2alpha1.TypeOperatorCatalog, img.Type, "catalog role lost for %s", img.Destination)
+		}
+	}
+
+	t.Run("MirrorToDisk", func(t *testing.T) {
+		ex := setupFilterCollector_MirrorToDisk(tempDir, log, &MockManifest{})
+		res, err := ex.prepareM2DCopyBatch(relatedImages)
+		assert.NoError(t, err)
+		assertOnlyCatalogs(t, res)
+	})
+
+	t.Run("DiskToMirror", func(t *testing.T) {
+		ex := setupFilterCollector_DiskToMirror(tempDir, log)
+		res, err := ex.prepareD2MCopyBatch(relatedImages)
+		assert.NoError(t, err)
+		assertOnlyCatalogs(t, res)
+	})
+
+	t.Run("MirrorToMirror", func(t *testing.T) {
+		ex := setupFilterCollector_MirrorToDisk(tempDir, log, &MockManifest{})
+		ex.Opts.Mode = mirror.MirrorToMirror
+		ex.Opts.Destination = "docker://localhost:5000/test"
+		res, err := ex.dispatchImagesForM2M(relatedImages)
+		assert.NoError(t, err)
+		assertOnlyCatalogs(t, res)
+	})
+}
+
 func TestOperatorCollector(t *testing.T) {
 	log := clog.New("trace")
 
