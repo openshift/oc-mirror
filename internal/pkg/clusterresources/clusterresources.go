@@ -6,10 +6,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"iter"
 	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 	"unicode"
@@ -60,6 +62,17 @@ type (
 type categorizedMirrors struct {
 	category mirrorCategory
 	mirrors  map[string][]confv1.ImageMirror
+}
+
+// sortedBySource iterates over the mirrors ordered by source, for a deterministic, diff-friendly output.
+func (c categorizedMirrors) sortedBySource() iter.Seq2[string, []confv1.ImageMirror] {
+	return func(yield func(string, []confv1.ImageMirror) bool) {
+		for _, source := range slices.Sorted(maps.Keys(c.mirrors)) {
+			if !yield(source, c.mirrors[source]) {
+				return
+			}
+		}
+	}
 }
 
 const (
@@ -140,7 +153,7 @@ func (o *ClusterResourcesGenerator) generateITMS(mirrorsByCategory []categorized
 				ImageTagMirrors: []confv1.ImageTagMirrors{},
 			},
 		}
-		for source, imgMirrors := range catMirrors.mirrors {
+		for source, imgMirrors := range catMirrors.sortedBySource() {
 			itm := confv1.ImageTagMirrors{
 				Source:  source,
 				Mirrors: imgMirrors,
@@ -486,7 +499,7 @@ func (o *ClusterResourcesGenerator) generateIDMS(mirrorsByCategory []categorized
 				ImageDigestMirrors: []confv1.ImageDigestMirrors{},
 			},
 		}
-		for source, imgMirrors := range catMirrors.mirrors {
+		for source, imgMirrors := range catMirrors.sortedBySource() {
 			idm := confv1.ImageDigestMirrors{
 				Source:  source,
 				Mirrors: imgMirrors,
@@ -574,8 +587,10 @@ func (o *ClusterResourcesGenerator) generateImageMirrors(allRelatedImages []v2al
 		}
 	}
 	categorizedMirrorsList := make([]categorizedMirrors, 0, len(mirrorsByCategory))
-	for _, mirrors := range mirrorsByCategory {
-		categorizedMirrorsList = append(categorizedMirrorsList, mirrors)
+	// categories are ordered by their constant value (release, operator, generic) for a deterministic,
+	// diff-friendly output; iterating the keys also guarantees no category is dropped
+	for _, category := range slices.Sorted(maps.Keys(mirrorsByCategory)) {
+		categorizedMirrorsList = append(categorizedMirrorsList, mirrorsByCategory[category])
 	}
 	return categorizedMirrorsList, nil
 }
@@ -786,8 +801,14 @@ func (o *ClusterResourcesGenerator) GenerateSignatureConfigMap(allRelatedImages 
 		}
 	}
 
+	// walk the images sorted by source, so that the ids in the configmap keys do not depend on the collection order
+	sortedImages := slices.Clone(allRelatedImages)
+	slices.SortStableFunc(sortedImages, func(a, b v2alpha1.CopyImageSchema) int {
+		return strings.Compare(a.Source, b.Source)
+	})
+
 	id := 1
-	for _, copyImage := range allRelatedImages {
+	for _, copyImage := range sortedImages {
 		if copyImage.Type == v2alpha1.TypeOCPRelease {
 			o.Log.Debug("[GenerateSignatureConfigMap] release image source %v", copyImage)
 			imgSpec, err := image.ParseRef(copyImage.Source)
@@ -855,6 +876,9 @@ func (o *ClusterResourcesGenerator) GenerateSignatureConfigMap(allRelatedImages 
 	return nil
 }
 
+// generateOcMirrorAnnotations returns the annotations added to the generated resources.
+// createdAt is the generation time, so it differs between runs on purpose: it is the only
+// expected difference between two runs with the same input (content ordering is deterministic).
 func generateOcMirrorAnnotations() map[string]string {
 	return map[string]string{
 		"createdBy":         "oc-mirror v2",
