@@ -208,7 +208,7 @@ func TestChannelConcurrentWorker(t *testing.T) {
 
 		errorMsg := err.Error()
 
-		pattern := `/tmp/[^\s]+`
+		pattern := regexp.QuoteMeta(os.TempDir()) + `[^\s]+`
 		regex, err := regexp.Compile(pattern)
 		assert.NoError(t, err)
 
