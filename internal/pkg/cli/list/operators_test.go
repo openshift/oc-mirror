@@ -1,7 +1,12 @@
 package list
 
 import (
+	"encoding/base64"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -9,10 +14,68 @@ import (
 	"github.com/operator-framework/operator-registry/alpha/model"
 	"github.com/operator-framework/operator-registry/alpha/property"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 )
+
+func TestTaggedCatalogExistsHonorsAuthFile(t *testing.T) {
+	const (
+		username = "test-user"
+		password = "test-password"
+		manifest = `{"schemaVersion":2,"mediaType":"application/vnd.oci.image.manifest.v1+json","config":{"mediaType":"application/vnd.oci.image.config.v1+json","digest":"sha256:0000000000000000000000000000000000000000000000000000000000000000","size":2},"layers":[]}`
+	)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/v2/" {
+			w.Header().Set("WWW-Authenticate", `Basic realm="test"`)
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+
+		if r.URL.Path != "/v2/redhat/test-index/manifests/latest" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+
+		user, pass, ok := r.BasicAuth()
+		if !ok || user != username || pass != password {
+			w.Header().Set("WWW-Authenticate", `Basic realm="test"`)
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/vnd.oci.image.manifest.v1+json")
+		_, _ = w.Write([]byte(manifest))
+	}))
+	defer server.Close()
+
+	host := strings.TrimPrefix(server.URL, "http://")
+	authFile := filepath.Join(t.TempDir(), "auth.json")
+	auth := base64.StdEncoding.EncodeToString([]byte(username + ":" + password))
+	authFileContents := `{"auths":{"` + host + `":{"auth":"` + auth + `"}}}`
+	require.NoError(t, os.WriteFile(authFile, []byte(authFileContents), 0o600))
+
+	global := &mirror.GlobalOptions{}
+	sharedFlags, sharedOpts := mirror.SharedImageFlags()
+	_, deprecatedTLSVerifyOpt := mirror.DeprecatedTLSVerifyFlags()
+	srcFlags, srcOpts := mirror.ImageSrcFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "src-", "screds")
+	require.NoError(t, sharedFlags.Set("authfile", authFile))
+	require.NoError(t, srcFlags.Set("src-tls-verify", "false"))
+	opts := mirror.CopyOptions{Global: global, SrcImage: srcOpts}
+
+	exists, err := taggedCatalogExists(t.Context(), host+"/redhat/test-index:latest", opts)
+	require.NoError(t, err)
+	assert.True(t, exists)
+
+	malformedAuthFile := filepath.Join(t.TempDir(), "malformed-auth.json")
+	require.NoError(t, os.WriteFile(malformedAuthFile, []byte("{not json"), 0o600))
+	require.NoError(t, sharedFlags.Set("authfile", malformedAuthFile))
+
+	_, err = taggedCatalogExists(t.Context(), host+"/redhat/test-index:latest", opts)
+	assert.Error(t, err)
+}
 
 func populateValidCatalogModel(t *testing.T) model.Model {
 	t.Helper()
@@ -72,7 +135,11 @@ func TestListCatalogs(t *testing.T) {
 	t.Skip("needs internet access")
 
 	log := log.New("debug")
-	opts := &mirror.CopyOptions{Global: &mirror.GlobalOptions{}}
+	global := &mirror.GlobalOptions{}
+	_, sharedOpts := mirror.SharedImageFlags()
+	_, deprecatedTLSVerifyOpt := mirror.DeprecatedTLSVerifyFlags()
+	_, srcOpts := mirror.ImageSrcFlags(global, sharedOpts, deprecatedTLSVerifyOpt, "src-", "screds")
+	opts := &mirror.CopyOptions{Global: global, SrcImage: srcOpts}
 
 	t.Run("should succeed", func(t *testing.T) {
 		w := strings.Builder{}
