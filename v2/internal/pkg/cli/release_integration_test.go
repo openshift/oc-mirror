@@ -124,16 +124,23 @@ func (suite *TestEnvironmentRelease) setupTestData(t *testing.T) {
 	assert.NoError(t, err, "should not fail to generate and push release to source registry")
 	suite.releaseImageRefs = releaseImageRefs
 
-	// Serve a PGP signature whose embedded digest matches the runtime-computed
+	// Build a PGP signature whose embedded digest matches the runtime-computed
 	// fake release digest. A checked-in fixture drifts whenever GenerateFakeRelease's
 	// OCI digest changes; --ignore-release-signature is intentionally scoped to
 	// platform.release (not channels) so it cannot bypass this path.
+	// Seed the working-dir signature cache (this branch does not honor
+	// OCP_SIGNATURE_URL in production code).
 	dockerRef := "quay.io/openshift-release-dev/ocp-release:4.15.0-x86_64"
 	sigFixture, err := testutils.SetupReleaseSignatureFixture(suite.tempFolder, releaseDigest, dockerRef)
 	assert.NoError(t, err, "should not fail to set up release signature fixture")
 	suite.signatureFixture = sigFixture
 	t.Setenv("OCP_SIGNATURE_VERIFICATION_PK", sigFixture.PublicKeyPath)
-	t.Setenv("OCP_SIGNATURE_URL", sigFixture.Server.URL+"/")
+
+	sigDir := suite.tempFolder + "/release/m2d/working-dir/signatures/"
+	err = os.MkdirAll(sigDir, 0755)
+	assert.NoError(t, err, "should not fail to create signatures cache dir")
+	err = os.WriteFile(sigDir+strings.TrimPrefix(releaseDigest, "sha256:"), sigFixture.Signature, 0600)
+	assert.NoError(t, err, "should not fail to seed release signature cache")
 
 	cm := testutils.CincinnatiMock{
 		Templates: map[string]string{"stable-4.15": "../../e2e/templates/release_templates/cincinnati_stable-4.15.json"},

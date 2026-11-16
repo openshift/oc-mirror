@@ -21,23 +21,28 @@ import (
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 )
 
-// ReleaseSignatureFixture holds a throwaway PGP key and an HTTP server that
-// serves a signature for a locally generated fake release image. Integration
-// tests use this instead of a checked-in signature file whose embedded digest
-// drifts when GenerateFakeRelease's OCI digest changes.
+// ReleaseSignatureFixture holds a throwaway PGP key and a signature payload for a
+// locally generated fake release image. Integration tests use this instead of a
+// checked-in signature file whose embedded digest drifts when
+// GenerateFakeRelease's OCI digest changes.
+//
+// On branches that honor OCP_SIGNATURE_URL, Server can be used as the signature
+// base URL. On branches that only read the working-dir signature cache, seed
+// Signature into working-dir/signatures/<digest>.
 type ReleaseSignatureFixture struct {
 	Server        *httptest.Server
 	PublicKeyPath string
+	Signature     []byte
 }
 
 // SetupReleaseSignatureFixture creates a throwaway PGP identity, writes its
-// public key under dir, and starts an HTTP server that responds to the
-// oc-mirror signature lookup path (baseURL + "sha256=" + digest + "/signature-1")
-// with a payload whose docker-manifest-digest matches releaseDigest.
+// public key under dir, builds a signature whose docker-manifest-digest matches
+// releaseDigest, and starts an HTTP server that serves that signature at the
+// oc-mirror lookup path (baseURL + "sha256=" + digest + "/signature-1").
 //
-// Callers should set:
-//   - OCP_SIGNATURE_VERIFICATION_PK to PublicKeyPath
-//   - OCP_SIGNATURE_URL to Server.URL + "/"
+// Callers should set OCP_SIGNATURE_VERIFICATION_PK to PublicKeyPath, and either:
+//   - set OCP_SIGNATURE_URL to Server.URL + "/" (when production code honors it), or
+//   - write Signature into working-dir/signatures/<digest> (cache path)
 //
 // and close Server when finished.
 func SetupReleaseSignatureFixture(dir, releaseDigest, dockerReference string) (*ReleaseSignatureFixture, error) {
@@ -68,6 +73,7 @@ func SetupReleaseSignatureFixture(dir, releaseDigest, dockerReference string) (*
 	return &ReleaseSignatureFixture{
 		Server:        server,
 		PublicKeyPath: pubKeyPath,
+		Signature:     signed,
 	}, nil
 }
 
