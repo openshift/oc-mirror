@@ -64,10 +64,15 @@ func catalogBundleNames(packages map[string]catalogPackageExpectation) []string 
 	return slices.Sorted(maps.Keys(versions))
 }
 
-func catalogBundleSource(bundle string) string {
+// catalogBundleTag returns the tag of the bundle image with the given bundle name, like foo.v0.3.1.
+func catalogBundleTag(bundle string) string {
 	pkg, version, found := strings.Cut(bundle, ".v")
 	Expect(found).To(BeTrue(), "invalid expected bundle name %s", bundle)
-	return "quay.io/" + testCatalogRepo + ":" + pkg + "-bundle-v" + version
+	return pkg + "-bundle-v" + version
+}
+
+func catalogBundleSource(bundle string) string {
+	return bundleImage(catalogBundleTag(bundle))
 }
 
 func operatorImages(expected []catalogExpectation) map[string]string {
@@ -78,12 +83,11 @@ func operatorImages(expected []catalogExpectation) map[string]string {
 			images[catalog.Destination] = catalog.Source
 		}
 		for _, bundle := range catalogBundleNames(catalog.Packages) {
-			source := catalogBundleSource(bundle)
-			images[strings.TrimPrefix(source, "quay.io/")] = source
+			images[testCatalogRepo+":"+catalogBundleTag(bundle)] = catalogBundleSource(bundle)
 		}
 	}
 	// Every bundle in this fixture catalog references the same operand image.
-	images[testCatalogRepo+":sha256-"+strings.TrimPrefix(fooOperandDigest, "sha256:")] = operandImage
+	images[testCatalogRepo+":"+digestTag(operandImage)] = operandImage
 	return images
 }
 
@@ -287,7 +291,9 @@ func mirrorOperatorCatalogs(specCtx SpecContext, workDir, isc string, viaDisk bo
 	env := append(slices.Clone(options.Env),
 		"HTTP_PROXY=http://127.0.0.1:1", "HTTPS_PROXY=http://127.0.0.1:1", "NO_PROXY=localhost,127.0.0.1")
 	restore := ocmirror.NewRunner(os.Getenv("OC_MIRROR_BINARY")).WithEnv(env)
-	result, err = restore.DiskToMirror(specCtx, isc, workDir, testRegistry.Endpoint(),
-		"--cache-dir", filepath.Join(workDir, "restore-cache"), "--remove-signatures=true", "--dest-tls-verify=false", "--retry-times=1")
+	withOriginRegistryOffline(func() {
+		result, err = restore.DiskToMirror(specCtx, isc, workDir, testRegistry.Endpoint(),
+			"--cache-dir", filepath.Join(workDir, "restore-cache"), "--remove-signatures=true", "--dest-tls-verify=false", "--retry-times=1")
+	})
 	expectOcMirrorCommandSuccess(result, err)
 }

@@ -15,9 +15,10 @@ import (
 	"github.com/openshift/oc-mirror/tests/integration/pkg/registry"
 )
 
+// fooMultiBundleTag and barMultiBundleTag are the multi-architecture bundles of test-catalog-multi.
 const (
-	fooMultiBundleTag = "foo-bundle-v0.3.1-multi-20261103-2e526488d"
-	barMultiBundleTag = "bar-bundle-v1.0.0-multi-20261103-2e526488d"
+	fooMultiBundleTag = "foo-bundle-v0.3.1-multi"
+	barMultiBundleTag = "bar-bundle-v1.0.0-multi"
 )
 
 var _ = Describe("sparse manifest platform filtering", Label("sparse-manifest"), func() {
@@ -266,6 +267,9 @@ var _ = Describe("deprecated platform.architectures field with release channel",
 
 	BeforeAll(func() {
 		workDir = setupWorkDir()
+		// Use digest references so GenerateReleaseSignatures can find the GPG signatures.
+		multiPayload := fixtureByDigest(multiReleaseImage)
+		singlePayload := fixtureByDigest(testReleaseImage)
 		// Mock Cincinnati server: returns different release payloads depending on ?arch=
 		cincinnatiServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.Header.Get("Accept") != "application/json" {
@@ -276,10 +280,9 @@ var _ = Describe("deprecated platform.architectures field with release channel",
 			var payload string
 			switch arch {
 			case "multi":
-				// Use digest reference so GenerateReleaseSignatures can find the GPG signature
-				payload = "quay.io/oc-mirror/release/test-release-index-multi@sha256:2352c020dacb945a96cf665e553644f3a3c39341b636a4d9ef1653944fd9de1f"
-			default: // amd64 and others — use digest reference for GPG signature lookup
-				payload = "quay.io/oc-mirror/release/test-release-index@sha256:f81792339c8b5934191d18a53b18bc1d584e01a9f37d59c0aa6905b00200aa1b"
+				payload = multiPayload
+			default: // amd64 and others
+				payload = singlePayload
 			}
 			w.Header().Set("Content-Type", "application/json")
 			fmt.Fprintf(w, `{"nodes":[{"version":"4.18.1","payload":"%s"}],"edges":[]}`, payload)

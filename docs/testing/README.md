@@ -32,14 +32,21 @@ These are black-box tests that do not have direct access to the `oc-mirror` inte
 
 All the images used in these tests are built by us, in order to control their content and size.
 
-Project-owned fixture images use immutable, checked-in version tags containing
-the UTC publishing date and source commit. See the
-[integration image guide](../../tests/integration/image-builders/README.md) for
-publishing and updating fixtures without affecting other PRs.
+The operator catalogs, with their bundles and operands, and the release payloads,
+with their components, are built from `tests/integration/testdata` when the suite
+starts, and served by a local registry, so changing them does not require
+publishing anything. The additional images, which rarely change, are published
+with immutable, checked-in version tags containing the UTC publishing date and
+source commit. See the [integration image guide](../../tests/integration/image-builders/README.md)
+for publishing and updating them without affecting other PRs.
 
 In these tests we assert the tangible outputs of `oc-mirror`: archive contents, mirrored images present on the target registry, etc.
 
 > **Example:** Execute the oc-mirror CLI command to successfully copy one image from a source registry to a target registry, and then verify the image exists in the target registry.
+
+Run the suite with `make test-integration-cli`. When running `go test` directly
+from `tests/integration`, pass `-tags containers_image_openpgp` so the upstream
+`opm` renderer can build without the native GPGME library.
 
 ### End-to-end Tests
 

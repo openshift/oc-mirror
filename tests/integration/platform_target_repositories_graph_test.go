@@ -69,9 +69,11 @@ var _ = Describe("platform target repositories with graph data", Label("platform
 				"http_proxy=http://127.0.0.1:1", "https_proxy=http://127.0.0.1:1",
 				"NO_PROXY=localhost,127.0.0.1", "no_proxy=localhost,127.0.0.1",
 			})
-			result, err = offlineRunner.DiskToMirror(ctx, isc, restoreDir, destination,
-				"--cache-dir", filepath.Join(workDir, "restore-cache"), "--remove-signatures=true",
-				"--dest-tls-verify=false", "--max-nested-paths=3", "--retry-times=1")
+			withOriginRegistryOffline(func() {
+				result, err = offlineRunner.DiskToMirror(ctx, isc, restoreDir, destination,
+					"--cache-dir", filepath.Join(workDir, "restore-cache"), "--remove-signatures=true",
+					"--dest-tls-verify=false", "--max-nested-paths=3", "--retry-times=1")
+			})
 			expectOcMirrorCommandSuccess(result, err)
 		} else {
 			By("mirroring directly with a destination nesting limit")

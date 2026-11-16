@@ -41,8 +41,8 @@ apiVersion: mirror.openshift.io/v2alpha1
   platform:
     targetImageRepo: %q
     targetComponentRepo: %q
-    release: quay.io/oc-mirror/release/test-release-index:v0.0.1
-`, kind, section, imageRepo, componentRepo)
+    release: %q
+`, kind, section, imageRepo, componentRepo, testReleaseImage)
 			Expect(os.WriteFile(configPath, data, 0600)).To(Succeed(), "write %s for independent repository paths", kind)
 			return configPath
 		}
@@ -96,8 +96,10 @@ apiVersion: mirror.openshift.io/v2alpha1
 		Expect(err).NotTo(HaveOccurred(), "read generated IDMS")
 		var idms configv1.ImageDigestMirrorSet
 		Expect(yaml.Unmarshal(idmsData, &idms)).To(Succeed(), "decode generated IDMS")
+		payloadRepo := referenceWithoutTagOrDigest(testReleaseImage)
+		sourceComponentRepo := referenceWithoutTagOrDigest(releaseComponentImage)
 		Expect(idms.Spec.ImageDigestMirrors).To(ConsistOf(configv1.ImageDigestMirrors{
-			Source:  "quay.io/oc-mirror/release/test-release-index",
+			Source:  payloadRepo,
 			Mirrors: []configv1.ImageMirror{configv1.ImageMirror(destination + "/" + wantImageRepo)},
 		}), "IDMS must map the payload to its exact repository")
 		itmsData, err := os.ReadFile(filepath.Join(resourceWorkDir, dirWorkingDir, dirClusterResources, "itms-oc-mirror.yaml"))
@@ -106,11 +108,11 @@ apiVersion: mirror.openshift.io/v2alpha1
 		Expect(yaml.Unmarshal(itmsData, &itms)).To(Succeed(), "decode generated ITMS")
 		Expect(itms.Spec.ImageTagMirrors).To(ConsistOf(
 			configv1.ImageTagMirrors{
-				Source:  "quay.io/oc-mirror/release/test-release-index",
+				Source:  payloadRepo,
 				Mirrors: []configv1.ImageMirror{configv1.ImageMirror(destination + "/" + wantImageRepo)},
 			},
 			configv1.ImageTagMirrors{
-				Source:  "quay.io/oc-mirror/release/test-image",
+				Source:  sourceComponentRepo,
 				Mirrors: []configv1.ImageMirror{configv1.ImageMirror(destination + "/" + wantComponentRepo)},
 			},
 		), "ITMS must map payload and component sources to their own exact repositories")
@@ -188,7 +190,7 @@ apiVersion: mirror.openshift.io/v2alpha1
 		}
 
 		By("checking generated mirror resources use the custom repository")
-		expectCorrectIDMS(workDir, isc)
+		expectCorrectIDMS(workDir, isc, *testRegistry)
 		for _, filename := range []string{idmsFileName, "itms-oc-mirror.yaml"} {
 			content, err := os.ReadFile(filepath.Join(workDir, dirWorkingDir, dirClusterResources, filename))
 			Expect(err).NotTo(HaveOccurred())
@@ -365,9 +367,10 @@ apiVersion: mirror.openshift.io/v2alpha1
 
 // startReleaseChannelServer serves the signed test payload through Cincinnati.
 func startReleaseChannelServer() *httptest.Server {
+	payload := fixtureByDigest(testReleaseImage)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprint(w, `{"nodes":[{"version":"4.18.1","payload":"quay.io/oc-mirror/release/test-release-index@sha256:f81792339c8b5934191d18a53b18bc1d584e01a9f37d59c0aa6905b00200aa1b"}],"edges":[]}`)
+		fmt.Fprintf(w, `{"nodes":[{"version":"4.18.1","payload":%q}],"edges":[]}`, payload)
 	}))
 	DeferCleanup(server.Close)
 	return server

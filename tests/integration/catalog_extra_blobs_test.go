@@ -44,7 +44,7 @@ func expectOtherBlobsInCatalog(iscPath string, reg registry.Registry, pkgHasExtr
 
 	const lifecycleSchema string = "io.openshift.operators.lifecycles.v1alpha1"
 	for _, op := range cfg.Mirror.Operators {
-		configsDir := extractCatalogConfigs(ctx, reg, op.Catalog)
+		configsDir := extractCatalogConfigs(ctx, reg, op)
 
 		for _, pkg := range op.Packages {
 			extras := loadOtherBlobs(ctx, configsDir, pkg.Name)

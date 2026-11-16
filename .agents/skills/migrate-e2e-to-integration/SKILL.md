@@ -76,23 +76,27 @@ Apply these conversions:
 - **Integration**: Use helpers from `tests/integration/helpers_test.go`:
   - `expectOcMirrorCommandSuccess(result, err)`
   - `expectSuccessfulMirrorInRegistry(iscPath, registry)`
-  - `expectCorrectIDMS(workDir, iscPath)`
+  - `expectCorrectIDMS(workDir, iscPath, registry)`
   - `expectValidDeleteImagesFiles(workDir, deleteID)`
   - `expectEmptyRegistry(registry)`
   - Follow the `expect*` naming pattern for any new helpers.
 
 #### Test images
 - **E2E**: Often uses real release images and production operator catalogs.
-- **Integration**: Reuse the complete, pinned fixture references in
-  `tests/integration/testdata/imagesetconfigs/` and the matching test constants. Do not use abbreviated digests
-  or substitute mutable `latest` tags.
+- **Integration**: Reuse the local fixtures in `tests/integration/testdata/imagesetconfigs/` and the matching Go helpers:
+  - Catalog: `${ORIGIN_REGISTRY}/oc-mirror/oc-mirror-dev:test-catalog` in ISCs, `happyPathCatalog` in Go
+  - Release: `${ORIGIN_REGISTRY}/oc-mirror/release/test-release-index:v0.0.1` in ISCs, `testReleaseImage` in Go
 
-See `tests/integration/image-builders/README.md` before publishing a new fixture version.
+The suite builds the operator and release fixtures from `tests/integration/testdata/` at startup. Edit those sources
+instead of publishing new images, and use `${ORIGIN_REGISTRY}` or `${DIGEST:<repository>:<tag>}` in configs.
+
+For prebuilt additional images, reuse complete, pinned references. Do not use abbreviated digests or substitute
+mutable `latest` tags. See `tests/integration/image-builders/README.md` before publishing a new version.
 
 #### Test data configs
 - Check existing ISC/DISC configs in `tests/integration/testdata/imagesetconfigs/` first.
 - Only create new ones if the scenario needs a config that doesn't exist.
-- Use the existing pinned fixture references described above instead of production images.
+- Use the fixture references described above instead of production images.
 
 ### 6. Write the integration test
 
@@ -117,7 +121,7 @@ The suite is a separate Go module, so run focused tests from `tests/integration/
 ```bash
 make build
 cd tests/integration
-go test -v -count=1 -timeout 30m . -ginkgo.focus '<test description or regex>'
+CGO_ENABLED=0 go test -tags containers_image_openpgp -v -count=1 -timeout 30m . -ginkgo.focus '<test description or regex>'
 ```
 
 These commands start at the repository root. The suite starts an in-process registry; no registry executable or

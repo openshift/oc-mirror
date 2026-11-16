@@ -32,7 +32,7 @@ var _ = Describe("mirrorToMirror", func() {
 			expectSuccessfulMirrorInRegistry(filepath.Join(iscDir, iscHappyPath), *testRegistry)
 
 			By("verifying IDMS contains all the expected images and no empty fields")
-			expectCorrectIDMS(workDir, filepath.Join(iscDir, iscHappyPath))
+			expectCorrectIDMS(workDir, filepath.Join(iscDir, iscHappyPath), *testRegistry)
 
 			By("running delete workflow - phase 1: generating delete yaml")
 			result, err = runner.DeletePhaseOne(ctx, filepath.Join(iscDir, discHappyPath), workDir, "", testRegistry.Endpoint())

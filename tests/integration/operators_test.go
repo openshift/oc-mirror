@@ -82,7 +82,7 @@ var _ = Describe("operators", func() {
 			expectCatalogContainsOnlyExpectedPackages(ctx, *testRegistry, filepath.Join(iscDir, iscFile))
 
 			By("verifying IDMS contains all the expected images and no empty fields")
-			expectCorrectIDMS(workDir, filepath.Join(iscDir, iscFile))
+			expectCorrectIDMS(workDir, filepath.Join(iscDir, iscFile), *testRegistry)
 
 			By("verifying CatalogSource YAML references the rebuilt catalog in the target registry")
 			expectCorrectCatalogSourceYAMLs(workDir, testRegistry.Endpoint(), filepath.Join(iscDir, iscFile))
@@ -321,7 +321,7 @@ func expectCatalogContainsOnlyExpectedPackages(ctx context.Context, reg registry
 	cfg := parseImageSetConfig(iscPath)
 
 	for _, op := range cfg.Mirror.Operators {
-		configsDir := extractCatalogConfigs(ctx, reg, op.Catalog)
+		configsDir := extractCatalogConfigs(ctx, reg, op)
 		DeferCleanup(func() {
 			Expect(os.RemoveAll(configsDir)).To(Succeed(), "failed to clean up catalog configs dir %s", configsDir)
 		})

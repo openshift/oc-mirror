@@ -1,0 +1,4 @@
+config:
+  Entrypoint: [/simple-release]
+  Labels:
+    io.openshift.release.component: alpine

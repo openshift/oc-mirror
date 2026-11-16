@@ -1,0 +1,23 @@
+---
+schema: olm.bundle
+image: ${ORIGIN_REGISTRY}/oc-mirror/oc-mirror-dev:foo-bundle-v0.1.0
+---
+image: ${ORIGIN_REGISTRY}/oc-mirror/oc-mirror-dev:foo-bundle-v0.1.0
+name: foo.v0.9.9-invalid-related-image
+package: foo
+properties:
+- type: olm.gvk
+  value:
+    group: test.foo
+    kind: Foo
+    version: v1
+- type: olm.package
+  value:
+    packageName: foo
+    version: 0.9.9
+relatedImages:
+- image: ${ORIGIN_REGISTRY}/oc-mirror/oc-mirror-dev:foo-bundle-v0.1.0
+  name: ""
+- image: registry.example.com/foo/operand-missing-tag
+  name: operand
+schema: olm.bundle

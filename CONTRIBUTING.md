@@ -35,7 +35,7 @@ there instead of duplicating it in oc-mirror.
 5. Consider the impact, reach, and recoverability of failures, and scale review and verification accordingly.
  Changes to image copying (`mirror`), archives/state (`archive`, `history`), deletion (`delete`), trust (`signature`),
  and catalog rebuilding (`imagebuilder`, `operator`, `manifest`) deserve particular care.
- Presentation-only changes (`emoji`, `spinners`, `log`, version-command display), isolated tests, and dry-run are generally safer. 
+ Presentation-only changes (`emoji`, `spinners`, `log`, version-command display), isolated tests, and dry-run are generally safer.
 
 ## Contribution Expectations
 
@@ -100,10 +100,10 @@ make build
 cd tests/integration
 
 # Run the full suite.
-go test -v -count=1 -timeout 30m ./...
+CGO_ENABLED=0 go test -tags containers_image_openpgp -v -count=1 -timeout 30m ./...
 
 # Run tests whose Ginkgo descriptions match a regular expression.
-go test -v -count=1 -timeout 30m . -ginkgo.focus '<test description or regex>'
+CGO_ENABLED=0 go test -tags containers_image_openpgp -v -count=1 -timeout 30m . -ginkgo.focus '<test description or regex>'
 ```
 
 Rebuild after changing the CLI code. The runner defaults to `../../bin/oc-mirror`; set `OC_MIRROR_BINARY` to an

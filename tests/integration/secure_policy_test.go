@@ -102,12 +102,14 @@ var _ = Describe("secure policy", func() {
 		catalogRepo := extractRepositoryName(cfg.Mirror.Operators[0].Catalog)
 		catalogTag := extractTag(cfg.Mirror.Operators[0].Catalog)
 		additionalImageRepo := extractRepositoryName(cfg.Mirror.AdditionalImages[0].Name)
-		policyPath := writeSigstoreSignedPolicy(workDir, filepath.Join(keysDir, "cosign.pub"), "quay.io/oc-mirror")
+		// The origin registry serves the catalog, its bundles and its operand.
+		policyPath := writeSigstoreSignedPolicy(workDir, filepath.Join(keysDir, "cosign.pub"),
+			originRegistry.Endpoint()+"/oc-mirror")
 
 		By("resolving expected operator images independently from the source catalog")
 		expectedImages := sourceCatalogImageDigests(ctx, cfg.Mirror.Operators[0].Catalog)
 
-		By("running mirrorToDisk with --secure-policy=true and a policy requiring cosign signatures for quay.io/oc-mirror")
+		By("running mirrorToDisk with --secure-policy=true and a policy requiring cosign signatures for the oc-mirror test images")
 		result, err := runner.MirrorToDisk(ctx, filepath.Join(iscDir, isc), workDir,
 			"--secure-policy=true", "--policy", policyPath)
 		expectOcMirrorExitCode(result, err, 8, "is rejected by policy")
@@ -224,26 +226,26 @@ func expectCatalogCollectedInWorkingDir(workDir, catalogRef string) {
 }
 
 // writeSigstoreSignedPolicy writes a container trust policy file to workDir that rejects
-// everything by default, except images under repoPrefix, which must carry a valid sigstore
+// everything by default, except images under repoPrefixes, which must carry a valid sigstore
 // signature verifiable with the cosign public key at cosignPubKeyPath. The key content is
 // read from disk rather than hardcoded, so the policy always matches the current test key.
-func writeSigstoreSignedPolicy(workDir, cosignPubKeyPath, repoPrefix string) string {
+func writeSigstoreSignedPolicy(workDir, cosignPubKeyPath string, repoPrefixes ...string) string {
 	keyData, err := os.ReadFile(cosignPubKeyPath)
 	Expect(err).NotTo(HaveOccurred())
 
-	policy := map[string]any{
-		"default": []map[string]string{{"type": "reject"}},
-		"transports": map[string]any{
-			"docker": map[string]any{
-				repoPrefix: []map[string]any{
-					{
-						"type":           "sigstoreSigned",
-						"keyData":        base64.StdEncoding.EncodeToString(keyData),
-						"signedIdentity": map[string]string{"type": "matchRepository"},
-					},
-				},
+	scopes := map[string]any{}
+	for _, repoPrefix := range repoPrefixes {
+		scopes[repoPrefix] = []map[string]any{
+			{
+				"type":           "sigstoreSigned",
+				"keyData":        base64.StdEncoding.EncodeToString(keyData),
+				"signedIdentity": map[string]string{"type": "matchRepository"},
 			},
-		},
+		}
+	}
+	policy := map[string]any{
+		"default":    []map[string]string{{"type": "reject"}},
+		"transports": map[string]any{"docker": scopes},
 	}
 
 	data, err := json.Marshal(policy)

@@ -60,7 +60,7 @@ test-integration:
 
 .PHONY: test-integration-cli
 test-integration-cli: build
-	cd tests/integration && $(GO) test -v -count=1 -timeout 30m ./...
+	cd tests/integration && CGO_ENABLED=0 $(GO) test -tags containers_image_openpgp -v -count=1 -timeout 30m ./...
 
 tidy:
 	$(GO) mod tidy

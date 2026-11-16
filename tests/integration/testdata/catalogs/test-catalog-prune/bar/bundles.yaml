@@ -1,0 +1,3 @@
+---
+schema: olm.bundle
+image: ${ORIGIN_REGISTRY}/oc-mirror/oc-mirror-dev:bar-bundle-v0.1.0

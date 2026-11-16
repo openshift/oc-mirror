@@ -14,23 +14,29 @@ import (
 )
 
 // blockedImages maps the image that isc-blocked-images.yaml blocks for each content type, as
-// repository:tag at the destination when it is not blocked, to its source reference.
-var blockedImages = map[string]string{
-	"openshift/release:v0.0.1-alpine":           "quay.io/oc-mirror/release/test-image:v0.0.1",
-	"oc-mirror/oc-mirror-dev:bar-bundle-v1.0.0": "quay.io/oc-mirror/oc-mirror-dev:bar-bundle-v1.0.0",
-	"oc-mirror/oc-mirror-dev:foo-bundle-v0.1.0": "quay.io/oc-mirror/oc-mirror-dev:foo-bundle-v0.1.0",
-	"oc-mirror/oc-mirror-dev:foo-bundle-v0.3.0": "quay.io/oc-mirror/oc-mirror-dev:foo-bundle-v0.3.0",
+// repository:tag at the destination when it is not blocked, to its source reference: the release
+// component, an operator bundle, an additional image and a helm chart image. The additional and
+// helm images are published on Quay.
+func blockedImages() map[string]string {
+	return map[string]string{
+		"openshift/release:v0.0.1-alpine":           releaseComponentImage,
+		testCatalogRepo + ":bar-bundle-v1.0.0":      bundleImage("bar-bundle-v1.0.0"),
+		"oc-mirror/oc-mirror-dev:foo-bundle-v0.1.0": "quay.io/oc-mirror/oc-mirror-dev:foo-bundle-v0.1.0",
+		"oc-mirror/oc-mirror-dev:foo-bundle-v0.3.0": "quay.io/oc-mirror/oc-mirror-dev:foo-bundle-v0.3.0",
+	}
 }
 
 // allowedImages maps every image that isc-blocked-images.yaml still mirrors, as repository:tag at
 // the destination, to its source reference. The operator catalog is rebuilt, so it has no source.
-var allowedImages = map[string]string{
-	"openshift/release-images:v0.0.1":           "quay.io/oc-mirror/release/test-release-index:v0.0.1",
-	testCatalogRepo + ":" + testCatalogTag:      "",
-	"oc-mirror/oc-mirror-dev:baz-bundle-v1.1.0": "quay.io/oc-mirror/oc-mirror-dev:baz-bundle-v1.1.0",
-	"oc-mirror/oc-mirror-dev:sha256-1ce8c0187c8fe6b4be327dc848b8baf062ce1baa5096b4f5d955893d126d5b58": operandImage,
-	"oc-mirror/oc-mirror-dev:foo-bundle-v0.2.0":                                                       "quay.io/oc-mirror/oc-mirror-dev:foo-bundle-v0.2.0",
-	"oc-mirror/oc-mirror-dev:foo-bundle-v0.3.2":                                                       "quay.io/oc-mirror/oc-mirror-dev:foo-bundle-v0.3.2",
+func allowedImages() map[string]string {
+	return map[string]string{
+		"openshift/release-images:v0.0.1":               testReleaseImage,
+		testCatalogRepo + ":" + testCatalogTag:          "",
+		testCatalogRepo + ":baz-bundle-v1.1.0":          bundleImage("baz-bundle-v1.1.0"),
+		testCatalogRepo + ":" + digestTag(operandImage): operandImage,
+		"oc-mirror/oc-mirror-dev:foo-bundle-v0.2.0":     "quay.io/oc-mirror/oc-mirror-dev:foo-bundle-v0.2.0",
+		"oc-mirror/oc-mirror-dev:foo-bundle-v0.3.2":     "quay.io/oc-mirror/oc-mirror-dev:foo-bundle-v0.3.2",
+	}
 }
 
 var _ = Describe("blocked images", func() {
@@ -41,7 +47,7 @@ var _ = Describe("blocked images", func() {
 		workDir = setupWorkDir()
 		data, err := os.ReadFile(filepath.Join(iscDir, "blocked_images", "isc-blocked-images.yaml"))
 		Expect(err).NotTo(HaveOccurred())
-		chartPath, err := filepath.Abs(filepath.Join(filepath.Dir(iscDir), "helm-charts", "blocked-images"))
+		chartPath, err := filepath.Abs(filepath.Join(testdataDir, "helm-charts", "blocked-images"))
 		Expect(err).NotTo(HaveOccurred())
 		var config map[string]any
 		Expect(yaml.Unmarshal(data, &config)).To(Succeed())
@@ -66,12 +72,12 @@ var _ = Describe("blocked images", func() {
 
 		By("verifying mapping.txt lists only the allowed images")
 		var mappings []string
-		for destination, source := range allowedImages {
+		for destination, source := range allowedImages() {
 			if source != "" {
 				mappings = append(mappings, "docker://"+source+"=docker://"+localCacheHost+"/"+destination)
 			}
 		}
-		mappings = append(mappings, "docker://quay.io/"+testCatalogRepo+"@"+remoteDigest(happyPathCatalog)+
+		mappings = append(mappings, "docker://"+fixtureByDigest(happyPathCatalog)+
 			"=docker://"+localCacheHost+"/"+testCatalogRepo+":"+testCatalogTag)
 		expectDryRunFile(workDir, mappingFileName, mappings)
 
@@ -80,7 +86,7 @@ var _ = Describe("blocked images", func() {
 		expectOcMirrorCommandSuccess(result, err)
 
 		By("verifying the archive contains the allowed images only")
-		cachedImages := maps.Clone(allowedImages)
+		cachedImages := allowedImages()
 		cachedImages[testCatalogRepo+":"+testCatalogTag] = happyPathCatalog
 		expectArchiveContainsExactly(workDir, cachedImages, testCatalogRepo)
 
@@ -120,18 +126,22 @@ var _ = Describe("blocked images", func() {
 // reference the blocked release component.
 func expectOnlyAllowedImagesMirrored(reg registry.Registry, workDir string) {
 	GinkgoHelper()
-	expectRegistryContainsExactly(reg, allowedImages)
+	expectRegistryContainsExactly(reg, allowedImages())
 
-	for destination, source := range blockedImages {
+	for destination, source := range blockedImages() {
 		repo, _, _ := strings.Cut(destination, ":")
 		exists, err := reg.ManifestExistsByDigest(ctx, repo, remoteDigest(source))
 		Expect(err).NotTo(HaveOccurred())
 		Expect(exists).To(BeFalse(), "blocked image %s was mirrored to %s", source, repo)
 	}
 
-	mirrors := map[string]string{
-		"quay.io/oc-mirror/release/test-release-index": "openshift/release-images",
-		"quay.io/oc-mirror":                            "oc-mirror",
+	// The operand is the only image referenced by digest, and the additional and helm images, on
+	// Quay, are referenced by tag.
+	idms := map[string]string{
+		referenceWithoutTagOrDigest(testReleaseImage): "openshift/release-images",
+		originRegistry.Endpoint() + "/oc-mirror":      "oc-mirror",
 	}
-	expectMirrorSets(workDir, reg.Endpoint(), mirrors, mirrors)
+	itms := maps.Clone(idms)
+	itms["quay.io/oc-mirror"] = "oc-mirror"
+	expectMirrorSets(workDir, reg.Endpoint(), idms, itms)
 }
