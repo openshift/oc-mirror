@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/operator-framework/operator-registry/alpha/declcfg"
@@ -130,48 +131,79 @@ func (o CatalogHandler) getRelatedImagesFromCatalog(dc *declcfg.DeclarativeConfi
 	return relatedImages, errors.Join(errs...)
 }
 
+// handleRelatedImages returns the images to mirror for a bundle: its bundle image,
+// when olm.bundle.image is set, followed by the bundle's related images.
 func handleRelatedImages(bundle declcfg.Bundle, operatorName string, copyImageSchemaMap *v2alpha1.CopyImageSchemaMap) ([]v2alpha1.RelatedImage, error) {
 	var relatedImages []v2alpha1.RelatedImage
-	for _, ri := range bundle.RelatedImages {
-		if strings.Contains(ri.Image, consts.OciProtocol) {
-			return relatedImages, fmt.Errorf("invalid image: %s 'oci' is not supported in operator catalogs", ri.Image)
+
+	// OCPBUGS-132865: the bundle image (olm.bundle.image) must be mirrored even when the
+	// catalog does not repeat it in relatedImages. When it is repeated, the first matching
+	// entry provides its name and the image is collected only once.
+	if bundle.Image != "" {
+		bundleImage := v2alpha1.RelatedImage{
+			Image: bundle.Image,
+			Type:  v2alpha1.TypeOperatorBundle,
 		}
-		relatedImage := v2alpha1.RelatedImage{
+		i := slices.IndexFunc(bundle.RelatedImages, func(ri declcfg.RelatedImage) bool {
+			return ri.Image == bundle.Image
+		})
+		if i >= 0 {
+			bundleImage.Name = bundle.RelatedImages[i].Name
+		}
+		if err := addOperatorImage(bundle, operatorName, bundleImage.Image, copyImageSchemaMap); err != nil {
+			return relatedImages, err
+		}
+		relatedImages = append(relatedImages, bundleImage)
+	}
+
+	for _, ri := range bundle.RelatedImages {
+		if bundle.Image != "" && ri.Image == bundle.Image {
+			// Already collected as the bundle image.
+			continue
+		}
+		if err := addOperatorImage(bundle, operatorName, ri.Image, copyImageSchemaMap); err != nil {
+			return relatedImages, err
+		}
+		relatedImages = append(relatedImages, v2alpha1.RelatedImage{
 			Name:  ri.Name,
 			Image: ri.Image,
-		}
-		if ri.Image == bundle.Image {
-			relatedImage.Type = v2alpha1.TypeOperatorBundle
-		} else {
-			relatedImage.Type = v2alpha1.TypeOperatorRelatedImage
-		}
-
-		imgSpec, err := image.ParseRef(ri.Image)
-		if err != nil {
-			return relatedImages, fmt.Errorf("error parsing image %s: %w", ri.Image, err)
-		}
-
-		operators := copyImageSchemaMap.OperatorsByImage[imgSpec.ReferenceWithTransport]
-
-		if _, found := operators[operatorName]; !found {
-			if operators == nil {
-				copyImageSchemaMap.OperatorsByImage[imgSpec.ReferenceWithTransport] = make(map[string]struct{})
-			}
-			copyImageSchemaMap.OperatorsByImage[imgSpec.ReferenceWithTransport][operatorName] = struct{}{}
-		}
-
-		bundles := copyImageSchemaMap.BundlesByImage[imgSpec.ReferenceWithTransport]
-		if _, found := bundles[bundle.Name]; !found {
-			if bundles == nil {
-				copyImageSchemaMap.BundlesByImage[imgSpec.ReferenceWithTransport] = make(map[string]string)
-			}
-			copyImageSchemaMap.BundlesByImage[imgSpec.ReferenceWithTransport][bundle.Image] = bundle.Name
-		}
-
-		relatedImages = append(relatedImages, relatedImage)
+			Type:  v2alpha1.TypeOperatorRelatedImage,
+		})
 	}
 
 	return relatedImages, nil
+}
+
+// addOperatorImage validates an image referenced by a bundle and records that the
+// bundle and its operator depend on it.
+func addOperatorImage(bundle declcfg.Bundle, operatorName, img string, copyImageSchemaMap *v2alpha1.CopyImageSchemaMap) error {
+	if strings.Contains(img, consts.OciProtocol) {
+		return fmt.Errorf("invalid image: %s 'oci' is not supported in operator catalogs", img)
+	}
+
+	imgSpec, err := image.ParseRef(img)
+	if err != nil {
+		return fmt.Errorf("error parsing image %s: %w", img, err)
+	}
+
+	operators := copyImageSchemaMap.OperatorsByImage[imgSpec.ReferenceWithTransport]
+
+	if _, found := operators[operatorName]; !found {
+		if operators == nil {
+			copyImageSchemaMap.OperatorsByImage[imgSpec.ReferenceWithTransport] = make(map[string]struct{})
+		}
+		copyImageSchemaMap.OperatorsByImage[imgSpec.ReferenceWithTransport][operatorName] = struct{}{}
+	}
+
+	bundles := copyImageSchemaMap.BundlesByImage[imgSpec.ReferenceWithTransport]
+	if _, found := bundles[bundle.Name]; !found {
+		if bundles == nil {
+			copyImageSchemaMap.BundlesByImage[imgSpec.ReferenceWithTransport] = make(map[string]string)
+		}
+		copyImageSchemaMap.BundlesByImage[imgSpec.ReferenceWithTransport][bundle.Image] = bundle.Name
+	}
+
+	return nil
 }
 
 // EnsureCatalogInOCIFormat makes the catalog available as an OCI layout in the
