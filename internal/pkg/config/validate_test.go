@@ -8,6 +8,21 @@ import (
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 )
 
+func TestValidateDeleteReleaseRepos(t *testing.T) {
+	cfg := &v2alpha1.DeleteImageSetConfiguration{
+		DeleteImageSetConfigurationSpec: v2alpha1.DeleteImageSetConfigurationSpec{
+			Delete: v2alpha1.Delete{
+				Platform: v2alpha1.Platform{ReleaseImageRepo: "okd/scos-release@sha256:1234"},
+			},
+		},
+	}
+	require.EqualError(t, ValidateDelete(cfg),
+		`invalid configuration: platform.releaseImageRepo "okd/scos-release@sha256:1234": invalid repository path, expected lowercase path components separated by / and no tag or digest`)
+
+	cfg.Delete.Platform.ReleaseImageRepo = "okd/scos-release"
+	require.NoError(t, ValidateDelete(cfg))
+}
+
 func TestValidate(t *testing.T) {
 	type spec struct {
 		name     string
@@ -273,6 +288,34 @@ func TestValidate(t *testing.T) {
 				},
 			},
 			expError: "invalid configuration: release channel \"channel\": duplicate found in configuration",
+		},
+		{
+			name: "Valid/ReleaseRepos",
+			config: &v2alpha1.ImageSetConfiguration{
+				ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
+					Mirror: v2alpha1.Mirror{
+						Platform: v2alpha1.Platform{
+							ReleaseImageRepo:     "openshift-release-dev/ocp-release",
+							ReleaseComponentRepo: "openshift-release-dev/ocp-v4.0-art-dev",
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "Invalid/ReleaseRepos",
+			config: &v2alpha1.ImageSetConfiguration{
+				ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
+					Mirror: v2alpha1.Mirror{
+						Platform: v2alpha1.Platform{
+							ReleaseImageRepo:     "/OKD/scos-release",
+							ReleaseComponentRepo: "okd/scos-content:latest",
+						},
+					},
+				},
+			},
+			expError: `invalid configuration: [platform.releaseImageRepo "/OKD/scos-release": invalid repository path, expected lowercase path components separated by / and no tag or digest, ` +
+				`platform.releaseComponentRepo "okd/scos-content:latest": invalid repository path, expected lowercase path components separated by / and no tag or digest]`,
 		},
 		{
 			name: "Invalid/DuplicateOperatorPackages",
