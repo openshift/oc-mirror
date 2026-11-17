@@ -2,6 +2,9 @@ module github.com/openshift/oc-mirror/v2
 
 go 1.26.3
 
+// Validate the version-range rebuild selection fix before its upstream release.
+replace github.com/sherine-k/catalog-filter => github.com/rdossant-rh/catalog-filter v0.0.0-20261112203729-c3f61071c5b9
+
 require (
 	github.com/Masterminds/semver/v3 v3.5.0
 	github.com/blang/semver/v4 v4.0.0
