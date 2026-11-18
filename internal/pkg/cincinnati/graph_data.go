@@ -72,3 +72,47 @@ func (o Graph) GetNodeByVersion(version semver.Version) (Update, int, error) {
 	}
 	return Update(o.Nodes[idx]), idx, nil
 }
+
+// MergeGraphs returns the union of the graphs. Each release appears once, identified by its
+// version: when several graphs contain the same version, the release of the first of them is
+// kept. The edges of every graph are kept between the merged releases, without duplicates, and
+// no other edges are added. Edges referring to missing nodes are ignored.
+func MergeGraphs(graphs ...Graph) Graph {
+	var merged Graph
+	indexByVersion := map[string]int{}
+	seenEdges := map[[2]int]struct{}{}
+	for _, graph := range graphs {
+		indexes := make([]int, len(graph.Nodes))
+		for i, n := range graph.Nodes {
+			// Build metadata does not identify a version, as in GetNodeByVersion.
+			version := n.Version
+			version.Build = nil
+			key := version.String()
+			idx, ok := indexByVersion[key]
+			if !ok {
+				idx = len(merged.Nodes)
+				indexByVersion[key] = idx
+				merged.Nodes = append(merged.Nodes, n)
+			}
+			indexes[i] = idx
+		}
+		for _, edge := range graph.Edges {
+			if !validEdge(edge, len(indexes)) {
+				continue
+			}
+			mergedEdge := [2]int{indexes[edge[0]], indexes[edge[1]]}
+			if _, ok := seenEdges[mergedEdge]; ok {
+				continue
+			}
+			seenEdges[mergedEdge] = struct{}{}
+			merged.Edges = append(merged.Edges, []int{mergedEdge[0], mergedEdge[1]})
+		}
+	}
+	return merged
+}
+
+// validEdge returns whether the edge connects two of the nodes of a graph with the given number
+// of nodes.
+func validEdge(edge []int, nodes int) bool {
+	return len(edge) == 2 && edge[0] >= 0 && edge[0] < nodes && edge[1] >= 0 && edge[1] < nodes
+}

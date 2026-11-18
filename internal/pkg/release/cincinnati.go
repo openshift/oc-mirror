@@ -273,7 +273,8 @@ func (o *CincinnatiSchema) initCincinnatiClient(ch v2alpha1.ReleaseChannel) erro
 	}
 }
 
-// warnEUSChannel emits a one-time warning when an EUS channel spans two or more minor versions.
+// warnEUSChannel emits a one-time warning when an EUS channel spans two or more minor versions,
+// or releases of different major versions.
 // It returns true if the warning was printed, or the value of alreadyReported if the warning
 // was skipped (either because it was already printed or the channel does not qualify).
 func (o *CincinnatiSchema) warnEUSChannel(ch v2alpha1.ReleaseChannel, alreadyReported bool) bool {
@@ -283,7 +284,10 @@ func (o *CincinnatiSchema) warnEUSChannel(ch v2alpha1.ReleaseChannel, alreadyRep
 	// CLID-135: detect and log as early as possible
 	max := semver.MustParse(ch.MaxVersion)
 	min := semver.MustParse(ch.MinVersion)
-	if strings.Contains(ch.Name, "eus") && (max.Minor-min.Minor) >= 2 {
+	crossesMajor := max.Major > min.Major
+	spansMultipleMinors := max.Major == min.Major &&
+		max.Minor >= min.Minor && max.Minor-min.Minor >= 2
+	if strings.Contains(ch.Name, "eus") && (crossesMajor || spansMultipleMinors) {
 		o.Log.Warn("Extended Update Support (EUS) channel detected with minor version range >= 2\n" +
 			"\t\t\t\tPlease refer to the web console https://access.redhat.com/labs/ocpupgradegraph/update_path\n" +
 			"\t\t\t\tTo correctly determine the upgrade path for EUS releases")
@@ -327,7 +331,7 @@ func (o *CincinnatiSchema) resolveChannelVersions(ctx context.Context, ch v2alph
 	return ch, nil
 }
 
-// getDownloads will prepare the downloads map for mirroring
+// getChannelDownloads will prepare the downloads map for mirroring
 func getChannelDownloads(ctx context.Context, cs CincinnatiSchema, lastChannels []v2alpha1.ReleaseChannel, channel v2alpha1.ReleaseChannel) ([]v2alpha1.CopyImageSchema, error) {
 	var allImages []v2alpha1.CopyImageSchema
 
@@ -379,7 +383,6 @@ func getChannelDownloads(ctx context.Context, cs CincinnatiSchema, lastChannels 
 // getCrossChannelDownloads will determine required downloads between channel versions (for OCP only)
 func getCrossChannelDownloads(ctx context.Context, cs CincinnatiSchema, channels []v2alpha1.ReleaseChannel) ([]v2alpha1.CopyImageSchema, error) {
 	// Strip any OKD channels from the list
-
 	var ocpChannels []v2alpha1.ReleaseChannel
 	for _, ch := range channels {
 		if ch.Type == v2alpha1.TypeOCP {
@@ -399,7 +402,11 @@ func getCrossChannelDownloads(ctx context.Context, cs CincinnatiSchema, channels
 	if err != nil {
 		return []v2alpha1.CopyImageSchema{}, fmt.Errorf("failed to find maximum release version: %w", err)
 	}
-	current, newest, updates, err := CalculateUpgrades(ctx, cs, firstCh, lastCh, first, last)
+	// Other configured channels with the same start or target version are tried when the selected
+	// pair has no path to a later major version.
+	sources := tiedChannels(ocpChannels, firstCh, first, true)
+	targets := tiedChannels(ocpChannels, lastCh, last, false)
+	current, newest, updates, err := calculateUpgrades(ctx, cs, sources, targets, first, last)
 	if err != nil {
 		return []v2alpha1.CopyImageSchema{}, fmt.Errorf("failed to get upgrade graph: %w", err)
 	}

@@ -24,17 +24,37 @@ func FindRelease(channels []v2alpha1.ReleaseChannel, min bool) (string, semver.V
 	for k := range vers {
 		keys = append(keys, k)
 	}
+	// If two channels have the same version, pick the same one every time.
+	// Otherwise, disk-to-mirror might look for a graph we didn't save.
+	sort.Strings(keys)
 	if min {
-		sort.Slice(keys, func(i, j int) bool {
+		sort.SliceStable(keys, func(i, j int) bool {
 			return vers[keys[i]].GT(vers[keys[j]])
 		})
 	} else {
-		sort.Slice(keys, func(i, j int) bool {
+		sort.SliceStable(keys, func(i, j int) bool {
 			return vers[keys[i]].LT(vers[keys[j]])
 		})
 	}
 
 	return keys[len(keys)-1], vers[keys[len(keys)-1]], nil
+}
+
+// tiedChannels returns the selected channel followed by the other channels with the same minimum or
+// maximum version, in the reverse name order in which FindRelease prefers them.
+func tiedChannels(channels []v2alpha1.ReleaseChannel, selected string, version semver.Version, min bool) []string {
+	vers, err := findReleases(channels, min)
+	if err != nil {
+		return []string{selected}
+	}
+	others := make([]string, 0, len(vers))
+	for name, ver := range vers {
+		if name != selected && ver.EQ(version) {
+			others = append(others, name)
+		}
+	}
+	sort.Sort(sort.Reverse(sort.StringSlice(others)))
+	return append([]string{selected}, others...)
 }
 
 func findReleases(channels []v2alpha1.ReleaseChannel, min bool) (map[string]semver.Version, error) {
