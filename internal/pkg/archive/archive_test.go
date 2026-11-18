@@ -6,16 +6,23 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
+	"time"
 
+	digest "github.com/opencontainers/go-digest"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"go.podman.io/image/v5/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/history"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 )
@@ -554,4 +561,137 @@ func (m mockHistory) Append(inputMap sets.Set[string]) (sets.Set[string], error)
 	)
 	historyMap = historyMap.Union(inputMap)
 	return historyMap, nil
+}
+
+func TestArchiveSizeEstimateMatchesArchive(t *testing.T) {
+	root := t.TempDir()
+	working := filepath.Join(root, "working-dir")
+	cache := filepath.Join(root, "cache")
+	write := func(path string, n int64) {
+		t.Helper()
+		require.NoError(t, os.MkdirAll(filepath.Dir(path), 0755))
+		require.NoError(t, os.WriteFile(path, []byte(strings.Repeat("x", int(n))), 0600))
+	}
+	write(filepath.Join(working, "operator-catalogs", "catalog", "config.json"), 713)
+	write(filepath.Join(root, "isc.yaml"), 33)
+	old := types.BlobInfo{Digest: digest.FromString("old"), Size: 600}
+	newBlob := types.BlobInfo{Digest: digest.FromString("new"), Size: 900}
+	for _, blob := range []types.BlobInfo{old, newBlob} {
+		path, err := BlobPath(cache, blob.Digest)
+		require.NoError(t, err)
+		write(path, blob.Size)
+	}
+	log := clog.New("error")
+	h, err := history.NewHistory(working, time.Time{}, log, history.OSFileCreator{})
+	require.NoError(t, err)
+	_, err = h.Append(sets.New(old.Digest.String()))
+	require.NoError(t, err)
+	opts := &mirror.CopyOptions{Global: &mirror.GlobalOptions{WorkingDir: working, ConfigPath: filepath.Join(root, "isc.yaml")}}
+	img := v2alpha1.CopyImageSchema{Source: "docker://source.example/ns/image:latest", Destination: "docker://localhost:55000/ns/image:latest"}
+	schema := v2alpha1.CollectorSchema{AllImages: []v2alpha1.CopyImageSchema{img}}
+	blobs := map[string][]types.BlobInfo{img.Source: {old, newBlob}}
+	metadata, err := CacheMetadata(schema.AllImages, blobs)
+	require.NoError(t, err)
+	for path, size := range metadata {
+		write(filepath.Join(cache, path), size)
+	}
+	extraLink := filepath.Join(cacheRepositoriesDir, "image", "_layers", "sha256", newBlob.Digest.Encoded(), "link")
+	metadata[extraLink] = int64(len(newBlob.Digest.String()))
+	estimated, err := EstimateSize(context.Background(), opts, cache, schema, blobs, metadata, 0, log)
+	require.NoError(t, err)
+	for name, laterBlobs := range map[string][]types.BlobInfo{"inspected source": {old}, "failed inspection": nil} {
+		t.Run("repeated destination/"+name, func(t *testing.T) {
+			repeated := schema
+			repeated.AllImages = []v2alpha1.CopyImageSchema{img,
+				{Source: "docker://source.example/ns/middle:latest", Destination: "docker://localhost:55000/ns/middle:latest"},
+				{Source: "docker://source.example/ns/later:latest", Destination: img.Destination}}
+			inspected := maps.Clone(blobs)
+			inspected[repeated.AllImages[2].Source] = laterBlobs
+			got, err := EstimateSize(context.Background(), opts, cache, repeated, inspected, metadata, 0, log)
+			require.NoError(t, err)
+			require.Equal(t, estimated, got, "later entries must preserve the first source's new blobs")
+		})
+	}
+	write(filepath.Join(cache, extraLink), metadata[extraLink])
+	// The history baseline is read only; the new blob has not been appended.
+	previous, err := h.Read()
+	require.NoError(t, err)
+	require.False(t, previous.Has(newBlob.Digest.String()))
+	archiver, err := NewMirrorArchive(opts, filepath.Join(root, "archives"), opts.Global.ConfigPath, working, cache, 0, log)
+	require.NoError(t, err)
+	archiver.blobGatherer = funcBlobGatherer(func(context.Context, string, []string) (sets.Set[string], error) {
+		return sets.New(old.Digest.String(), newBlob.Digest.String()), nil
+	})
+	require.NoError(t, archiver.BuildArchive(context.Background(), schema, nil))
+	require.Equal(t, archiveBytes(t, filepath.Join(root, "archives")), estimated)
+
+}
+
+func TestSizeAdderMatchesChunkWriters(t *testing.T) {
+	for _, strict := range []bool{false, true} {
+		t.Run(map[bool]string{false: "permissive", true: "strict"}[strict], func(t *testing.T) {
+			root := t.TempDir()
+			log := clog.New("error")
+			var actual archiveAdder
+			var err error
+			if strict {
+				actual, err = newStrictAdder(1000, root, log)
+			} else {
+				actual, err = newPermissiveAdder(1000, root, log)
+			}
+			require.NoError(t, err)
+			estimate := &sizeAdder{maxSize: 1000, strict: strict, total: 1024, files: map[string]bool{}}
+			for i, size := range []int{0, 510, 515, 1600} {
+				name := string(rune('a' + i))
+				file := filepath.Join(t.TempDir(), "data")
+				require.NoError(t, os.WriteFile(file, make([]byte, size), 0600))
+				err := actual.addFile(file, name)
+				estimateErr := estimate.addFile(file, name)
+				if strict && size > 1000 {
+					require.Error(t, err)
+					require.Error(t, estimateErr)
+					continue
+				}
+				require.NoError(t, err)
+				require.NoError(t, estimateErr)
+			}
+			require.NoError(t, actual.close())
+			require.Equal(t, archiveBytes(t, root), estimate.total)
+		})
+	}
+}
+
+func TestSizeAdderPendingFolders(t *testing.T) {
+	root := t.TempDir()
+	folder := filepath.Join(root, "blobs", "first")
+	neighbor := filepath.Join(root, "blobs", "first-other")
+	pending := map[string]int64{
+		filepath.Join(folder, "data"):   1,
+		filepath.Join(folder, "extra"):  513,
+		filepath.Join(neighbor, "data"): 1025,
+	}
+	counter := &sizeAdder{maxSize: 1024 * 1024, total: 1024, files: map[string]bool{},
+		pending: pending, pendingPaths: slices.Sorted(maps.Keys(pending))}
+	require.NoError(t, counter.addAllFolder(folder, root))
+	require.Equal(t, map[string]bool{filepath.Join("blobs", "first", "data"): true,
+		filepath.Join("blobs", "first", "extra"): true}, counter.files)
+	firstSize := counter.total
+	require.NoError(t, counter.addAllFolder(folder, root))
+	require.Equal(t, firstSize, counter.total, "repeated folders must not be counted twice")
+	require.NoError(t, counter.addAllFolder(neighbor, root))
+	require.Len(t, counter.files, 3)
+	require.Greater(t, counter.total, firstSize)
+}
+
+func archiveBytes(t *testing.T, directory string) int64 {
+	t.Helper()
+	files, err := filepath.Glob(filepath.Join(directory, "mirror_*.tar"))
+	require.NoError(t, err)
+	var total int64
+	for _, file := range files {
+		info, err := os.Stat(file)
+		require.NoError(t, err)
+		total += info.Size()
+	}
+	return total
 }

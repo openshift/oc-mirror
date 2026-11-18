@@ -36,6 +36,7 @@ import (
 	"go.podman.io/image/v5/docker"
 	"go.podman.io/image/v5/docker/reference"
 	imgconfig "go.podman.io/image/v5/pkg/docker/config"
+	"go.podman.io/image/v5/types"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/additional"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
@@ -158,6 +159,8 @@ type ExecutorSchema struct {
 	Delete               delete.DeleteInterface
 	MirrorStartTimeStamp string
 	stopRegistryOnce     sync.Once
+	// blobExists optionally supplies the read-only destination checker for sizing.
+	blobExists func(context.Context, string, types.BlobInfo) (bool, error)
 }
 
 type MakeDirInterface interface {
@@ -915,7 +918,7 @@ func (o *ExecutorSchema) RunMirrorToDisk(cmd *cobra.Command, args []string) erro
 	}
 
 	if o.Opts.IsDryRun {
-		return o.DryRun(cmd.Context(), collectorSchema.AllImages)
+		return o.DryRun(cmd.Context(), collectorSchema)
 	}
 
 	if err := o.RebuildCatalogs(cmd.Context(), collectorSchema); err != nil {
@@ -985,7 +988,7 @@ func (o *ExecutorSchema) RunMirrorToMirror(cmd *cobra.Command, args []string) er
 	}
 
 	if o.Opts.IsDryRun {
-		return o.DryRun(cmd.Context(), collectorSchema.AllImages)
+		return o.DryRun(cmd.Context(), collectorSchema)
 	}
 
 	if err := o.RebuildCatalogs(cmd.Context(), collectorSchema); err != nil {
@@ -1049,7 +1052,7 @@ func (o *ExecutorSchema) RunDiskToMirror(cmd *cobra.Command, args []string) erro
 	}
 
 	if o.Opts.IsDryRun {
-		return o.DryRun(cmd.Context(), collectorSchema.AllImages)
+		return o.DryRun(cmd.Context(), collectorSchema)
 	}
 
 	// call the batch worker
@@ -1376,23 +1379,27 @@ func checkKeyWord(key_words []string, check string) string {
 }
 
 func addRebuiltCatalogs(cs v2alpha1.CollectorSchema) (v2alpha1.CollectorSchema, error) {
-	for _, ci := range cs.AllImages {
-		if ci.Type == v2alpha1.TypeOperatorCatalog && ci.RebuiltTag != "" {
-			imgSpec, err := image.ParseRef(ci.Destination)
+	for _, img := range cs.AllImages {
+		if img.Type == v2alpha1.TypeOperatorCatalog && img.RebuiltTag != "" {
+			rebuilt, err := rebuiltCatalog(img)
 			if err != nil {
-				return cs, fmt.Errorf("unable to add rebuilt catalog for %s: %v", ci.Origin, err)
+				return cs, err
 			}
-			imgSpec = imgSpec.SetTag(ci.RebuiltTag)
-			rebuiltCI := v2alpha1.CopyImageSchema{
-				Origin:      ci.Origin,
-				Source:      imgSpec.ReferenceWithTransport,
-				Destination: imgSpec.ReferenceWithTransport,
-				Type:        v2alpha1.TypeOperatorCatalog,
-			}
-			cs.AllImages = append(cs.AllImages, rebuiltCI)
+			cs.AllImages = append(cs.AllImages, rebuilt)
 		}
 	}
 	return cs, nil
+}
+
+// rebuiltCatalog preserves catalog metadata while pointing both references at its cache tag.
+func rebuiltCatalog(img v2alpha1.CopyImageSchema) (v2alpha1.CopyImageSchema, error) {
+	ref, err := image.ParseRef(img.Destination)
+	if err != nil {
+		return img, fmt.Errorf("unable to add rebuilt catalog for %s: %w", img.Origin, err)
+	}
+	ref = ref.SetTag(img.RebuiltTag)
+	img.Source, img.Destination = ref.ReferenceWithTransport, ref.ReferenceWithTransport
+	return img, nil
 }
 
 func mandatoryRegistries(opts *mirror.CopyOptions) map[string]struct{} {
