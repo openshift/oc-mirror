@@ -46,6 +46,41 @@ func TestGetCustomRegistrydConfigPath(t *testing.T) {
 	assert.Equal(t, expectedRegistriesD, registriesDirPath)
 }
 
+func TestPrepareLookasideOnlyDir(t *testing.T) {
+	testFolder := t.TempDir()
+	regs := map[string]struct{}{
+		"mymirror.com": {},
+	}
+	err := PrepareRegistrydCustomDir(testFolder, "", regs)
+	assert.NoError(t, err)
+
+	lookasideFile := filepath.Join(GetWorkingDirRegistrydConfigPath(testFolder), "mymirror.com.yaml")
+	assert.NoError(t, os.WriteFile(lookasideFile, []byte("docker:\n  mymirror.com:\n    lookaside: file:///var/lib/oc-mirror/signatures\n    use-sigstore-attachments: true\n"), 0o600))
+
+	dir, err := PrepareLookasideOnlyDir(testFolder)
+	assert.NoError(t, err)
+	assert.Equal(t, GetWorkingDirLookasideOnlyRegistrydConfigPath(testFolder), dir)
+
+	clonedPath := filepath.Join(dir, "mymirror.com.yaml")
+	cloned, err := parser.ParseYamlFile[registryConfiguration](clonedPath)
+	assert.NoError(t, err)
+	assert.Equal(t, "file:///var/lib/oc-mirror/signatures", cloned.Docker["mymirror.com"].Lookaside)
+	assert.Equal(t, boolPtr(false), cloned.Docker["mymirror.com"].UseSigstoreAttachments)
+	info, err := os.Stat(clonedPath)
+	assert.NoError(t, err)
+	assert.Equal(t, os.FileMode(0o600), info.Mode().Perm())
+
+	_, err = PrepareLookasideOnlyDir(testFolder)
+	assert.NoError(t, err)
+	cloned, err = parser.ParseYamlFile[registryConfiguration](filepath.Join(dir, "mymirror.com.yaml"))
+	assert.NoError(t, err)
+	assert.Equal(t, boolPtr(false), cloned.Docker["mymirror.com"].UseSigstoreAttachments)
+
+	empty, err := PrepareLookasideOnlyDir(filepath.Join(testFolder, "missing-workdir"))
+	assert.NoError(t, err)
+	assert.DirExists(t, empty)
+}
+
 func TestGetDefaultRegistrydConfigPath(t *testing.T) {
 	testHome := t.TempDir()
 	t.Setenv("HOME", testHome)
