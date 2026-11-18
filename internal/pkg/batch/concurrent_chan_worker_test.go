@@ -457,6 +457,78 @@ func TestWorkerMirrorsAvailableOperandPlatforms(t *testing.T) {
 	}
 }
 
+func TestOCPBUGS128841_InFlightCopyObservesParentCancellation(t *testing.T) {
+	for _, mode := range []string{mirror.MirrorToDisk, mirror.MirrorToMirror, mirror.DiskToMirror} {
+		t.Run(mode, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			started := make(chan context.Context, 1)
+			release := make(chan struct{})
+			mirrorMock := new(MirrorMock)
+			mirrorMock.On("Run", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+				Run(func(args mock.Arguments) {
+					runCtx := args.Get(0).(context.Context)
+					started <- runCtx
+					select {
+					case <-runCtx.Done():
+					case <-release:
+					}
+				}).Return(context.Canceled)
+
+			worker := &ChannelConcurrentBatch{
+				Log:              clog.New("trace"),
+				LogsDir:          t.TempDir(),
+				Mirror:           mirrorMock,
+				MaxGoroutines:    1,
+				SynchedTimeStamp: time.Now().Format("20060102_150405"),
+			}
+			opts := mirror.CopyOptions{
+				Global:   &mirror.GlobalOptions{SecurePolicy: false},
+				Mode:     mode,
+				Function: "copy",
+			}
+			collectorSchema := v2alpha1.CollectorSchema{
+				AllImages: []v2alpha1.CopyImageSchema{{
+					Source:      "docker://registry.example/repro:latest",
+					Origin:      "docker://registry.example/repro:latest",
+					Destination: "docker://mirror.example/repro:latest",
+					Type:        v2alpha1.TypeOCPRelease,
+				}},
+			}
+
+			workerDone := make(chan error, 1)
+			go func() {
+				_, err := worker.Worker(ctx, collectorSchema, opts)
+				workerDone <- err
+			}()
+
+			var runCtx context.Context
+			select {
+			case runCtx = <-started:
+			case <-time.After(time.Second):
+				t.Fatal("mirror copy did not start")
+			}
+
+			cancel()
+			select {
+			case <-runCtx.Done():
+				assert.Equal(t, context.Canceled, runCtx.Err())
+			case <-time.After(200 * time.Millisecond):
+				assert.Fail(t, "in-flight mirror copy did not observe parent cancellation")
+			}
+
+			close(release)
+			select {
+			case <-workerDone:
+			case <-time.After(time.Second):
+				t.Fatal("worker did not finish after releasing the mock copy")
+			}
+			mirrorMock.AssertExpectations(t)
+		})
+	}
+}
+
 func TestWorkerNeverSkipsBundlePlatforms(t *testing.T) {
 	schema := operandSchema()
 	schema.PlatformFilters[bundleRef] = schema.PlatformFilters[operandRef]
@@ -493,4 +565,192 @@ func readMirroringErrors(t *testing.T, logsDir string) string {
 
 	t.Fatalf("no mirroring errors file written to %s", logsDir)
 	return ""
+}
+
+func TestOCPBUGS128841_ReleaseFailureCancelsInFlightCopy(t *testing.T) {
+	for _, mode := range []string{mirror.MirrorToDisk, mirror.MirrorToMirror, mirror.DiskToMirror} {
+		t.Run(mode, func(t *testing.T) {
+			activeSource := "docker://registry.example/active:latest"
+			activeDestination := "docker://mirror.example/active:latest"
+			releaseSource := "docker://registry.example/release:latest"
+			releaseDestination := "docker://mirror.example/release:latest"
+
+			activeStarted := make(chan struct{})
+			activeCanceled := make(chan struct{})
+			mirrorMock := new(MirrorMock)
+			mirrorMock.On("Run", mock.Anything, activeSource, activeDestination, mock.Anything, mock.Anything).
+				Run(func(args mock.Arguments) {
+					runCtx := args.Get(0).(context.Context)
+					close(activeStarted)
+					select {
+					case <-runCtx.Done():
+						assert.Equal(t, context.Canceled, runCtx.Err())
+						close(activeCanceled)
+					case <-time.After(time.Second):
+						t.Error("in-flight copy did not observe release failure cancellation")
+					}
+				}).Return(context.Canceled).Once()
+			mirrorMock.On("Run", mock.Anything, releaseSource, releaseDestination, mock.Anything, mock.Anything).
+				Run(func(mock.Arguments) {
+					select {
+					case <-activeStarted:
+					case <-time.After(time.Second):
+						t.Error("in-flight copy did not start before release failure")
+					}
+				}).Return(assert.AnError).Once()
+
+			worker := &ChannelConcurrentBatch{
+				Log:              clog.New("trace"),
+				LogsDir:          t.TempDir(),
+				Mirror:           mirrorMock,
+				MaxGoroutines:    2,
+				SynchedTimeStamp: time.Now().Format("20060102_150405"),
+			}
+			opts := mirror.CopyOptions{
+				Global:   &mirror.GlobalOptions{SecurePolicy: false},
+				Mode:     mode,
+				Function: "copy",
+			}
+			collectorSchema := v2alpha1.CollectorSchema{AllImages: []v2alpha1.CopyImageSchema{
+				{Source: activeSource, Origin: activeSource, Destination: activeDestination, Type: v2alpha1.TypeOCPRelease},
+				{Source: releaseSource, Origin: releaseSource, Destination: releaseDestination, Type: v2alpha1.TypeOCPRelease},
+			}}
+
+			copiedImages, err := worker.Worker(context.Background(), collectorSchema, opts)
+
+			assert.Error(t, err)
+			assert.Empty(t, copiedImages.AllImages)
+			select {
+			case <-activeCanceled:
+			case <-time.After(time.Second):
+				t.Fatal("in-flight copy did not observe release failure cancellation")
+			}
+			mirrorMock.AssertExpectations(t)
+		})
+	}
+}
+
+func TestOCPBUGS128841_CanceledBeforeSchedulingReturnsCancellation(t *testing.T) {
+	for _, mode := range []string{mirror.MirrorToDisk, mirror.MirrorToMirror, mirror.DiskToMirror} {
+		t.Run(mode, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			cancel()
+
+			collectorSchema := v2alpha1.CollectorSchema{AllImages: []v2alpha1.CopyImageSchema{{
+				Source:      "docker://registry.example/repro:latest",
+				Origin:      "docker://registry.example/repro:latest",
+				Destination: "docker://mirror.example/repro:latest",
+				Type:        v2alpha1.TypeGeneric,
+			}}}
+			worker := &ChannelConcurrentBatch{
+				Log:              clog.New("trace"),
+				LogsDir:          t.TempDir(),
+				Mirror:           new(MirrorMock),
+				MaxGoroutines:    1,
+				SynchedTimeStamp: time.Now().Format("20060102_150405"),
+			}
+			opts := mirror.CopyOptions{
+				Global:   &mirror.GlobalOptions{SecurePolicy: false},
+				Mode:     mode,
+				Function: "copy",
+			}
+
+			copiedImages, err := worker.Worker(ctx, collectorSchema, opts)
+
+			assert.ErrorIs(t, err, context.Canceled)
+			assert.Empty(t, copiedImages.AllImages)
+		})
+	}
+}
+
+func TestOCPBUGS128841_PartialCancellationDoesNotFabricateResult(t *testing.T) {
+	for _, mode := range []string{mirror.MirrorToDisk, mirror.MirrorToMirror, mirror.DiskToMirror} {
+		t.Run(mode, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			started := make(chan struct{})
+			release := make(chan struct{})
+			mirrorMock := new(MirrorMock)
+			mirrorMock.On("Run", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+				Run(func(mock.Arguments) {
+					close(started)
+					<-release
+				}).Return(nil).Once()
+
+			worker := &ChannelConcurrentBatch{
+				Log:              clog.New("trace"),
+				LogsDir:          t.TempDir(),
+				Mirror:           mirrorMock,
+				MaxGoroutines:    1,
+				SynchedTimeStamp: time.Now().Format("20060102_150405"),
+			}
+			opts := mirror.CopyOptions{
+				Global:   &mirror.GlobalOptions{SecurePolicy: false},
+				Mode:     mode,
+				Function: "copy",
+			}
+			collectorSchema := v2alpha1.CollectorSchema{AllImages: []v2alpha1.CopyImageSchema{
+				{Source: "docker://registry.example/first:latest", Origin: "docker://registry.example/first:latest", Destination: "docker://mirror.example/first:latest", Type: v2alpha1.TypeGeneric},
+				{Source: "docker://registry.example/second:latest", Origin: "docker://registry.example/second:latest", Destination: "docker://mirror.example/second:latest", Type: v2alpha1.TypeGeneric},
+			}}
+
+			type workerResult struct {
+				copiedImages v2alpha1.CollectorSchema
+				err          error
+			}
+			done := make(chan workerResult, 1)
+			go func() {
+				copiedImages, err := worker.Worker(ctx, collectorSchema, opts)
+				done <- workerResult{copiedImages: copiedImages, err: err}
+			}()
+
+			select {
+			case <-started:
+			case <-time.After(time.Second):
+				t.Fatal("first copy did not start")
+			}
+			cancel()
+			close(release)
+
+			select {
+			case result := <-done:
+				assert.ErrorIs(t, result.err, context.Canceled)
+				assert.Len(t, result.copiedImages.AllImages, 1)
+			case <-time.After(time.Second):
+				t.Fatal("worker did not return after cancellation")
+			}
+			mirrorMock.AssertExpectations(t)
+		})
+	}
+}
+
+func TestOCPBUGS128841_ReleaseErrorRemainsBatchError(t *testing.T) {
+	mirrorMock := new(MirrorMock)
+	mirrorMock.On("Run", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(assert.AnError).Once()
+	mirrorMock.On("Run", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+
+	worker := &ChannelConcurrentBatch{
+		Log:              clog.New("trace"),
+		LogsDir:          t.TempDir(),
+		Mirror:           mirrorMock,
+		MaxGoroutines:    1,
+		SynchedTimeStamp: time.Now().Format("20060102_150405"),
+	}
+	opts := mirror.CopyOptions{
+		Global:   &mirror.GlobalOptions{SecurePolicy: false},
+		Mode:     mirror.MirrorToDisk,
+		Function: "copy",
+	}
+	collectorSchema := v2alpha1.CollectorSchema{AllImages: []v2alpha1.CopyImageSchema{
+		{Source: "docker://registry.example/release:latest", Origin: "docker://registry.example/release:latest", Destination: "docker://mirror.example/release:latest", Type: v2alpha1.TypeOCPRelease},
+		{Source: "docker://registry.example/content:latest", Origin: "docker://registry.example/content:latest", Destination: "docker://mirror.example/content:latest", Type: v2alpha1.TypeOCPReleaseContent},
+	}}
+
+	copiedImages, err := worker.Worker(context.Background(), collectorSchema, opts)
+
+	assert.Error(t, err)
+	assert.IsType(t, &BatchError{}, err)
+	assert.Empty(t, copiedImages.AllImages)
+	mirrorMock.AssertExpectations(t)
 }

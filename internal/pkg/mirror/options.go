@@ -312,8 +312,8 @@ func (opts *GlobalOptions) GetPolicyContext(mode Mode) (*signature.PolicyContext
 
 // commandTimeoutContext returns a context.Context and a cancellation callback based on opts.
 // The caller should usually "defer cancel()" immediately after calling this.
-func (opts *GlobalOptions) CommandTimeoutContext() (context.Context, context.CancelFunc) {
-	ctx := context.Background()
+func (opts *GlobalOptions) CommandTimeoutContext(parent context.Context) (context.Context, context.CancelFunc) {
+	ctx := parent
 	var cancel context.CancelFunc = func() {
 		// empty function - its ok for now
 	}
