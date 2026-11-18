@@ -77,6 +77,7 @@ func TestAllDeleteImages(t *testing.T) {
 	}
 
 	di := New(log, opts, &mockBatch{}, &mockBlobs{}, isc, &mockManifest{}, "/tmp", &mockSignatureHandler{})
+	disableRegistryLookup(di)
 
 	t.Run("Testing ReadDeleteData : should pass", func(t *testing.T) {
 		opts.Global.WorkingDir = consts.TestFolder
@@ -103,6 +104,7 @@ func TestAllDeleteImages(t *testing.T) {
 		opts.Global.WorkingDir = consts.TestFolder
 		opts.Global.ForceCacheDelete = true
 		deleteDI := New(log, opts, &mockBatch{}, &mockBlobs{}, v2alpha1.ImageSetConfiguration{}, &mockManifest{}, "/tmp", &mockSignatureHandler{})
+		disableRegistryLookup(deleteDI)
 		imgs, err := di.ReadDeleteMetaData()
 		if err != nil {
 			t.Fatal("should not fail")
@@ -421,6 +423,24 @@ func TestDeleteImagesWithTargetRepoAndTag(t *testing.T) {
 			expectedItemCount: 1,
 		},
 		{
+			name: "same repository different tags stay in the plan",
+			cpImages: []v2alpha1.CopyImageSchema{
+				{
+					Source:      "docker://registry.example.com/ocp@sha256:" + strings.Repeat("a", 64),
+					Destination: "docker://localhost:5000/myregistry/openshift/release:4.21.29-comp-a",
+					Origin:      "registry.example.com/ocp@sha256:" + strings.Repeat("a", 64),
+					Type:        v2alpha1.TypeOCPReleaseContent,
+				},
+				{
+					Source:      "docker://registry.example.com/ocp@sha256:" + strings.Repeat("a", 64),
+					Destination: "docker://localhost:5000/myregistry/openshift/release:4.21.36-comp-b",
+					Origin:      "registry.example.com/ocp@sha256:" + strings.Repeat("a", 64),
+					Type:        v2alpha1.TypeOCPReleaseContent,
+				},
+			},
+			expectedItemCount: 2,
+		},
+		{
 			name: "same origin with different targets should not be deduped",
 			cpImages: []v2alpha1.CopyImageSchema{
 				{
@@ -551,6 +571,7 @@ func TestDeleteImagesWithTargetRepoAndTag(t *testing.T) {
 				optsCopy := opts
 				optsCopy.Global = &globalCopy
 				di := New(log, optsCopy, &mockBatch{capturedSchema: &captured}, &mockBlobs{}, cfg, &mockManifest{}, tempDir, &mockSignatureHandler{})
+				disableRegistryLookup(di)
 				deleteImageList := v2alpha1.DeleteImageList{
 					Items: []v2alpha1.DeleteItem{
 						{
@@ -611,6 +632,7 @@ func TestDeleteRegistryImagesForceCacheDeleteTagAndDigest(t *testing.T) {
 	var captured v2alpha1.CollectorSchema
 	mb := &mockBatch{capturedSchema: &captured}
 	di := New(log, opts, mb, &mockBlobs{}, v2alpha1.ImageSetConfiguration{}, &mockManifest{}, "/tmp", &mockSignatureHandler{})
+	disableRegistryLookup(di)
 
 	deleteImageList := v2alpha1.DeleteImageList{
 		Items: []v2alpha1.DeleteItem{
@@ -720,6 +742,71 @@ func TestDeleteRegistryImagesForceCacheDeleteReferences(t *testing.T) {
 			}, captured.AllImages)
 			assert.Equal(t, 2, captured.TotalAdditionalImages)
 		})
+	}
+}
+
+func TestWriteDeleteMetaDataDedupesSharedSignature(t *testing.T) {
+	const sigTag = "sha256-c8636a92b5665988f030ed0948225276fea7428f2fe1f227142c988dc409a515.sig"
+	repo := "docker://localhost:5000/myregistry/openshift/release:"
+	otherRepo := "docker://localhost:5000/myregistry/other/app:"
+
+	di := &DeleteImages{
+		Log: clog.New("trace"),
+		Opts: mirror.CopyOptions{
+			Global: &mirror.GlobalOptions{
+				WorkingDir:       t.TempDir(),
+				DeleteSignatures: true,
+			},
+		},
+		SigHandler: &mockSignatureHandler{},
+	}
+	images := []v2alpha1.CopyImageSchema{
+		{
+			Source:      "docker://registry.example.com/ocp@sha256:" + strings.Repeat("a", 64),
+			Destination: repo + "4.21.29-comp-a",
+			Origin:      "registry.example.com/ocp@sha256:" + strings.Repeat("a", 64),
+			Type:        v2alpha1.TypeOCPReleaseContent,
+		},
+		{
+			Source:      "docker://registry.example.com/ocp@sha256:" + strings.Repeat("a", 64),
+			Destination: repo + "4.21.36-comp-b",
+			Origin:      "registry.example.com/ocp@sha256:" + strings.Repeat("a", 64),
+			Type:        v2alpha1.TypeOCPReleaseContent,
+		},
+		{
+			Source:      "docker://registry.example.com/ocp@sha256:" + strings.Repeat("b", 64),
+			Destination: otherRepo + "v1",
+			Origin:      "registry.example.com/ocp@sha256:" + strings.Repeat("b", 64),
+			Type:        v2alpha1.TypeOCPReleaseContent,
+		},
+	}
+
+	require.NoError(t, di.WriteDeleteMetaData(context.Background(), images))
+	data, err := di.ReadDeleteMetaData()
+	require.NoError(t, err)
+
+	refs := make([]string, 0, len(data.Items))
+	for _, item := range data.Items {
+		refs = append(refs, item.ImageReference)
+	}
+	require.ElementsMatch(t, []string{
+		repo + "4.21.29-comp-a",
+		repo + "4.21.36-comp-b",
+		"docker://localhost:5000/myregistry/openshift/release:" + sigTag,
+		otherRepo + "v1",
+		"docker://localhost:5000/myregistry/other/app:" + sigTag,
+	}, refs)
+}
+
+// disableRegistryLookup keeps Phase 2 from dialing a registry. These tests assert the
+// references passed to the worker, and a live registry would rewrite tags to digests.
+func disableRegistryLookup(images DeleteInterface) {
+	di, ok := images.(*DeleteImages)
+	if !ok {
+		return
+	}
+	di.resolveManifest = func(context.Context, string, bool) (digest.Digest, error) {
+		return "", fmt.Errorf("registry lookup disabled")
 	}
 }
 
