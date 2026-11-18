@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	digest "github.com/opencontainers/go-digest"
+	"github.com/opencontainers/go-digest"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
 )
@@ -47,70 +47,115 @@ const (
 	errMessageImage = "%s unable to parse image correctly"
 )
 
-// It expects the image reference not to have the transport prefix.
-// Otherwise, it will return an error.
-func ParseRef(imgRef string) (ImageSpec, error) {
-	var imgSpec ImageSpec
+// parseImageSpec parses an image string reference an ImageSpec
+func parseImageSpec(imgRef string) (ImageSpec, error) {
+	transport, reference, name, referenceWithTransport := parseTransport(imgRef)
+	digestStr, algorithm, nameAfterDigest, err := parseDigest(imgRef, name)
+	if err != nil {
+		return ImageSpec{}, err
+	}
 
+	tag, nameAfterTag := parseTag(nameAfterDigest, transport)
+	if nameAfterTag == "" {
+		return ImageSpec{}, fmt.Errorf("unknown image : reference name is empty")
+	}
+
+	domain, pathComponent, err := parseDomainAndPath(imgRef, nameAfterTag, transport)
+	if err != nil {
+		return ImageSpec{}, err
+	}
+
+	return ImageSpec{
+		Transport:              transport,
+		Reference:              reference,
+		Name:                   nameAfterTag,
+		ReferenceWithTransport: referenceWithTransport,
+		Domain:                 domain,
+		PathComponent:          pathComponent,
+		Tag:                    tag,
+		Algorithm:              algorithm,
+		Digest:                 digestStr,
+	}, nil
+}
+
+func parseTransport(imgRef string) (transport, reference, name, referenceWithTransport string) {
 	if strings.Contains(imgRef, "://") {
-		imgSpec.ReferenceWithTransport = imgRef
+		referenceWithTransport = imgRef
 		imgSplit := strings.Split(imgRef, "://")
 		if len(imgSplit) == 2 {
-			imgSpec.Transport = imgSplit[0] + "://"
-			imgSpec.Reference = imgSplit[1]
-			imgSpec.Name = imgSplit[1]
+			transport = imgSplit[0] + "://"
+			reference = imgSplit[1]
+			name = imgSplit[1]
 		}
 	} else {
-		imgSpec.Transport = consts.DockerProtocol
-		imgSpec.Reference = imgRef
-		imgSpec.Name = imgRef
-		imgSpec.ReferenceWithTransport = imgSpec.Transport + imgRef
+		transport = consts.DockerProtocol
+		reference = imgRef
+		name = imgRef
+		referenceWithTransport = transport + imgRef
 	}
-	if strings.Contains(imgSpec.Name, "@") {
-		imgSplit := strings.Split(imgSpec.Name, "@")
+	return transport, reference, name, referenceWithTransport
+}
+
+func parseDigest(imgRef, name string) (digestStr, algorithm, nameAfterDigest string, err error) {
+	nameAfterDigest = name
+	if strings.Contains(name, "@") {
+		imgSplit := strings.Split(name, "@")
 		if len(imgSplit) > 1 {
-			validDigest, err := digest.Parse(imgSplit[1])
-			if err != nil {
-				return ImageSpec{}, fmt.Errorf("%s unable to parse image correctly : invalid digest", imgRef)
+			validDigest, parseErr := digest.Parse(imgSplit[1])
+			if parseErr != nil {
+				return "", "", "", fmt.Errorf("%s unable to parse image correctly : invalid digest", imgRef)
 			}
-			imgSpec.Digest = validDigest.Encoded()
-			imgSpec.Algorithm = validDigest.Algorithm().String()
-			imgSpec.Name = imgSplit[0]
+			digestStr = validDigest.Encoded()
+			algorithm = validDigest.Algorithm().String()
+			nameAfterDigest = imgSplit[0]
 		}
 	}
-	if strings.Contains(imgSpec.Name, ":") {
-		if imgSpec.Transport == consts.DockerProtocol {
-			lastColonIndex := strings.LastIndex(imgSpec.Name, ":")
-			indexOfDomainPathSeparation := strings.Index(imgSpec.Name, "/")
+	return digestStr, algorithm, nameAfterDigest, nil
+}
+
+func parseTag(name, transport string) (tag, nameAfterTag string) {
+	nameAfterTag = name
+	if strings.Contains(name, ":") {
+		if transport == consts.DockerProtocol {
+			lastColonIndex := strings.LastIndex(name, ":")
+			indexOfDomainPathSeparation := strings.Index(name, "/")
 			if indexOfDomainPathSeparation < 0 || (indexOfDomainPathSeparation > 0 && lastColonIndex > indexOfDomainPathSeparation) {
-				imgSpec.Tag = imgSpec.Name[lastColonIndex+1:]
-				imgSpec.Name = imgSpec.Name[:lastColonIndex]
+				tag = name[lastColonIndex+1:]
+				nameAfterTag = name[:lastColonIndex]
 			}
 		}
-
 	}
+	return tag, nameAfterTag
+}
 
-	if imgSpec.Name == "" {
-		return ImageSpec{}, fmt.Errorf("unknown image : reference name is empty")
+func parseDomainAndPath(imgRef, name, transport string) (domain, pathComponent string, err error) {
+	if transport == consts.DockerProtocol {
+		imageNameComponents := strings.Split(name, "/")
+		switch {
+		case len(imageNameComponents) >= 2:
+			pathComponent = strings.Join(imageNameComponents[1:], "/")
+			domain = imageNameComponents[0]
+		case len(imageNameComponents) == 1:
+			pathComponent = imageNameComponents[0]
+		default:
+			return "", "", fmt.Errorf(errMessageImage, imgRef)
+		}
+	} else {
+		pathComponent = name
+	}
+	return domain, pathComponent, nil
+}
+
+// ParseRef accepts transport-prefixed references. Docker references must
+// include a tag or digest.
+func ParseRef(imgRef string) (ImageSpec, error) {
+	imgSpec, err := parseImageSpec(imgRef)
+	if err != nil {
+		return ImageSpec{}, err
 	}
 	if imgSpec.Transport == consts.DockerProtocol && imgSpec.Tag == "" && imgSpec.Digest == "" {
 		return ImageSpec{}, fmt.Errorf(errMessageImage+" : tag and digest are empty", imgRef)
 	}
-
-	if imgSpec.Transport == consts.DockerProtocol {
-		imageNameComponents := strings.Split(imgSpec.Name, "/")
-		if len(imageNameComponents) >= 2 {
-			imgSpec.PathComponent = strings.Join(imageNameComponents[1:], "/")
-			imgSpec.Domain = imageNameComponents[0]
-		} else if len(imageNameComponents) == 1 {
-			imgSpec.PathComponent = imageNameComponents[0]
-		} else {
-			return ImageSpec{}, fmt.Errorf(errMessageImage, imgRef)
-		}
-	} else {
-		imgSpec.PathComponent = imgSpec.Name
-	}
-
 	return imgSpec, nil
 }
 
