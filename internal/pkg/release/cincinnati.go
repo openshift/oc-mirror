@@ -350,6 +350,11 @@ func getChannelDownloads(ctx context.Context, cs CincinnatiSchema, lastChannels 
 
 	var newDownloads []v2alpha1.CopyImageSchema
 	if channel.ShortestPath {
+		// Match connected-cluster CVO: query the configured channel's Cincinnati
+		// graph (channel + current version) and BFS the shortest path inside it.
+		// Do not rewrite the channel to inferred source/target names; EUS-to-EUS
+		// intermediates are already present on the subscribed channel graph
+		// (for example eus-4.14 with 4.12.40 → 4.14.10).
 		current, newest, updates, err := CalculateUpgrades(ctx, cs, channel.Name, channel.Name, first, last)
 		if err != nil {
 			return allImages, err
