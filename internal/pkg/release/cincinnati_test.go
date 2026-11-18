@@ -2,16 +2,20 @@ package release
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 
 	gcrv1 "github.com/google/go-containerregistry/pkg/v1"
 	digest "github.com/opencontainers/go-digest"
 	specv1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.podman.io/image/v5/types"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
@@ -259,4 +263,294 @@ func (o mockManifest) ImageManifest(ctx context.Context, sourceCtx *types.System
 
 func (o mockManifest) GetManifestListDigests(ctx context.Context, sourceCtx *types.SystemContext, source string) ([]string, error) {
 	return nil, nil
+}
+
+// OCPBUGS-136257: release channels of two major versions in the same image set configuration.
+func TestCollectChannelImagesCrossMajorTargetFirst(t *testing.T) {
+	endpoint, requestedChannels := newChannelGraphServer(t, map[string]string{
+		"stable-4.22": testGraph(t, []string{"4.22.1"}, nil),
+		"stable-5.0":  testGraph(t, []string{"4.22.1", "4.22.5", "5.0.0"}, [][2]int{{0, 1}, {1, 2}}),
+	})
+	t.Setenv("UPDATE_URL_OVERRIDE", endpoint.String())
+	o := &CincinnatiSchema{Log: clog.New("error"), CincinnatiParams: CincinnatiParams{Arch: "amd64", GraphDataDir: t.TempDir()}}
+	channels := []v2alpha1.ReleaseChannel{
+		{Name: "stable-4.22", Type: v2alpha1.TypeOCP, MinVersion: "4.22.1", MaxVersion: "4.22.1"},
+		{Name: "stable-5.0", Type: v2alpha1.TypeOCP, MinVersion: "5.0.0", MaxVersion: "5.0.0"},
+	}
+	warned := false
+
+	images, errs := o.collectChannelImages(context.Background(), channels, &warned)
+	require.Empty(t, errs)
+	assert.ElementsMatch(t, releaseImages("4.22.1", "4.22.5", "5.0.0"), imageSources(images))
+	// The first two requests are for per-channel collection. Only the target is needed after that.
+	assert.Equal(t, []string{"stable-4.22", "stable-5.0", "stable-5.0"}, requestedChannels())
+}
+
+// warnRecorder records the warning messages logged through it.
+type warnRecorder struct {
+	clog.PluggableLoggerInterface
+	warnings []string
+}
+
+func (l *warnRecorder) Warn(msg string, args ...interface{}) {
+	l.warnings = append(l.warnings, fmt.Sprintf(msg, args...))
+}
+
+func TestWarnEUSChannel(t *testing.T) {
+	tests := []struct {
+		name            string
+		channel         v2alpha1.ReleaseChannel
+		alreadyReported bool
+		expReported     bool
+	}{{
+		name:        "EUSTwoMinorVersions",
+		channel:     v2alpha1.ReleaseChannel{Name: "eus-4.22", MinVersion: "4.20.0", MaxVersion: "4.22.0"},
+		expReported: true,
+	}, {
+		name:    "EUSOneMinorVersion",
+		channel: v2alpha1.ReleaseChannel{Name: "eus-4.22", MinVersion: "4.21.0", MaxVersion: "4.22.5"},
+	}, {
+		name:    "EUSPatchVersions",
+		channel: v2alpha1.ReleaseChannel{Name: "eus-4.22", MinVersion: "4.22.0", MaxVersion: "4.22.9"},
+	}, {
+		// OCPBUGS-136257: ranges that reach a later major version warn too.
+		name:        "EUSAcrossMajorVersions",
+		channel:     v2alpha1.ReleaseChannel{Name: "eus-4.22", MinVersion: "4.22.20", MaxVersion: "5.0.0"},
+		expReported: true,
+	}, {
+		name:        "EUSAcrossMajorAndMinorVersions",
+		channel:     v2alpha1.ReleaseChannel{Name: "eus-4.22", MinVersion: "4.22.0", MaxVersion: "5.2.0"},
+		expReported: true,
+	}, {
+		name:    "EUSReversedAcrossMajorVersions",
+		channel: v2alpha1.ReleaseChannel{Name: "eus-5.0", MinVersion: "5.0.0", MaxVersion: "4.22.0"},
+	}, {
+		// The minor version distance does not overflow.
+		name:    "EUSLargestMinorVersions",
+		channel: v2alpha1.ReleaseChannel{Name: "eus-4.22", MinVersion: "4.18446744073709551614.0", MaxVersion: "4.18446744073709551615.0"},
+	}, {
+		name:    "NonEUSAcrossMajorVersions",
+		channel: v2alpha1.ReleaseChannel{Name: "stable-5.0", MinVersion: "4.22.20", MaxVersion: "5.0.0"},
+	}, {
+		name:    "EUSReversedRange",
+		channel: v2alpha1.ReleaseChannel{Name: "eus-4.22", MinVersion: "4.22.0", MaxVersion: "4.20.0"},
+	}, {
+		name:            "AlreadyReported",
+		channel:         v2alpha1.ReleaseChannel{Name: "eus-4.22", MinVersion: "4.20.0", MaxVersion: "4.22.0"},
+		alreadyReported: true,
+		expReported:     true,
+	}, {
+		name:    "NoMinVersion",
+		channel: v2alpha1.ReleaseChannel{Name: "eus-4.22", MaxVersion: "4.22.0"},
+	}}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			log := &warnRecorder{PluggableLoggerInterface: clog.New("trace")}
+			o := &CincinnatiSchema{Log: log}
+
+			reported := o.warnEUSChannel(tt.channel, tt.alreadyReported)
+			assert.Equal(t, tt.expReported, reported)
+			if tt.expReported && !tt.alreadyReported {
+				assert.Len(t, log.warnings, 1)
+			} else {
+				assert.Empty(t, log.warnings)
+			}
+		})
+	}
+}
+
+// passthroughSignature returns the release images unchanged, as if their signatures were valid.
+type passthroughSignature struct{}
+
+func (passthroughSignature) GenerateReleaseSignatures(_ context.Context, images []v2alpha1.CopyImageSchema) ([]v2alpha1.CopyImageSchema, error) {
+	return images, nil
+}
+
+// imageSources returns the unique sources of the images.
+func imageSources(images []v2alpha1.CopyImageSchema) []string {
+	seen := map[string]bool{}
+	sources := []string{}
+	for _, img := range images {
+		if !seen[img.Source] {
+			seen[img.Source] = true
+			sources = append(sources, img.Source)
+		}
+	}
+	return sources
+}
+
+// releaseImages returns the release images of the versions.
+func releaseImages(versions ...string) []string {
+	images := make([]string, 0, len(versions))
+	for _, v := range versions {
+		images = append(images, testUpdate(v).Image)
+	}
+	return images
+}
+
+// A third configured channel is not used as a bridge.
+func TestGetCrossChannelDownloadsDoesNotSearchOtherConfiguredChannels(t *testing.T) {
+	ocpEndpoint, ocpRequests := newChannelGraphServer(t, map[string]string{
+		"stable-4.22":   testGraph(t, []string{"4.22.1"}, nil),
+		"stable-5.0":    testGraph(t, []string{"5.0.0", "5.0.1"}, [][2]int{{0, 1}}),
+		"candidate-5.0": testGraph(t, []string{"4.22.1", "5.0.0"}, [][2]int{{0, 1}}),
+	})
+	t.Setenv("UPDATE_URL_OVERRIDE", ocpEndpoint.String())
+	log := &warnRecorder{PluggableLoggerInterface: clog.New("error")}
+	cs := CincinnatiSchema{
+		Log:              log,
+		CincinnatiParams: CincinnatiParams{Arch: "amd64", GraphDataDir: t.TempDir()},
+	}
+	require.NoError(t, cs.NewOCPClient())
+	channels := []v2alpha1.ReleaseChannel{
+		{Name: "stable-4.22", Type: v2alpha1.TypeOCP, MinVersion: "4.22.1", MaxVersion: "4.22.1"},
+		{Name: "stable-5.0", Type: v2alpha1.TypeOCP, MinVersion: "5.0.1", MaxVersion: "5.0.1"},
+		{Name: "candidate-5.0", Type: v2alpha1.TypeOCP, MinVersion: "5.0.0", MaxVersion: "5.0.0"},
+	}
+
+	images, err := getCrossChannelDownloads(context.Background(), cs, channels)
+	require.NoError(t, err)
+	assert.ElementsMatch(t, releaseImages("4.22.1", "5.0.1"), imageSources(images))
+	require.Len(t, log.warnings, 1)
+	assert.Contains(t, log.warnings[0], "the two graphs publish no unconditional update path")
+	assert.Equal(t, []string{"stable-5.0", "stable-4.22"}, ocpRequests())
+}
+
+// newArchChannelGraphServer mocks a Cincinnati API serving the graphs by "<arch>/<channel>". It
+// returns the server URL and a function listing the requested "<arch>/<channel>" in order.
+func newArchChannelGraphServer(t *testing.T, graphs map[string]string) (*url.URL, func() []string) {
+	t.Helper()
+	emptyGraph := testGraph(t, nil, nil)
+	var mu sync.Mutex
+	var requested []string
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		key := r.URL.Query().Get("arch") + "/" + r.URL.Query().Get("channel")
+		mu.Lock()
+		requested = append(requested, key)
+		mu.Unlock()
+		body, ok := graphs[key]
+		if !ok {
+			body = emptyGraph
+		}
+		if _, err := w.Write([]byte(body)); err != nil {
+			t.Error(err)
+		}
+	}))
+	t.Cleanup(ts.Close)
+	endpoint, err := url.Parse(ts.URL)
+	require.NoError(t, err)
+	return endpoint, func() []string {
+		mu.Lock()
+		defer mu.Unlock()
+		return append([]string(nil), requested...)
+	}
+}
+
+// Each architecture uses the graphs of its own channels.
+func TestGetReleaseReferenceImagesConnectingChannelArchitectures(t *testing.T) {
+	endpoint, requested := newArchChannelGraphServer(t, map[string]string{
+		"amd64/stable-4.22": testGraph(t, []string{"4.22.1", "4.22.5"}, [][2]int{{0, 1}}),
+		"amd64/stable-5.1":  testGraph(t, []string{"4.22.5", "5.0.0", "5.1.0"}, [][2]int{{0, 1}, {1, 2}}),
+		"arm64/stable-4.22": testGraph(t, []string{"4.22.1", "4.22.7"}, [][2]int{{0, 1}}),
+		"arm64/stable-5.1":  testGraph(t, []string{"4.22.7", "5.0.0", "5.1.0"}, [][2]int{{0, 1}, {1, 2}}),
+	})
+	t.Setenv("UPDATE_URL_OVERRIDE", endpoint.String())
+	workingDir := t.TempDir()
+	graphDataDir := filepath.Join(workingDir, releaseImageExtractDir, cincinnatiGraphDataDir)
+	require.NoError(t, os.MkdirAll(graphDataDir, 0o755))
+	cfg := &v2alpha1.ImageSetConfiguration{ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
+		Mirror: v2alpha1.Mirror{Platform: v2alpha1.Platform{
+			//nolint:staticcheck // SA1019: the deprecated Architectures field is the per architecture collection under test.
+			Architectures: []string{"amd64", "arm64"},
+			Channels: []v2alpha1.ReleaseChannel{
+				{Name: "stable-4.22", Type: v2alpha1.TypeOCP, MinVersion: "4.22.1", MaxVersion: "4.22.1"},
+				{Name: "stable-5.1", Type: v2alpha1.TypeOCP, MinVersion: "5.1.0", MaxVersion: "5.1.0"},
+			},
+		}},
+	}}
+	opts := mirror.CopyOptions{Global: &mirror.GlobalOptions{WorkingDir: workingDir}, Mode: mirror.MirrorToDisk}
+	sch := NewCincinnati(clog.New("error"), nil, cfg, opts, &mockClient{}, false, passthroughSignature{})
+
+	images, err := sch.GetReleaseReferenceImages(context.Background())
+	require.NoError(t, err)
+	assert.ElementsMatch(t, releaseImages("4.22.1", "4.22.5", "4.22.7", "5.0.0", "5.1.0"), imageSources(images))
+	for _, arch := range []string{"amd64", "arm64"} {
+		for _, ch := range []string{"stable-4.22", "stable-5.1"} {
+			assert.FileExists(t, filepath.Join(graphDataDir, arch+"-"+ch+".json"))
+			assert.Contains(t, requested(), arch+"/"+ch)
+		}
+	}
+}
+
+// Disk to mirror replays the two saved graphs and requires the source graph when the target alone has no path.
+func TestGetCrossChannelDownloadsConnectingChannelsDiskToMirror(t *testing.T) {
+	endpoint, requestedChannels := newChannelGraphServer(t, map[string]string{
+		"stable-4.22": testGraph(t, []string{"4.22.1", "4.22.5"}, [][2]int{{0, 1}}),
+		"stable-5.1":  testGraph(t, []string{"4.22.5", "5.0.0", "5.1.0"}, [][2]int{{0, 1}, {1, 2}}),
+	})
+	unreachable := httptest.NewServer(http.NotFoundHandler())
+	unreachableURL := unreachable.URL
+	unreachable.Close()
+
+	channels := []v2alpha1.ReleaseChannel{
+		{Name: "stable-5.1", Type: v2alpha1.TypeOCP, MinVersion: "5.1.0", MaxVersion: "5.1.0"},
+		{Name: "stable-4.22", Type: v2alpha1.TypeOCP, MinVersion: "4.22.1", MaxVersion: "4.22.1"},
+	}
+	graphDataDir := t.TempDir()
+	cs := CincinnatiSchema{Log: clog.New("error"), CincinnatiParams: CincinnatiParams{Arch: "amd64", GraphDataDir: graphDataDir}}
+	cs.Opts.Mode = mirror.MirrorToDisk
+	t.Setenv("UPDATE_URL_OVERRIDE", endpoint.String())
+	require.NoError(t, cs.NewOCPClient())
+	m2d, err := getCrossChannelDownloads(context.Background(), cs, channels)
+	require.NoError(t, err)
+	assert.ElementsMatch(t, releaseImages("4.22.1", "4.22.5", "5.0.0", "5.1.0"), imageSources(m2d))
+	requests := len(requestedChannels())
+
+	files, err := os.ReadDir(graphDataDir)
+	require.NoError(t, err)
+	stored := make([]string, 0, len(files))
+	for _, f := range files {
+		stored = append(stored, f.Name())
+	}
+	assert.ElementsMatch(t, []string{"amd64-stable-5.1.json", "amd64-stable-4.22.json"}, stored)
+
+	d2m := cs
+	d2m.Opts.Mode = mirror.DiskToMirror
+	t.Setenv("UPDATE_URL_OVERRIDE", unreachableURL)
+	require.NoError(t, d2m.NewOCPClient())
+	replayed, err := getCrossChannelDownloads(context.Background(), d2m, channels)
+	require.NoError(t, err)
+	assert.ElementsMatch(t, imageSources(m2d), imageSources(replayed))
+	assert.Len(t, requestedChannels(), requests, "disk to mirror must not query the Cincinnati API")
+
+	require.NoError(t, os.Remove(filepath.Join(graphDataDir, "amd64-stable-4.22.json")))
+	_, err = getCrossChannelDownloads(context.Background(), d2m, channels)
+	require.EqualError(t, err, `failed to get upgrade graph: APIRequestError: channel "stable-4.22": NoGraphData: No graph data found on disk`)
+}
+
+// The mirror run continues with the known releases when there is no cross major version path.
+func TestGetReleaseReferenceImagesNoUpgradePathContinues(t *testing.T) {
+	endpoint, _ := newChannelGraphServer(t, map[string]string{
+		"stable-4.22": testGraph(t, []string{"4.22.1"}, nil),
+		"stable-5.0":  conditionalEdgesOnlyGraph,
+	})
+	t.Setenv("UPDATE_URL_OVERRIDE", endpoint.String())
+	workingDir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(workingDir, releaseImageExtractDir, cincinnatiGraphDataDir), 0o755))
+	cfg := &v2alpha1.ImageSetConfiguration{ImageSetConfigurationSpec: v2alpha1.ImageSetConfigurationSpec{
+		Mirror: v2alpha1.Mirror{Platform: v2alpha1.Platform{Channels: []v2alpha1.ReleaseChannel{
+			{Name: "stable-4.22", Type: v2alpha1.TypeOCP, MinVersion: "4.22.1", MaxVersion: "4.22.1"},
+			{Name: "stable-5.0", Type: v2alpha1.TypeOCP},
+		}}},
+	}}
+	opts := mirror.CopyOptions{Global: &mirror.GlobalOptions{WorkingDir: workingDir}, Mode: mirror.MirrorToDisk}
+	log := &warnRecorder{PluggableLoggerInterface: clog.New("error")}
+	sch := NewCincinnati(log, nil, cfg, opts, &mockClient{}, false, passthroughSignature{})
+
+	images, err := sch.GetReleaseReferenceImages(context.Background())
+	require.NoError(t, err)
+	assert.ElementsMatch(t, releaseImages("4.22.1", "5.0.0"), imageSources(images))
+	require.Len(t, log.warnings, 1)
+	assert.Contains(t, log.warnings[0], "NoUpgradePath: no qualifying unconditional upgrade path from version 4.22.1")
+	assert.Contains(t, log.warnings[0], "conditional update edges are not followed")
 }

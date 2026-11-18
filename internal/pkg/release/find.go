@@ -24,12 +24,15 @@ func FindRelease(channels []v2alpha1.ReleaseChannel, min bool) (string, semver.V
 	for k := range vers {
 		keys = append(keys, k)
 	}
+	// If two channels have the same version, pick the same one every time.
+	// Otherwise, disk-to-mirror might look for a graph we didn't save.
+	sort.Strings(keys)
 	if min {
-		sort.Slice(keys, func(i, j int) bool {
+		sort.SliceStable(keys, func(i, j int) bool {
 			return vers[keys[i]].GT(vers[keys[j]])
 		})
 	} else {
-		sort.Slice(keys, func(i, j int) bool {
+		sort.SliceStable(keys, func(i, j int) bool {
 			return vers[keys[i]].LT(vers[keys[j]])
 		})
 	}

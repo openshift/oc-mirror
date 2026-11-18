@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/blang/semver/v4"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
@@ -71,5 +72,25 @@ func TestFindLatestRelease(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// Among channels of the same version, the same channel is always picked, so that the searched
+// channels, and the graphs that disk to mirror runs need, do not change between runs.
+func TestFindReleaseTiedChannels(t *testing.T) {
+	channels := []v2alpha1.ReleaseChannel{
+		{Name: "stable-5.2", MinVersion: "5.2.1", MaxVersion: "5.2.3"},
+		{Name: "eus-5.2", MinVersion: "5.2.1", MaxVersion: "5.2.3"},
+		{Name: "fast-5.2", MinVersion: "5.2.1", MaxVersion: "5.2.3"},
+	}
+	for range 50 {
+		minCh, minVer, err := FindRelease(channels, true)
+		require.NoError(t, err)
+		assert.Equal(t, "stable-5.2", minCh)
+		assert.Equal(t, semver.MustParse("5.2.1"), minVer)
+		maxCh, maxVer, err := FindRelease(channels, false)
+		require.NoError(t, err)
+		assert.Equal(t, "stable-5.2", maxCh)
+		assert.Equal(t, semver.MustParse("5.2.3"), maxVer)
 	}
 }
