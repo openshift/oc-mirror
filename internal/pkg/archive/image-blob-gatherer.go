@@ -7,10 +7,12 @@ import (
 	"slices"
 
 	digest "github.com/opencontainers/go-digest"
+	specv1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"go.podman.io/image/v5/manifest"
 	"go.podman.io/image/v5/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 
+	"github.com/openshift/oc-mirror/v2/internal/pkg/artifactfilter"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	ocmirrormanifest "github.com/openshift/oc-mirror/v2/internal/pkg/manifest"
@@ -77,7 +79,13 @@ func (o *ImageBlobGatherer) multiArchBlobs(ctx context.Context, in internalImage
 
 	blobs := sets.New(in.digest.String())
 
-	manifestList, err := manifest.ListFromBlob(in.manifestBytes, in.mimeType)
+	var manifestList manifest.List
+	var err error
+	if in.mimeType == specv1.MediaTypeImageIndex {
+		manifestList, err = manifest.OCI1IndexFromManifest(in.manifestBytes)
+	} else {
+		manifestList, err = manifest.ListFromBlob(in.manifestBytes, in.mimeType)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("error to get the manifest list %w", err)
 	}
@@ -94,18 +102,16 @@ func (o *ImageBlobGatherer) multiArchBlobs(ctx context.Context, in internalImage
 		}
 	}
 
-	digests := manifestList.Instances()
-	for _, digest := range digests {
-		if platform := platformForDigest(manifestList, digest); len(in.allowedPlatforms) > 0 && platform != "" && !slices.Contains(in.allowedPlatforms, platform) {
-			// Platform was intentionally not mirrored (sparse manifest filtering).
-			// Do not add its digest to blobs — the blob file does not exist locally.
-			o.log.Debug("Skipping absent platform %q for digest %s (not in allowed platforms)", platform, digest.String())
-			continue
-		}
-
+	// Temporary compatibility workaround owned by package artifactfilter.
+	skipper := artifactfilter.NewArchiveSkipper(manifestList, len(in.allowedPlatforms) > 0)
+	for _, digest := range o.archiveInstances(manifestList, in.allowedPlatforms) {
 		singleIn := in
 		singleIn.manifestBytes, singleIn.mimeType, err = o.ocmirrormanifest.ImageManifest(ctx, in.sourceCtx, in.imgRef, &digest)
 		if err != nil {
+			if canSkipArchiveInstance(ctx, skipper, in.imgRef, digest, err) {
+				o.log.Warn("Skipping attestation manifest %s of %s, which is not available: %v", digest.String(), in.imgRef, err)
+				continue
+			}
 			return nil, err
 		}
 		// Only insert the platform digest after confirming the manifest is present.
@@ -126,6 +132,31 @@ func (o *ImageBlobGatherer) multiArchBlobs(ctx context.Context, in internalImage
 	}
 
 	return blobs, errors.Join(sigErrors...)
+}
+
+func canSkipArchiveInstance(ctx context.Context, skipper *artifactfilter.ArchiveSkipper, source string, instance digest.Digest, err error) bool {
+	readErr := ocmirrormanifest.InstanceReadError(err, source, instance)
+	return !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) && skipper.Skip(ctx, instance, readErr)
+}
+
+// archiveInstances returns the instances of manifestList whose content must be
+// archived: every instance, or the sparse selection when platforms are explicit.
+func (o *ImageBlobGatherer) archiveInstances(manifestList manifest.List, allowedPlatforms []string) []digest.Digest {
+	digests := manifestList.Instances()
+	if len(allowedPlatforms) == 0 {
+		return digests
+	}
+	selected := make([]digest.Digest, 0, len(digests))
+	for _, instance := range digests {
+		if platform := platformForDigest(manifestList, instance); platform != "" && !slices.Contains(allowedPlatforms, platform) {
+			// Platform was intentionally not mirrored (sparse manifest filtering):
+			// its blobs do not exist locally.
+			o.log.Debug("Skipping absent platform %q for digest %s (not in allowed platforms)", platform, instance.String())
+			continue
+		}
+		selected = append(selected, instance)
+	}
+	return selected
 }
 
 // singleArchBlobs returns the blobs of single architecture (including signature blobs if they exists).

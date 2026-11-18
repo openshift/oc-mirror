@@ -2,20 +2,36 @@ package archive
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"path/filepath"
 	"reflect"
+	"slices"
+	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
+	"github.com/docker/distribution/registry/api/errcode"
+	v2 "github.com/docker/distribution/registry/api/v2"
 	"github.com/google/go-containerregistry/pkg/registry"
 	digest "github.com/opencontainers/go-digest"
+	"github.com/opencontainers/image-spec/specs-go"
+	specv1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.podman.io/image/v5/manifest"
+	"go.podman.io/image/v5/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 
+	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
+	ocmirrormanifest "github.com/openshift/oc-mirror/v2/internal/pkg/manifest"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/mirror"
 )
 
@@ -404,4 +420,249 @@ func TestPlatformForDigest(t *testing.T) {
 	assert.Equal(t, "linux/arm64", platformForDigest(ml, digest.Digest(arm64Digest)))
 	assert.Equal(t, "", platformForDigest(ml, digest.Digest(noPlat)))
 	assert.Equal(t, "", platformForDigest(ml, digest.Digest("sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd")))
+}
+
+type recordingManifestSource struct {
+	ocmirrormanifest.ManifestInterface
+	manifests   map[digest.Digest][]byte
+	unavailable []digest.Digest
+	requested   []digest.Digest
+}
+
+func (source *recordingManifestSource) ImageManifest(_ context.Context, _ *types.SystemContext, reference string, instance *digest.Digest) ([]byte, string, error) {
+	if instance == nil {
+		return nil, "", fmt.Errorf("signature not present")
+	}
+	source.requested = append(source.requested, *instance)
+	if slices.Contains(source.unavailable, *instance) {
+		return nil, "", fmt.Errorf("received unexpected HTTP status: 503 Service Unavailable")
+	}
+	data, present := source.manifests[*instance]
+	if !present {
+		return nil, "", &ocmirrormanifest.InstanceManifestError{Source: reference, Instance: *instance, Err: fmt.Errorf("missing manifest %s: %w", *instance, v2.ErrorCodeManifestUnknown.WithMessage("manifest unknown"))}
+	}
+	return data, specv1.MediaTypeImageManifest, nil
+}
+
+// TestImageBlobGatherer_MultiArchBlobsSelection checks that only a missing
+// annotated attestation is skipped, and that a skipped entry adds no blobs.
+func TestImageBlobGatherer_MultiArchBlobsSelection(t *testing.T) {
+	t.Parallel()
+	config := specv1.Descriptor{MediaType: specv1.MediaTypeImageConfig, Digest: digest.FromString("config")}
+	layer := specv1.Descriptor{MediaType: specv1.MediaTypeImageLayer, Digest: digest.FromString("layer")}
+	childBytes, err := json.Marshal(specv1.Manifest{Versioned: specs.Versioned{SchemaVersion: 2}, MediaType: specv1.MediaTypeImageManifest, Config: config, Layers: []specv1.Descriptor{layer}})
+	require.NoError(t, err)
+	runnable := specv1.Descriptor{MediaType: specv1.MediaTypeImageManifest, Digest: digest.FromBytes(childBytes), Platform: &specv1.Platform{OS: "linux", Architecture: "amd64"}}
+	attestation := runnable
+	attestation.Digest = digest.FromString("attestation")
+	attestation.Platform = &specv1.Platform{OS: "unknown", Architecture: "unknown"}
+	attestation.Annotations = map[string]string{"vnd.docker.reference.type": "attestation-manifest"}
+	platformAttestation := attestation
+	platformAttestation.Digest = digest.FromString("platform-attestation")
+	platformAttestation.Platform = runnable.Platform
+	platformless := runnable
+	platformless.Digest = digest.FromString("platformless")
+	platformless.Platform = nil
+	unknown := runnable
+	unknown.Digest = digest.FromString("unknown")
+	unknown.Platform = &specv1.Platform{OS: "unknown", Architecture: "unknown"}
+
+	for _, test := range []struct {
+		name           string
+		instances      []specv1.Descriptor
+		present        []digest.Digest
+		unavailable    []digest.Digest
+		allowed        []string
+		cancelled      bool
+		wantRequested  []digest.Digest
+		wantArchived   []digest.Digest
+		wantError      string
+		copySignatures bool
+	}{
+		{name: "available attestation is archived", instances: []specv1.Descriptor{runnable, attestation}, present: []digest.Digest{runnable.Digest, attestation.Digest}, wantRequested: []digest.Digest{runnable.Digest, attestation.Digest}, wantArchived: []digest.Digest{runnable.Digest, attestation.Digest}},
+		// Regression: after a copy that left the attestation out, the archive skips it.
+		{name: "missing attestation is skipped", instances: []specv1.Descriptor{runnable, attestation}, present: []digest.Digest{runnable.Digest}, wantRequested: []digest.Digest{runnable.Digest, attestation.Digest}, wantArchived: []digest.Digest{runnable.Digest}},
+		{name: "unavailable attestation is not skipped", instances: []specv1.Descriptor{runnable, attestation}, present: []digest.Digest{runnable.Digest}, unavailable: []digest.Digest{attestation.Digest}, wantRequested: []digest.Digest{runnable.Digest, attestation.Digest}, wantError: "503"},
+		{name: "missing runnable still fails", instances: []specv1.Descriptor{runnable, attestation}, present: []digest.Digest{attestation.Digest}, wantRequested: []digest.Digest{runnable.Digest}, wantError: "missing manifest"},
+		{name: "cancelled gathering does not skip a missing attestation", instances: []specv1.Descriptor{runnable, attestation}, present: []digest.Digest{runnable.Digest}, cancelled: true, wantRequested: []digest.Digest{runnable.Digest, attestation.Digest}, wantError: "missing manifest"},
+		{name: "explicit platforms do not skip a missing attestation", instances: []specv1.Descriptor{runnable, platformAttestation}, present: []digest.Digest{runnable.Digest}, allowed: []string{"linux/amd64"}, wantRequested: []digest.Digest{runnable.Digest, platformAttestation.Digest}, wantError: "missing manifest"},
+		{name: "explicit platforms keep platformless and skip unknown", instances: []specv1.Descriptor{runnable, platformless, unknown}, present: []digest.Digest{runnable.Digest, platformless.Digest}, allowed: []string{"linux/amd64"}, wantRequested: []digest.Digest{runnable.Digest, platformless.Digest}, wantArchived: []digest.Digest{runnable.Digest, platformless.Digest}},
+		{name: "runnable signature errors are retained", instances: []specv1.Descriptor{runnable, attestation}, present: []digest.Digest{runnable.Digest}, wantRequested: []digest.Digest{runnable.Digest, attestation.Digest}, wantArchived: []digest.Digest{runnable.Digest}, copySignatures: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			indexBytes, err := json.Marshal(specv1.Index{Versioned: specs.Versioned{SchemaVersion: 2}, MediaType: specv1.MediaTypeImageIndex, Manifests: test.instances})
+			require.NoError(t, err)
+			source := &recordingManifestSource{manifests: map[digest.Digest][]byte{}, unavailable: test.unavailable}
+			for _, instance := range test.present {
+				source.manifests[instance] = childBytes
+			}
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			if test.cancelled {
+				cancel()
+			}
+			gatherer := &ImageBlobGatherer{ocmirrormanifest: source, log: clog.New("error")}
+			blobs, err := gatherer.multiArchBlobs(ctx, internalImageBlobGatherer{imgRef: "docker://localhost/synthetic:latest", manifestBytes: indexBytes, mimeType: specv1.MediaTypeImageIndex, digest: digest.FromBytes(indexBytes), allowedPlatforms: test.allowed, copySignatures: test.copySignatures})
+			expected := sets.New(digest.FromBytes(indexBytes).String(), config.Digest.String(), layer.Digest.String())
+			for _, instance := range test.wantArchived {
+				expected.Insert(instance.String())
+			}
+			switch {
+			case test.copySignatures:
+				var signatureError *SignatureBlobGathererError
+				require.ErrorAs(t, err, &signatureError)
+				require.Equal(t, expected, blobs)
+			case test.wantError != "":
+				require.ErrorContains(t, err, test.wantError)
+				require.Nil(t, blobs)
+			default:
+				require.NoError(t, err)
+				require.Equal(t, expected, blobs)
+			}
+			require.Equal(t, test.wantRequested, source.requested)
+		})
+	}
+}
+
+type archiveHTTPFixture struct {
+	t                             *testing.T
+	mode                          string
+	index, child                  []byte
+	runnable, attestation         digest.Digest
+	parentRequests, childRequests atomic.Int32
+}
+
+func (fixture *archiveHTTPFixture) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
+	switch request.URL.Path {
+	case "/v2/":
+		writer.WriteHeader(http.StatusOK)
+		return
+	case "/v2/synthetic/manifests/test":
+		if fixture.parentRequests.Add(1) == 1 || fixture.mode != "parent missing" {
+			writer.Header().Set("Content-Type", specv1.MediaTypeImageIndex)
+			fixture.write(writer, fixture.index)
+			return
+		}
+	case "/v2/synthetic/manifests/" + fixture.attestation.String():
+		fixture.childRequests.Add(1)
+		if fixture.mode == "child 503" {
+			writer.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		if fixture.mode == "missing runnable" {
+			writer.Header().Set("Content-Type", specv1.MediaTypeImageManifest)
+			fixture.write(writer, fixture.child)
+			return
+		}
+	case "/v2/synthetic/manifests/" + fixture.runnable.String():
+		if fixture.mode != "missing runnable" {
+			writer.Header().Set("Content-Type", specv1.MediaTypeImageManifest)
+			fixture.write(writer, fixture.child)
+			return
+		}
+	}
+	writer.Header().Set("Content-Type", "application/json")
+	writer.WriteHeader(http.StatusNotFound)
+	fixture.write(writer, []byte(`{"errors":[{"code":"MANIFEST_UNKNOWN","message":"synthetic missing"}]}`))
+}
+
+// write sends a fixture response body; the handler runs on a server goroutine,
+// so a failure is reported without stopping the test.
+func (fixture *archiveHTTPFixture) write(writer http.ResponseWriter, body []byte) {
+	if _, err := writer.Write(body); err != nil {
+		fixture.t.Errorf("%s fixture: writing response: %v", fixture.mode, err)
+	}
+}
+
+func TestImageBlobGatherer_AttestationHTTPFailures(t *testing.T) {
+	child, err := json.Marshal(specv1.Manifest{Versioned: specs.Versioned{SchemaVersion: 2}, MediaType: specv1.MediaTypeImageManifest, Config: specv1.Descriptor{Digest: digest.FromString("config")}})
+	require.NoError(t, err)
+	runnable := specv1.Descriptor{Digest: digest.FromBytes(child), Platform: &specv1.Platform{OS: "linux", Architecture: "amd64"}}
+	attestation := specv1.Descriptor{Digest: digest.FromString("attestation"), Annotations: map[string]string{"vnd.docker.reference.type": "attestation-manifest"}}
+	index, err := json.Marshal(specv1.Index{Versioned: specs.Versioned{SchemaVersion: 2}, MediaType: specv1.MediaTypeImageIndex, Manifests: []specv1.Descriptor{attestation, runnable}})
+	require.NoError(t, err)
+	for _, mode := range []string{"parent missing", "child missing", "child 503", "missing runnable", "explicit platform"} {
+		t.Run(mode, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			fixture := &archiveHTTPFixture{t: t, mode: mode, index: index, child: child, runnable: runnable.Digest, attestation: attestation.Digest}
+			server := httptest.NewServer(fixture)
+			defer server.Close()
+			reference := "docker://" + strings.TrimPrefix(server.URL, "http://") + "/synthetic:test"
+			system := &types.SystemContext{DockerInsecureSkipTLSVerify: types.OptionalBoolTrue}
+			source := ocmirrormanifest.New(clog.New("error"))
+			parent, _, err := source.ImageManifest(ctx, system, reference, nil)
+			require.NoError(t, err)
+			input := internalImageBlobGatherer{imgRef: reference, sourceCtx: system, manifestBytes: parent, mimeType: specv1.MediaTypeImageIndex, digest: digest.FromBytes(parent)}
+			if mode == "explicit platform" {
+				input.allowedPlatforms = []string{"linux/amd64"}
+			}
+			gatherer := &ImageBlobGatherer{ocmirrormanifest: source, log: clog.New("error")}
+			blobs, err := gatherer.multiArchBlobs(ctx, input)
+			if mode == "child missing" {
+				require.NoError(t, err)
+				require.Contains(t, blobs, runnable.Digest.String())
+				require.Contains(t, blobs, input.digest.String())
+				require.NotContains(t, blobs, attestation.Digest.String())
+				require.EqualValues(t, 1, fixture.childRequests.Load())
+				return
+			}
+			require.Error(t, err)
+			if mode == "parent missing" {
+				require.Zero(t, fixture.childRequests.Load())
+				var coded errcode.ErrorCoder
+				require.ErrorAs(t, err, &coded)
+				require.Equal(t, v2.ErrorCodeManifestUnknown, coded.ErrorCode())
+				require.Nil(t, ocmirrormanifest.InstanceReadError(err, reference, attestation.Digest))
+			}
+			if mode == "child 503" {
+				require.ErrorContains(t, err, "503")
+			}
+			// The failing child and its typed cause, not just any error.
+			failed := map[string]digest.Digest{"missing runnable": runnable.Digest, "explicit platform": attestation.Digest}
+			if instance, ok := failed[mode]; ok {
+				cause := ocmirrormanifest.InstanceReadError(err, reference, instance)
+				require.Error(t, cause, "%s must fail reading child %s", mode, instance)
+				var coded errcode.ErrorCoder
+				require.ErrorAs(t, cause, &coded)
+				require.Equal(t, v2.ErrorCodeManifestUnknown, coded.ErrorCode())
+			}
+		})
+	}
+}
+
+var errUnsignedAttestation = errors.New("unsigned synthetic attestation")
+
+type unsignedAttestationSource struct {
+	recordingManifestSource
+	unsigned digest.Digest
+	child    []byte
+}
+
+func (source *unsignedAttestationSource) ImageManifest(ctx context.Context, system *types.SystemContext, image string, instance *digest.Digest) ([]byte, string, error) {
+	if instance == nil {
+		if strings.Contains(image, source.unsigned.Encoded()) {
+			return nil, "", errUnsignedAttestation
+		}
+		return source.child, specv1.MediaTypeImageManifest, nil
+	}
+	return source.recordingManifestSource.ImageManifest(ctx, system, image, instance)
+}
+
+func TestArchivePresentUnsignedAttestationPreservesReleaseEnforcement(t *testing.T) {
+	child := []byte(fmt.Sprintf(`{"schemaVersion":2,"mediaType":%q,"config":{"digest":%q}}`, specv1.MediaTypeImageManifest, digest.FromString("config")))
+	runnable := specv1.Descriptor{Digest: digest.FromBytes(child)}
+	attestation := specv1.Descriptor{Digest: digest.FromString("attestation"), Annotations: map[string]string{"vnd.docker.reference.type": "attestation-manifest"}}
+	index, err := json.Marshal(specv1.Index{Versioned: specs.Versioned{SchemaVersion: 2}, MediaType: specv1.MediaTypeImageIndex, Manifests: []specv1.Descriptor{runnable, attestation}})
+	require.NoError(t, err)
+	source := &unsignedAttestationSource{recordingManifestSource: recordingManifestSource{manifests: map[digest.Digest][]byte{runnable.Digest: child, attestation.Digest: child}}, unsigned: attestation.Digest, child: child}
+	gatherer := &ImageBlobGatherer{ocmirrormanifest: source, log: clog.New("error")}
+	_, err = gatherer.multiArchBlobs(context.Background(), internalImageBlobGatherer{imgRef: "docker://localhost/synthetic:test", manifestBytes: index, mimeType: specv1.MediaTypeImageIndex, digest: digest.FromBytes(index), copySignatures: true})
+	var signatureErr *SignatureBlobGathererError
+	require.ErrorAs(t, err, &signatureErr)
+	err = handleSignatureErrors(v2alpha1.CopyImageSchema{Type: v2alpha1.TypeOCPRelease}, err)
+	var archiveErr *ArchiveError
+	require.ErrorAs(t, err, &archiveErr)
+	require.ErrorIs(t, archiveErr.ReleaseErr, errUnsignedAttestation, "the release error must come from the unsigned attestation")
 }
