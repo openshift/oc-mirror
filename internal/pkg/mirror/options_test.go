@@ -1,11 +1,24 @@
 package mirror
 
 import (
+	"context"
 	"testing"
+	"time"
 
 	"github.com/spf13/pflag"
 	"go.podman.io/common/pkg/flag"
 )
+
+func TestCommandTimeoutContextFromHonorsParentCancel(t *testing.T) {
+	parent, cancel := context.WithCancel(context.Background())
+	cancel()
+	opts := &GlobalOptions{CommandTimeout: time.Minute}
+	ctx, stop := opts.CommandTimeoutContextFrom(parent)
+	defer stop()
+	if ctx.Err() == nil {
+		t.Fatal("expected canceled parent to cancel the timeout context")
+	}
+}
 
 func TestOptionsNewContext(t *testing.T) {
 
