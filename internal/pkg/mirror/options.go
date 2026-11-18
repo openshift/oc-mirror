@@ -21,7 +21,10 @@ import (
 	"go.podman.io/image/v5/types"
 )
 
-const defaultUserAgent string = "oc-mirror"
+const (
+	defaultUserAgent    string = "oc-mirror"
+	DefaultImageTimeout        = 10 * time.Minute
+)
 
 // errorShouldDisplayUsage is a subtype of error used by command handlers to indicate that cli.ShowSubcommandHelp should be called.
 type ErrorShouldDisplayUsage struct {
