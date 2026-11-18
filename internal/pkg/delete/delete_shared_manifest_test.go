@@ -195,7 +195,7 @@ func TestLookupTimeoutIsPerReference(t *testing.T) {
 	release := "docker://localhost:5000/myregistry/openshift/release:"
 	origin := "quay.io/ocp/release:v1"
 	var calls int
-	var first context.Context
+	var firstDone <-chan struct{}
 	var captured v2alpha1.CollectorSchema
 	di := &DeleteImages{
 		Log: clog.New("trace"),
@@ -212,11 +212,15 @@ func TestLookupTimeoutIsPerReference(t *testing.T) {
 			require.True(t, ok)
 			require.Greater(t, time.Until(deadline), 20*time.Second)
 			if strings.HasSuffix(ref, "comp-a") {
-				first = ctx
+				firstDone = ctx.Done()
 				return "", context.DeadlineExceeded
 			}
-			require.NotNil(t, first)
-			require.ErrorIs(t, first.Err(), context.Canceled)
+			require.NotNil(t, firstDone)
+			select {
+			case <-firstDone:
+			default:
+				t.Fatal("first lookup context is still active")
+			}
 			require.NoError(t, ctx.Err())
 			return digestA, nil
 		},
