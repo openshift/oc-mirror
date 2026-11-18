@@ -85,7 +85,7 @@ oc-mirror --v2 -c ./isc.yaml --workspace file:///home/user/oc-mirror/workspace d
 |------|-------------|
 | `-c`, `--config` | Path to ImageSetConfiguration file (required) |
 | `--dry-run` | Preview what would be mirrored without copying. See [Dry Run](dry-run.md) |
-| `--parallel-images` | Number of images mirrored in parallel (default 4, max 10) |
+| `--parallel-images` | Number of images mirrored in parallel (default 4, max 128) |
 | `--parallel-layers` | Number of image layers mirrored in parallel (default 5, max 10) |
 | `--image-timeout` | Timeout for mirroring a single image (default 10m) |
 | `--max-nested-paths` | Limit nested paths for registries that restrict path depth |
@@ -93,6 +93,8 @@ oc-mirror --v2 -c ./isc.yaml --workspace file:///home/user/oc-mirror/workspace d
 | `--secure-policy` | Enable signature verification. See [Signature Verification](signature-verification.md) |
 | `--remove-signatures` | Do not copy image signatures to the destination |
 | `--cache-dir` | Override the default cache directory (defaults to `$HOME`; see [Archive Management](archive-management.md)) |
+
+`--parallel-layers` applies to each image, so up to `--parallel-images` × `--parallel-layers` layers can be copied at the same time, each with its own connections and files. Before raising `--parallel-images` far above the default, check that the open-file limit allows for that. Go programs raise their soft limit to the hard limit at startup, so the hard limit (`ulimit -Hn`) is the one that counts.
 
 Signature handling can also be configured at a more granular level using YAML configuration files in the `registries.d` directory, allowing per-registry control over signature behavior.
 
