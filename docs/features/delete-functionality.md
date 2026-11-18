@@ -160,6 +160,14 @@ If by accident the local cache is deleted, untar all the relevant <work-director
 If the remote registry is also deleted by accident, re-run the oc-mirror command using the --from flag (disk to mirror mode, it will use the contents of all the relevant .tar.gz files), this will ensure your remote registry is back to the original state.
 
 
+### Shared manifests
+
+Release components from different versions are stored as different tags in one repository, and those tags can point at the same manifest. `delete --generate` keeps every selected tag, and it keeps a signature tag once when several images share it. Phase 2 reads each tag from the destination registry and deletes each manifest in that repository once. A repeated tag, or a second tag of a manifest already deleted in the same run, is not deleted again.
+
+The digest recorded where the image was mirrored from is not used for this. The registry is. The same digest in another repository is a separate deletion. Two selections that name different digests are both deleted, including when they share a tag or a layer.
+
+Deleting a manifest removes every tag that points at it. De-duplicating the delete list does not keep a release whose tag points at a manifest you are deleting.
+
 ### Conclusion
 
 This is still tech preview so feedback is welcome.
