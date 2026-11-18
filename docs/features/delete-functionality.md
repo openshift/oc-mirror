@@ -162,7 +162,7 @@ If the remote registry is also deleted by accident, re-run the oc-mirror command
 
 ### Shared manifests
 
-Release components from different versions are stored as different tags in one repository, and those tags can point at the same manifest. `delete --generate` keeps every selected tag, and it keeps a signature tag once when several images share it. Phase 2 reads each tag from the destination registry and deletes each manifest in that repository once. A repeated tag, or a second tag of a manifest already deleted in the same run, is not deleted again.
+Release components from different versions are stored as different tags in one repository, and those tags can point at the same manifest. `delete --generate` keeps every selected tag, and it keeps a signature tag once when several images share it. Phase 2 reads each tag from the destination registry. Tags that resolve to the same manifest in one repository are deleted once. A tag whose digest cannot be read is deleted as written, so it can still be attempted after that manifest was already removed.
 
 The digest recorded where the image was mirrored from is not used for this. The registry is. The same digest in another repository is a separate deletion. Two selections that name different digests are both deleted, including when they share a tag or a layer.
 

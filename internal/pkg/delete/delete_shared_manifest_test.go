@@ -2,7 +2,9 @@ package delete
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"os"
@@ -16,6 +18,7 @@ import (
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/random"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
+	"github.com/google/go-containerregistry/pkg/v1/remote/transport"
 	"github.com/opencontainers/go-digest"
 	"github.com/stretchr/testify/require"
 
@@ -91,10 +94,20 @@ func TestDeleteRegistryImagesCollapsesSharedManifest(t *testing.T) {
 			},
 			forbidLookup: true,
 			wantDest: []string{
-				release + "v1@" + digestA.String(),
-				release + "v1@" + digestB.String(),
+				releaseRepo() + "@" + digestA.String(),
+				releaseRepo() + "@" + digestB.String(),
 			},
 			wantRelease: 2,
+		},
+		{
+			name: "tag plus digest does not hide the tag that names the same manifest",
+			items: []v2alpha1.DeleteItem{
+				releaseItem(origin, release+"v1@"+digestA.String()),
+				releaseItem(origin, release+"v1"),
+			},
+			resolve:     func(string) (digest.Digest, error) { return digestA, nil },
+			wantDest:    []string{releaseRepo() + "@" + digestA.String()},
+			wantRelease: 1,
 		},
 		{
 			name: "tag alias collapses only into the digest it points at",
@@ -105,7 +118,7 @@ func TestDeleteRegistryImagesCollapsesSharedManifest(t *testing.T) {
 			resolve: func(string) (digest.Digest, error) { return digestA, nil },
 			wantDest: []string{
 				releaseRepo() + "@" + digestA.String(),
-				release + "v1@" + digestB.String(),
+				releaseRepo() + "@" + digestB.String(),
 			},
 			wantRelease: 2,
 		},
@@ -182,6 +195,7 @@ func TestLookupTimeoutIsPerReference(t *testing.T) {
 	release := "docker://localhost:5000/myregistry/openshift/release:"
 	origin := "quay.io/ocp/release:v1"
 	var calls int
+	var first context.Context
 	var captured v2alpha1.CollectorSchema
 	di := &DeleteImages{
 		Log: clog.New("trace"),
@@ -198,8 +212,12 @@ func TestLookupTimeoutIsPerReference(t *testing.T) {
 			require.True(t, ok)
 			require.Greater(t, time.Until(deadline), 20*time.Second)
 			if strings.HasSuffix(ref, "comp-a") {
+				first = ctx
 				return "", context.DeadlineExceeded
 			}
+			require.NotNil(t, first)
+			require.ErrorIs(t, first.Err(), context.Canceled)
+			require.NoError(t, ctx.Err())
 			return digestA, nil
 		},
 	}
@@ -225,6 +243,8 @@ func TestDeleteSharedDestinationManifest(t *testing.T) {
 
 	shared := mustImage(t)
 	other := mustImage(t)
+	sharedDigest := imageDigest(t, shared)
+	otherDigest := imageDigest(t, other)
 	pushImage(t, host, "mirror/openshift/release:4.21.29-comp-a", shared)
 	pushImage(t, host, "mirror/openshift/release:4.21.36-comp-b", shared)
 	pushImage(t, host, "mirror/openshift/release:4.21.29-other", other)
@@ -251,14 +271,17 @@ func TestDeleteSharedDestinationManifest(t *testing.T) {
 	require.NoError(t, err)
 
 	// The registry fixture deletes a manifest by the requested reference and does not
-	// clear other tags. Scheduling is the behavior oc-mirror controls: two aliases of
-	// one manifest become one deletion, and a different manifest or repository does not.
+	// clear other tags. The digest entry is removed, so absence is checked by digest.
 	destinations := scheduledDestinations(recorded.schema)
 	require.Len(t, destinations, 3)
 	require.NotContains(t, destinations, aliasA)
 	require.NotContains(t, destinations, aliasB)
 	require.NotContains(t, destinations, otherRef)
 	require.NotContains(t, destinations, otherRepo)
+	require.False(t, manifestDigestExists(t, host, "mirror/openshift/release", sharedDigest))
+	require.False(t, manifestDigestExists(t, host, "mirror/openshift/release", otherDigest))
+	require.False(t, manifestDigestExists(t, host, "mirror/otherns/app", sharedDigest))
+	require.True(t, manifestDigestExists(t, host, "mirror/kept/app", sharedDigest))
 	require.True(t, imageExists(t, opts, kept), "repository omitted from the plan remains")
 }
 
@@ -331,11 +354,42 @@ func mustDigest(t *testing.T, char string) digest.Digest {
 	return dgst
 }
 
-func mustImage(t *testing.T) v1.Image {
+func mustImage(t *testing.T) v1.Image { //nolint:ireturn // as expected by go-containerregistry
 	t.Helper()
 	img, err := random.Image(256, 1)
 	require.NoError(t, err)
 	return img
+}
+
+func imageDigest(t *testing.T, img v1.Image) string {
+	t.Helper()
+	dgst, err := img.Digest()
+	require.NoError(t, err)
+	return dgst.String()
+}
+
+func manifestDigestExists(t *testing.T, host, repository, dgst string) bool {
+	t.Helper()
+	ref, err := name.NewDigest(host+"/"+repository+"@"+dgst, name.Insecure)
+	require.NoError(t, err)
+	_, err = remote.Head(ref)
+	if err == nil {
+		return true
+	}
+	var transportErr *transport.Error
+	if errors.As(err, &transportErr) && transportErr.StatusCode == http.StatusNotFound {
+		return false
+	}
+	require.NoError(t, err)
+	return false
+}
+
+func TestSkipTLSVerifyMatchesCacheHost(t *testing.T) {
+	di := DeleteImages{LocalStorageFQDN: "localhost:8888"}
+	require.True(t, di.skipTLSVerify("docker://example.com/ns/app:v1", true))
+	require.True(t, di.skipTLSVerify("docker://localhost:8888/openshift/release:v1", false))
+	require.False(t, di.skipTLSVerify("docker://mirror-localhost:8888/ns/app:v1", false))
+	require.False(t, di.skipTLSVerify("docker://example.com/ns/app:v1", false))
 }
 
 func pushImage(t *testing.T, host, repoTag string, img v1.Image) {

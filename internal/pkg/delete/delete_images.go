@@ -116,18 +116,21 @@ func (o DeleteImages) WriteDeleteMetaData(ctx context.Context, images []v2alpha1
 }
 
 // processDeleteItems processes the list of images and returns delete items.
-// Identical destination references are kept once, including a signature tag shared
-// by several images. Different tags are kept even when their origins share a digest:
-// the destination registry is what decides whether those tags are one manifest.
+// Identical image destinations are kept once, and a signature tag shared by several
+// images is kept once. Those two sets are separate: an image is not dropped because
+// its destination equals a signature tag already written. Different tags are kept
+// even when their origins share a digest. The destination registry decides whether
+// those tags are one manifest.
 func (o DeleteImages) processDeleteItems(ctx context.Context, images []v2alpha1.CopyImageSchema) []v2alpha1.DeleteItem {
-	seen := make(map[string]struct{}, len(images))
+	seenImages := make(map[string]struct{}, len(images))
+	seenSigs := make(map[string]struct{}, len(images))
 	items := make([]v2alpha1.DeleteItem, 0, len(images)*2)
 	for _, img := range images {
-		if _, ok := seen[img.Destination]; ok {
+		if _, ok := seenImages[img.Destination]; ok {
 			o.Log.Debug("duplicate image found %s", img.Destination)
 			continue
 		}
-		seen[img.Destination] = struct{}{}
+		seenImages[img.Destination] = struct{}{}
 		items = append(items, v2alpha1.DeleteItem{
 			ImageName:      img.Origin,
 			ImageReference: img.Destination,
@@ -139,11 +142,11 @@ func (o DeleteImages) processDeleteItems(ctx context.Context, images []v2alpha1.
 		}
 
 		for _, sig := range o.sigDeleteItems(ctx, img) {
-			if _, ok := seen[sig.ImageReference]; ok {
+			if _, ok := seenSigs[sig.ImageReference]; ok {
 				o.Log.Debug("duplicate signature found %s", sig.ImageReference)
 				continue
 			}
-			seen[sig.ImageReference] = struct{}{}
+			seenSigs[sig.ImageReference] = struct{}{}
 			items = append(items, sig)
 		}
 	}
@@ -269,7 +272,9 @@ func dedupeExactDestinations(tasks []deleteTask) []deleteTask {
 // digest is not used: it describes where the image was mirrored from, not what the
 // destination tag points at now. A reference that already names a digest keeps that
 // digest, so two digests that share a tag are both deleted. A reference that cannot
-// be resolved is deleted as written, and the deletion reports the failure.
+// be resolved is deleted as written, and the deletion reports the failure. An
+// unresolved tag is not matched to a manifest that was resolved earlier, so it can
+// still be attempted after that manifest was removed.
 func (o DeleteImages) collapseSharedManifests(tasks []deleteTask) []deleteTask {
 	scheduled := make(map[string]string, len(tasks))
 	out := make([]deleteTask, 0, len(tasks))
@@ -298,12 +303,15 @@ func (o DeleteImages) manifestIdentity(task *deleteTask) string {
 	if spec.Digest == "" {
 		resolved, err := o.destinationManifestDigest(task.schema.Destination, task.cache)
 		if err != nil || resolved == "" {
-			o.Log.Debug("leaving %s unchanged, manifest digest is unavailable: %v", task.schema.Destination, err)
+			o.Log.Warn("could not read the manifest digest for %s (%v); deleting the original reference", task.schema.Destination, err)
 			return unresolvedIdentity(task)
 		}
 		dgst = resolved.String()
-		task.schema.Destination = spec.Transport + spec.Name + "@" + dgst
 	}
+	// The Docker transport rejects a reference that has both a tag and a digest.
+	// Schedule the digest alone so that form cannot fail and hide another deletion
+	// of the same manifest.
+	task.schema.Destination = spec.Transport + spec.Name + "@" + dgst
 	return taskLocation(task) + ":" + spec.Name + "@" + dgst
 }
 
@@ -334,7 +342,7 @@ func (o DeleteImages) destinationManifestDigest(ref string, cache bool) (digest.
 	if err != nil {
 		return "", fmt.Errorf("destination system context: %w", err)
 	}
-	if cache || (o.LocalStorageFQDN != "" && strings.Contains(ref, o.LocalStorageFQDN)) {
+	if o.skipTLSVerify(ref, cache) {
 		sysCtx.DockerInsecureSkipTLSVerify = types.OptionalBoolTrue
 	}
 	var dgst digest.Digest
@@ -344,9 +352,23 @@ func (o DeleteImages) destinationManifestDigest(ref string, cache bool) (digest.
 		return lookupErr
 	}, mirror.RetryOptionsFrom(&o.Opts))
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("resolve manifest %s: %w", ref, err)
 	}
 	return dgst, nil
+}
+
+// skipTLSVerify reports whether ref should be read without certificate checks.
+// Cache deletions always skip verification. A remote reference skips it only when
+// its registry host is the local cache, not when that host appears elsewhere in the reference.
+func (o DeleteImages) skipTLSVerify(ref string, cache bool) bool {
+	if cache {
+		return true
+	}
+	if o.LocalStorageFQDN == "" {
+		return false
+	}
+	spec, err := image.ParseRef(ref)
+	return err == nil && spec.Domain == o.LocalStorageFQDN
 }
 
 // lookupManifestDigest asks the named registry for ref's digest. It does not follow
