@@ -252,12 +252,17 @@ oc-mirror --v2 list operators --catalog=registry.redhat.io/redhat/redhat-operato
       --ignore-release-signature       Ignore release signature
       --image-timeout duration         Timeout for mirroring an image (default 10m0s)
       --max-nested-paths int           Number of nested paths, for destination registries that limit nested paths
+      --remove-referrers[="all"]        Allow attestation omission after a copy or archive-read failure (disabled by default)
       --remove-signatures              Do not copy image signatures
       --rootless-storage-path string   Override the default container rootless storage path
       --secure-policy                  Enable signature verification (secure policy for signature verification)
       --since string                   Include all new content since specified date (format yyyy-MM-dd)
       --strict-archive                 Generate archives strictly less than archiveSize (set in the ImageSetConfiguration)
 ```
+
+`--remove-referrers` is equivalent to `--remove-referrers=all` and permits omitting
+annotated attestation children only after a failure. For archives with omitted
+attestations, use the flag during both M2D and D2M and a sparse-capable destination.
 
 ### Delete subcommand flags
 

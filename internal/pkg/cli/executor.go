@@ -127,6 +127,8 @@ oc-mirror delete --delete-yaml-file /home/<user>/oc-mirror/delete1/working-dir/d
 // reference host cannot diverge through name resolution.
 const localStorageHost = "127.0.0.1"
 
+const removeAllReferrers = "all"
+
 var (
 	errWrongWorkingDirProtocol error = fmt.Errorf("when --workspace is used, it must have file:// prefix")
 	errConflictingCacheValues        = fmt.Errorf("either OC_MIRROR_CACHE or --cache-dir can be used but not both")
@@ -283,6 +285,8 @@ func NewMirrorCmd(log clog.PluggableLoggerInterface) *cobra.Command {
 	cmd.Flags().BoolVar(&opts.Global.StrictArchiving, "strict-archive", false, "If set, generates archives that are strictly less than archiveSize (set in the imageSetConfig). Mirroring will exit in error if a file being archived exceed archiveSize(GB)")
 	cmd.Flags().StringVar(&opts.RootlessStoragePath, "rootless-storage-path", "", "Override the default container rootless storage path (usually in etc/containers/storage.conf)")
 	cmd.Flags().BoolVar(&opts.RemoveSignatures, "remove-signatures", false, "Do not copy image signature")
+	cmd.Flags().StringVar(&opts.RemoveReferrers, "remove-referrers", "", "Allow retrying failed copies and skipping failed archive reads without referrers (currently only annotated attestation children); only 'all' is supported")
+	cmd.Flags().Lookup("remove-referrers").NoOptDefVal = removeAllReferrers
 	cmd.Flags().BoolVar(&opts.Global.IgnoreReleaseSignature, "ignore-release-signature", false, "Ignore release signature")
 	HideFlags(cmd)
 
@@ -371,6 +375,9 @@ func (o *ExecutorSchema) setupEnvironment() error {
 
 // Validate - cobra validation
 func (o *ExecutorSchema) Validate(dest []string) error { //nolint:cyclop // pre-existing complexity, unrelated to the pointer-receiver change; refactor out of scope for this PR
+	if o.Opts.RemoveReferrers != "" && o.Opts.RemoveReferrers != removeAllReferrers {
+		return fmt.Errorf("unsupported --remove-referrers value %q: only 'all' is supported", o.Opts.RemoveReferrers)
+	}
 	keyWords := []string{
 		"cluster-resources",
 		"dry-run",
