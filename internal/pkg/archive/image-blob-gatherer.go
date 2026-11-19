@@ -7,10 +7,12 @@ import (
 	"slices"
 
 	digest "github.com/opencontainers/go-digest"
+	specv1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"go.podman.io/image/v5/manifest"
 	"go.podman.io/image/v5/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 
+	"github.com/openshift/oc-mirror/v2/internal/pkg/artifactfilter"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	ocmirrormanifest "github.com/openshift/oc-mirror/v2/internal/pkg/manifest"
@@ -31,6 +33,7 @@ type internalImageBlobGatherer struct {
 	mimeType         string
 	digest           digest.Digest
 	copySignatures   bool
+	removeReferrers  bool
 	allowedPlatforms []string // non-empty = only these os/arch pairs were mirrored (sparse)
 }
 
@@ -62,7 +65,7 @@ func (o *ImageBlobGatherer) GatherBlobs(ctx context.Context, imgRef string, allo
 		return nil, fmt.Errorf("error to get the digest of the image manifest %w", err)
 	}
 
-	inImageBlogGather := internalImageBlobGatherer{imgRef: imgRef, sourceCtx: sourceCtx, manifestBytes: manifestBytes, mimeType: mime, digest: digest, copySignatures: !o.opts.RemoveSignatures, allowedPlatforms: allowedPlatforms}
+	inImageBlogGather := internalImageBlobGatherer{imgRef: imgRef, sourceCtx: sourceCtx, manifestBytes: manifestBytes, mimeType: mime, digest: digest, copySignatures: !o.opts.RemoveSignatures, removeReferrers: o.opts.RemoveReferrers != "", allowedPlatforms: allowedPlatforms}
 
 	if manifest.MIMETypeIsMultiImage(mime) {
 		return o.multiArchBlobs(ctx, inImageBlogGather)
@@ -77,7 +80,13 @@ func (o *ImageBlobGatherer) multiArchBlobs(ctx context.Context, in internalImage
 
 	blobs := sets.New(in.digest.String())
 
-	manifestList, err := manifest.ListFromBlob(in.manifestBytes, in.mimeType)
+	var manifestList manifest.List
+	var err error
+	if in.mimeType == specv1.MediaTypeImageIndex {
+		manifestList, err = manifest.OCI1IndexFromManifest(in.manifestBytes)
+	} else {
+		manifestList, err = manifest.ListFromBlob(in.manifestBytes, in.mimeType)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("error to get the manifest list %w", err)
 	}
@@ -94,6 +103,7 @@ func (o *ImageBlobGatherer) multiArchBlobs(ctx context.Context, in internalImage
 		}
 	}
 
+	skipper := artifactfilter.NewAttestationSkipper(manifestList, len(in.allowedPlatforms) > 0)
 	digests := manifestList.Instances()
 	for _, digest := range digests {
 		if platform := platformForDigest(manifestList, digest); len(in.allowedPlatforms) > 0 && platform != "" && !slices.Contains(in.allowedPlatforms, platform) {
@@ -106,6 +116,10 @@ func (o *ImageBlobGatherer) multiArchBlobs(ctx context.Context, in internalImage
 		singleIn := in
 		singleIn.manifestBytes, singleIn.mimeType, err = o.ocmirrormanifest.ImageManifest(ctx, in.sourceCtx, in.imgRef, &digest)
 		if err != nil {
+			if in.removeReferrers && skipper.CanSkip(ctx, digest, err) {
+				o.log.Warn("Skipping attestation manifest %s of %s after a failed read (--remove-referrers): %v", digest.String(), in.imgRef, err)
+				continue
+			}
 			return nil, err
 		}
 		// Only insert the platform digest after confirming the manifest is present.

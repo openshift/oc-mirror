@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	"github.com/distribution/reference"
-	"github.com/opencontainers/go-digest"
 	"go.podman.io/common/pkg/retry"
 	"go.podman.io/image/v5/copy"
 	"go.podman.io/image/v5/docker"
@@ -21,6 +20,7 @@ import (
 	"go.podman.io/image/v5/types"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/artifactfilter"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/registriesd"
 )
@@ -143,25 +143,6 @@ func (o *Mirror) copy(ctx context.Context, src, dest string, opts *CopyOptions) 
 		return err
 	}
 
-	// TODO: remove filterAttestationInstances when OCI1.1 is supported by containers-libs [OCPNODE-2018](https://redhat.atlassian.net/browse/OCPNODE-2018)
-	// OCPBUGS-62723: When copying all images from a manifest list, check for
-	// attestation entries that cannot be pulled from proxy registries. If found,
-	// switch to CopySpecificImages selecting only the real entries by digest so
-	// the copy skips unpullable attestation manifests.
-	var instanceDigests []digest.Digest
-	if imageListSelection == copy.CopyAllImages {
-		filter, attestationErr := filterAttestationInstances(ctx, srcRef, sourceCtx)
-		switch {
-		case attestationErr != nil:
-			// Best effort: a failed inspection must not break the copy. If the source
-			// is genuinely unreachable, copy.Image below reports it with better context.
-			clog.New(opts.Global.LogLevel).Debug("attestation check skipped for %s: %v", src, attestationErr)
-		case filter != nil && !filter.empty():
-			imageListSelection = copy.CopySpecificImages
-			instanceDigests = filter.digests
-		}
-	}
-
 	if len(opts.EncryptionKeys) > 0 && len(opts.DecryptionKeys) > 0 {
 		return fmt.Errorf("--encryption-key and --decryption-key cannot be specified together")
 	}
@@ -205,7 +186,6 @@ func (o *Mirror) copy(ctx context.Context, src, dest string, opts *CopyOptions) 
 		ForceManifestMIMEType:            manifestType,
 		ImageListSelection:               imageListSelection,
 		InstancePlatforms:                instancePlatforms,
-		Instances:                        instanceDigests,
 		PreserveDigests:                  opts.PreserveDigests,
 		MaxParallelDownloads:             opts.ParallelLayerImages,
 	}
@@ -214,23 +194,38 @@ func (o *Mirror) copy(ctx context.Context, src, dest string, opts *CopyOptions) 
 		co.ReportWriter = opts.Stdout
 	}
 
-	//nolint:wrapcheck // context will be added by the calling function
-	return retry.IfNecessary(ctx, func() error {
-		manifestBytes, err := o.mc.CopyImage(ctx, policyContext, destRef, srcRef, co)
-		if err != nil {
-			return err
-		}
-		if opts.DigestFile != "" {
-			manifestDigest, err := manifest.Digest(manifestBytes)
+	var manifestBytes []byte
+	copyImage := func(from types.ImageReference, options *copy.Options) error {
+		//nolint:wrapcheck // context will be added by the calling function
+		return retry.IfNecessary(ctx, func() error {
+			copied, err := o.mc.CopyImage(ctx, policyContext, destRef, from, options)
 			if err != nil {
 				return err
 			}
-			if err = os.WriteFile(opts.DigestFile, []byte(manifestDigest.String()), 0644); err != nil {
-				return fmt.Errorf("failed to write digest to file %q: %w", opts.DigestFile, err)
-			}
+			manifestBytes = copied
+			return nil
+		}, retryOptionsFrom(opts))
+	}
+
+	if copyErr := copyImage(srcRef, co); copyErr != nil {
+		if opts.RemoveReferrers == "" {
+			return copyErr
 		}
-		return nil
-	}, retryOptionsFrom(opts))
+		if err := artifactfilter.RetryCopyWithoutAttestations(ctx, clog.New(opts.Global.LogLevel), src, srcRef, co, copyErr, copyImage); err != nil {
+			return err
+		}
+	}
+	if opts.DigestFile != "" {
+		manifestDigest, err := manifest.Digest(manifestBytes)
+		if err != nil {
+			return fmt.Errorf("computing digest of the copied manifest: %w", err)
+		}
+		//nolint:gosec // the digest file keeps its established 0644 permissions
+		if err = os.WriteFile(opts.DigestFile, []byte(manifestDigest.String()), 0644); err != nil {
+			return fmt.Errorf("failed to write digest to file %q: %w", opts.DigestFile, err)
+		}
+	}
+	return nil
 }
 
 // retryOptionsFrom returns a copy of the caller's retry options with oc-mirror's

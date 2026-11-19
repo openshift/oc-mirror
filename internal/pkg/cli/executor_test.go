@@ -491,7 +491,27 @@ func TestExecutorVersionFlag(t *testing.T) {
 	}
 }
 
-// TestExecutorValidate
+func TestRemoveReferrersFlag(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		args []string
+		want string
+	}{
+		{name: "disabled by default", args: []string{"docker://localhost:6000"}},
+		{name: "bare flag before destination", args: []string{"--remove-referrers", "docker://localhost:6000"}, want: "all"},
+		{name: "explicit all", args: []string{"--remove-referrers=all", "docker://localhost:6000"}, want: "all"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			cmd := NewMirrorCmd(clog.New("error"))
+			require.NoError(t, cmd.ParseFlags(test.args))
+			value, err := cmd.Flags().GetString("remove-referrers")
+			require.NoError(t, err)
+			require.Equal(t, test.want, value)
+			require.Equal(t, []string{"docker://localhost:6000"}, cmd.Flags().Args(), "the bare string flag must not consume the destination")
+		})
+	}
+}
+
 func TestExecutorValidate(t *testing.T) {
 	t.Run("Testing Executor : ParallelLayerImages = 5, validate should pass", func(t *testing.T) {
 		log := new(LogMock)
