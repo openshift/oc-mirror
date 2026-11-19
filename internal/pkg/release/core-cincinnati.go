@@ -18,6 +18,12 @@ import (
 
 const ChannelInfo = "channel %q: %v"
 
+const (
+	reasonAPIRequestError = "APIRequestError"
+	reasonVersionNotFound = "VersionNotFound"
+	reasonFileWriteFailed = "FileWriteFailed"
+)
+
 // Error is returned when are unable to get updates.
 type Error struct {
 	// Reason is the reason suggested for the Cincinnati calculation error.
@@ -43,7 +49,7 @@ func GetUpdates(ctx context.Context, cs CincinnatiSchema, channel string, versio
 	graph, err := getGraphData(ctx, cs, channel, version.String())
 	if err != nil {
 		return cincinnati.Update{}, cincinnati.Update{}, nil, &Error{
-			Reason:  "APIRequestError",
+			Reason:  reasonAPIRequestError,
 			Message: fmt.Sprintf("version %s in channel %s: %v", version.String(), channel, err),
 			cause:   err,
 		}
@@ -56,7 +62,7 @@ func GetUpdates(ctx context.Context, cs CincinnatiSchema, channel string, versio
 	current, currentIdx, err := graph.GetNodeByVersion(version)
 	if errors.Is(err, cincinnati.ErrVersionNotFound) {
 		return current, requested, nil, &Error{
-			Reason:  "VersionNotFound",
+			Reason:  reasonVersionNotFound,
 			Message: fmt.Sprintf("current version %s not found in the %q channel", version, channel),
 		}
 	}
@@ -64,77 +70,20 @@ func GetUpdates(ctx context.Context, cs CincinnatiSchema, channel string, versio
 	requested, destinationIdx, err := graph.GetNodeByVersion(reqVer)
 	if errors.Is(err, cincinnati.ErrVersionNotFound) {
 		return current, requested, nil, &Error{
-			Reason:  "VersionNotFound",
+			Reason:  reasonVersionNotFound,
 			Message: fmt.Sprintf("requested version %s not found in the %q channel", reqVer, channel),
 		}
 	}
 
-	edgesByOrigin := make(map[int][]int, len(graph.Nodes))
-	for _, edge := range graph.Edges {
-		edgesByOrigin[edge[0]] = append(edgesByOrigin[edge[0]], edge[1])
-	}
-
-	// Sort destination by semver to ensure deterministic result
-	for origin, destinations := range edgesByOrigin {
-		sort.Slice(destinations, func(i, j int) bool {
-			return graph.Nodes[destinations[i]].Version.GT(graph.Nodes[destinations[j]].Version)
-		})
-		edgesByOrigin[origin] = destinations
-	}
-
-	shortestPath := func(g map[int][]int, start, end int) []int {
-		prev := map[int]int{}
-		visited := map[int]struct{}{}
-		queue := []int{start}
-		visited[start] = struct{}{}
-		prev[start] = -1
-
-		for len(queue) > 0 {
-			node := queue[0]
-			queue = queue[1:]
-			if node == end {
-				break
-			}
-
-			for _, neighbor := range g[node] {
-				if _, ok := visited[neighbor]; !ok {
-					prev[neighbor] = node
-					queue = append(queue, neighbor)
-					visited[neighbor] = struct{}{}
-				}
-			}
-		}
-
-		// No path to end
-		if _, ok := visited[end]; !ok {
-			return []int{}
-		}
-
-		path := []int{end}
-		for next := prev[end]; next != -1; next = prev[next] {
-			path = append(path, next)
-		}
-
-		// Reverse path.
-		for i, j := 0, len(path)-1; i < j; i, j = i+1, j-1 {
-			path[i], path[j] = path[j], path[i]
-		}
-
-		return path
-	}
+	edgesByOrigin := upgradeEdges(graph, false)
 
 	nextIdxs := shortestPath(edgesByOrigin, currentIdx, destinationIdx)
-
-	var updates []cincinnati.Update
-	for _, i := range nextIdxs {
-		updates = append(updates, cincinnati.Update(graph.Nodes[i]))
-	}
-
-	return current, requested, updates, nil
+	return current, requested, graphUpdates(graph, nextIdxs), nil
 }
 
 // CalculateUpgrades fetches and calculates all the update payloads from the specified
-// upstream Cincinnati stack given the current and target version and channel.
+// upstream Cincinnati stack given the current and target version and channel. When the target
+// graph has no path to a later major version, the search also checks the source graph.
 func CalculateUpgrades(ctx context.Context, cs CincinnatiSchema, sourceChannel, targetChannel string, startVer, reqVer semver.Version) (cincinnati.Update, cincinnati.Update, []cincinnati.Update, error) { //nolint:cyclop // FIXME: needs further refactoring.
 	if sourceChannel == targetChannel {
 		return GetUpdates(ctx, cs, targetChannel, startVer, reqVer)
@@ -159,6 +108,14 @@ func CalculateUpgrades(ctx context.Context, cs CincinnatiSchema, sourceChannel, 
 			return GetUpdates(ctx, cs, targetChannel, reqVer, reqVer)
 		}
 		return GetUpdates(ctx, cs, targetChannel, startVer, reqVer)
+	}
+
+	// The usual search only increments the minor version, so it would
+	// look for 4.23 after 4.22 even when the target is 5.0.
+	// For a later major version, use calculateCrossMajor to find where
+	// the channel graphs actually allow the jump.
+	if source.Major < target.Major {
+		return calculateCrossMajor(ctx, cs, sourceChannel, targetChannel, startVer, reqVer)
 	}
 
 	// Perform initial calculation for the source channel and
@@ -250,6 +207,169 @@ func calculate(ctx context.Context, cs CincinnatiSchema, sourceChannel, targetCh
 	return requested, upgrades, nil
 }
 
+// calculateCrossMajor looks for a path in the target graph, then in both graphs together.
+func calculateCrossMajor(ctx context.Context, cs CincinnatiSchema, sourceChannel, targetChannel string, startVer, reqVer semver.Version) (cincinnati.Update, cincinnati.Update, []cincinnati.Update, error) {
+	// Try the target first: it may already have the whole path.
+	targetGraph, err := loadGraph(ctx, cs, targetChannel, startVer)
+	if err != nil {
+		return cincinnati.Update{}, cincinnati.Update{}, nil, err
+	}
+	if _, _, err := targetGraph.GetNodeByVersion(reqVer); err != nil {
+		return cincinnati.Update{}, cincinnati.Update{}, nil, &Error{
+			Reason:  reasonVersionNotFound,
+			Message: fmt.Sprintf("requested version %s not found in the %q channel", reqVer, targetChannel),
+		}
+	}
+
+	// Don't route between two final releases through a prerelease.
+	gaOnly := len(startVer.Pre) == 0 && len(reqVer.Pre) == 0
+	current, requested, updates, _ := upgradePath(targetGraph, startVer, reqVer, gaOnly)
+	if len(updates) > 0 {
+		return current, requested, updates, nil
+	}
+
+	// The source may have missing links. Merge target first to keep its image references.
+	sourceGraph, err := loadGraph(ctx, cs, sourceChannel, startVer)
+	if err != nil {
+		return cincinnati.Update{}, cincinnati.Update{}, nil, err
+	}
+	combined := cincinnati.MergeGraphs(targetGraph, sourceGraph)
+	current, requested, updates, startFound := upgradePath(combined, startVer, reqVer, gaOnly)
+	if len(updates) > 0 {
+		return current, requested, updates, nil
+	}
+
+	// Keep the known releases without claiming the cluster can upgrade.
+	reason := "the two graphs publish no unconditional update path"
+	if !startFound {
+		reason = fmt.Sprintf("start version %s is not in either graph", startVer)
+	} else if gaOnly {
+		reason += " through generally available releases"
+	}
+	cs.Log.Warn("NoUpgradePath: no qualifying unconditional upgrade path from version %s in channel %q to version %s in channel %q for the %s architecture "+
+		"(conditional update edges are not followed): %s; only the known start and target releases are mirrored for this upgrade",
+		startVer, sourceChannel, reqVer, targetChannel, cs.CincinnatiParams.Arch, reason)
+	return current, requested, nil, nil
+}
+
+// loadGraph names the channel in errors and distinguishes failed saves from failed reads.
+func loadGraph(ctx context.Context, cs CincinnatiSchema, channel string, startVer semver.Version) (cincinnati.Graph, error) {
+	graph, err := getGraphData(ctx, cs, channel, startVer.String())
+	if err == nil {
+		return graph, nil
+	}
+	var storeErr *Error
+	if errors.As(err, &storeErr) && storeErr.Reason == reasonFileWriteFailed {
+		return graph, &Error{Reason: reasonFileWriteFailed, Message: fmt.Sprintf(ChannelInfo, channel, storeErr.Message), cause: err}
+	}
+	return graph, &Error{Reason: reasonAPIRequestError, Message: fmt.Sprintf(ChannelInfo, channel, err), cause: err}
+}
+
+// upgradePath searches a graph already known to contain the target release.
+func upgradePath(graph cincinnati.Graph, startVer, reqVer semver.Version, gaOnly bool) (cincinnati.Update, cincinnati.Update, []cincinnati.Update, bool) {
+	requested, reqIdx, _ := graph.GetNodeByVersion(reqVer)
+	current, startIdx, err := graph.GetNodeByVersion(startVer)
+	if err != nil {
+		return current, requested, nil, false
+	}
+	updates := graphUpdates(graph, shortestPath(upgradeEdges(graph, gaOnly), startIdx, reqIdx))
+	return current, requested, updates, true
+}
+
+// channelPrefix returns the prefix of the channel name, before its version.
+func channelPrefix(channel string) string {
+	return channel[:max(strings.LastIndex(channel, "-"), 0)]
+}
+
+// channelVersion returns the major and minor version of the channel name.
+func channelVersion(channel string) (semver.Version, error) {
+	idx := strings.LastIndex(channel, "-")
+	if idx == -1 {
+		return semver.Version{}, fmt.Errorf("invalid channel name %s", channel)
+	}
+	version, err := semver.Parse(channel[idx+1:] + ".0")
+	if err != nil {
+		return version, fmt.Errorf("invalid channel name %s: %w", channel, err)
+	}
+	return version, nil
+}
+
+// graphUpdates returns the updates of the graph nodes on the path.
+func graphUpdates(graph cincinnati.Graph, path []int) []cincinnati.Update {
+	if len(path) == 0 {
+		return nil
+	}
+	updates := make([]cincinnati.Update, 0, len(path))
+	for _, idx := range path {
+		updates = append(updates, cincinnati.Update(graph.Nodes[idx]))
+	}
+	return updates
+}
+
+// upgradeEdges groups edges by their starting node and sorts destinations newest first.
+// When gaOnly is true, it skips edges to or from prereleases.
+func upgradeEdges(graph cincinnati.Graph, gaOnly bool) map[int][]int {
+	edgesByOrigin := make(map[int][]int, len(graph.Nodes))
+	for _, edge := range graph.Edges {
+		if gaOnly && (len(graph.Nodes[edge[0]].Version.Pre) > 0 || len(graph.Nodes[edge[1]].Version.Pre) > 0) {
+			continue
+		}
+		edgesByOrigin[edge[0]] = append(edgesByOrigin[edge[0]], edge[1])
+	}
+
+	// Sort destination by semver to ensure deterministic result
+	for origin, destinations := range edgesByOrigin {
+		sort.Slice(destinations, func(i, j int) bool {
+			return graph.Nodes[destinations[i]].Version.GT(graph.Nodes[destinations[j]].Version)
+		})
+		edgesByOrigin[origin] = destinations
+	}
+	return edgesByOrigin
+}
+
+// shortestPath returns the node indexes of the shortest path from start to end through the
+// edges, or an empty slice when end cannot be reached from start.
+func shortestPath(g map[int][]int, start, end int) []int {
+	prev := map[int]int{}
+	visited := map[int]struct{}{}
+	queue := []int{start}
+	visited[start] = struct{}{}
+	prev[start] = -1
+
+	for len(queue) > 0 {
+		node := queue[0]
+		queue = queue[1:]
+		if node == end {
+			break
+		}
+
+		for _, neighbor := range g[node] {
+			if _, ok := visited[neighbor]; !ok {
+				prev[neighbor] = node
+				queue = append(queue, neighbor)
+				visited[neighbor] = struct{}{}
+			}
+		}
+	}
+
+	// No path to end
+	if _, ok := visited[end]; !ok {
+		return []int{}
+	}
+
+	path := []int{end}
+	for next := prev[end]; next != -1; next = prev[next] {
+		path = append(path, next)
+	}
+
+	// Reverse path.
+	for i, j := 0, len(path)-1; i < j; i, j = i+1, j-1 {
+		path[i], path[j] = path[j], path[i]
+	}
+
+	return path
+}
+
 // handleBlockedEdges will check for the starting version in the current channel
 // if it does not exist the version is blocked.
 func handleBlockedEdges(ctx context.Context, cs CincinnatiSchema, targetChannel string, startVer semver.Version) (bool, error) {
@@ -268,25 +388,13 @@ func handleBlockedEdges(ctx context.Context, cs CincinnatiSchema, targetChannel 
 // getSemverFromChannel will return the major and minor version from the source and target channels. The prefix returned is
 // for the source channels for cross channel calculations.
 func getSemverFromChannels(sourceChannel, targetChannel string) (source, target semver.Version, prefix string, err error) {
-	// Get semver representation of source and target channel versions
-	sourceIdx := strings.LastIndex(sourceChannel, "-")
-	if sourceIdx == -1 {
-		return source, target, prefix, fmt.Errorf("invalid channel name %s", sourceChannel)
-	}
-	targetIdx := strings.LastIndex(targetChannel, "-")
-	if targetIdx == -1 {
-		return source, target, prefix, fmt.Errorf("invalid channel name %s", targetChannel)
-	}
-	source, err = semver.Parse(fmt.Sprintf("%s.0", sourceChannel[sourceIdx+1:]))
-	if err != nil {
+	if source, err = channelVersion(sourceChannel); err != nil {
 		return source, target, prefix, err
 	}
-	target, err = semver.Parse(fmt.Sprintf("%s.0", targetChannel[targetIdx+1:]))
-	if err != nil {
+	if target, err = channelVersion(targetChannel); err != nil {
 		return source, target, prefix, err
 	}
-	prefix = sourceChannel[:sourceIdx]
-	return source, target, prefix, nil
+	return source, target, channelPrefix(sourceChannel), nil
 }
 
 // GetChannelMinOrMax fetches the minimum or maximum version from the specified
@@ -295,7 +403,7 @@ func GetChannelMinOrMax(ctx context.Context, cs CincinnatiSchema, channel string
 	graph, err := getGraphData(ctx, cs, channel, "")
 	if err != nil {
 		return semver.Version{}, &Error{
-			Reason:  "APIRequestError",
+			Reason:  reasonAPIRequestError,
 			Message: fmt.Sprintf(ChannelInfo, channel, err),
 			cause:   err,
 		}
@@ -336,7 +444,7 @@ func GetVersions(ctx context.Context, cs CincinnatiSchema, channel string) ([]se
 	graph, err := getGraphData(ctx, cs, channel, "")
 	if err != nil {
 		return nil, &Error{
-			Reason:  "APIRequestError",
+			Reason:  reasonAPIRequestError,
 			Message: fmt.Sprintf(ChannelInfo, channel, err),
 			cause:   err,
 		}
@@ -358,7 +466,7 @@ func GetUpdatesInRange(ctx context.Context, cs CincinnatiSchema, channel string,
 	graph, err := getGraphData(ctx, cs, channel, "")
 	if err != nil {
 		return nil, &Error{
-			Reason:  "APIRequestError",
+			Reason:  reasonAPIRequestError,
 			Message: fmt.Sprintf(ChannelInfo, channel, err),
 			cause:   err,
 		}
@@ -435,7 +543,7 @@ func loadGraphDataFromDisk(graphDataDir, arch, channel string) (cincinnati.Graph
 func writeGraphDataToFile(body []byte, arch, channel, graphDataDir string) error {
 	filename := fmt.Sprintf("%s-%s.json", arch, channel)
 	if err := os.WriteFile(path.Join(graphDataDir, filename), body, 0o644); err != nil { //nolint:gosec // no sensitive info
-		return &Error{Reason: "FileWriteFailed", Message: err.Error(), cause: err}
+		return &Error{Reason: reasonFileWriteFailed, Message: err.Error(), cause: err}
 	}
 
 	return nil
