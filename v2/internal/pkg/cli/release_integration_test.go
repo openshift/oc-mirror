@@ -27,6 +27,7 @@ type TestEnvironmentRelease struct {
 	cincinnatiServer          *httptest.Server
 	cincinnatiEndpoint        string
 	releaseImageRefs          []string
+	signatureFixture          *testutils.ReleaseSignatureFixture
 }
 
 // before all the tests
@@ -59,6 +60,12 @@ func (suite *TestEnvironmentRelease) tearDown() {
 	os.RemoveAll(suite.tempFolder)
 	suite.sourceServer.Close()
 	suite.destinationServer.Close()
+	if suite.cincinnatiServer != nil {
+		suite.cincinnatiServer.Close()
+	}
+	if suite.signatureFixture != nil && suite.signatureFixture.Server != nil {
+		suite.signatureFixture.Server.Close()
+	}
 }
 
 func (suite *TestEnvironmentRelease) copyArchiveForD2M(t *testing.T) {
@@ -117,6 +124,24 @@ func (suite *TestEnvironmentRelease) setupTestData(t *testing.T) {
 	assert.NoError(t, err, "should not fail to generate and push release to source registry")
 	suite.releaseImageRefs = releaseImageRefs
 
+	// Build a PGP signature whose embedded digest matches the runtime-computed
+	// fake release digest. A checked-in fixture drifts whenever GenerateFakeRelease's
+	// OCI digest changes; --ignore-release-signature is intentionally scoped to
+	// platform.release (not channels) so it cannot bypass this path.
+	// Seed the working-dir signature cache (this branch does not honor
+	// OCP_SIGNATURE_URL in production code).
+	dockerRef := "quay.io/openshift-release-dev/ocp-release:4.15.0-x86_64"
+	sigFixture, err := testutils.SetupReleaseSignatureFixture(suite.tempFolder, releaseDigest, dockerRef)
+	assert.NoError(t, err, "should not fail to set up release signature fixture")
+	suite.signatureFixture = sigFixture
+	t.Setenv("OCP_SIGNATURE_VERIFICATION_PK", sigFixture.PublicKeyPath)
+
+	sigDir := suite.tempFolder + "/release/m2d/working-dir/signatures/"
+	err = os.MkdirAll(sigDir, 0755)
+	assert.NoError(t, err, "should not fail to create signatures cache dir")
+	err = os.WriteFile(sigDir+strings.TrimPrefix(releaseDigest, "sha256:"), sigFixture.Signature, 0600)
+	assert.NoError(t, err, "should not fail to seed release signature cache")
+
 	cm := testutils.CincinnatiMock{
 		Templates: map[string]string{"stable-4.15": "../../e2e/templates/release_templates/cincinnati_stable-4.15.json"},
 		Tokens:    []string{suite.sourceRegistryDomain + "/openshift-release-dev/ocp-release@" + releaseDigest},
@@ -128,21 +153,6 @@ func (suite *TestEnvironmentRelease) setupTestData(t *testing.T) {
 	endpoint, err := url.Parse(ts.URL)
 	assert.NoError(t, err)
 	suite.cincinnatiEndpoint = endpoint.Host
-
-	// set up a signature in the working-dir (cached signature)
-	signatureFile, err := os.Open("../../e2e/signatures/signature-1")
-	assert.NoError(t, err)
-	defer signatureFile.Close()
-
-	err = os.MkdirAll(suite.tempFolder+"/release/m2d/working-dir/signatures/", 0755)
-	assert.NoError(t, err)
-	workingDirLocation, err := os.Create(suite.tempFolder + "/release/m2d/working-dir/signatures/" + strings.TrimPrefix(releaseDigest, "sha256:"))
-	assert.NoError(t, err)
-
-	defer workingDirLocation.Close()
-
-	_, err = io.Copy(workingDirLocation, signatureFile)
-	assert.NoError(t, err)
 
 	graphPrepDir := suite.tempFolder + "/release/m2d/working-dir/graph-preparation"
 
