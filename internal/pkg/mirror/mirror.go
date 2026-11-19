@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	"github.com/distribution/reference"
-	"github.com/opencontainers/go-digest"
 	"go.podman.io/common/pkg/retry"
 	"go.podman.io/image/v5/copy"
 	"go.podman.io/image/v5/docker"
@@ -21,7 +20,7 @@ import (
 	"go.podman.io/image/v5/types"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
-	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
+	"github.com/openshift/oc-mirror/v2/internal/pkg/artifactfilter"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/registriesd"
 )
 
@@ -143,25 +142,6 @@ func (o *Mirror) copy(ctx context.Context, src, dest string, opts *CopyOptions) 
 		return err
 	}
 
-	// TODO: remove filterAttestationInstances when OCI1.1 is supported by containers-libs [OCPNODE-2018](https://redhat.atlassian.net/browse/OCPNODE-2018)
-	// OCPBUGS-62723: When copying all images from a manifest list, check for
-	// attestation entries that cannot be pulled from proxy registries. If found,
-	// switch to CopySpecificImages selecting only the real entries by digest so
-	// the copy skips unpullable attestation manifests.
-	var instanceDigests []digest.Digest
-	if imageListSelection == copy.CopyAllImages {
-		filter, attestationErr := filterAttestationInstances(ctx, srcRef, sourceCtx)
-		switch {
-		case attestationErr != nil:
-			// Best effort: a failed inspection must not break the copy. If the source
-			// is genuinely unreachable, copy.Image below reports it with better context.
-			clog.New(opts.Global.LogLevel).Debug("attestation check skipped for %s: %v", src, attestationErr)
-		case filter != nil && !filter.empty():
-			imageListSelection = copy.CopySpecificImages
-			instanceDigests = filter.digests
-		}
-	}
-
 	if len(opts.EncryptionKeys) > 0 && len(opts.DecryptionKeys) > 0 {
 		return fmt.Errorf("--encryption-key and --decryption-key cannot be specified together")
 	}
@@ -205,13 +185,19 @@ func (o *Mirror) copy(ctx context.Context, src, dest string, opts *CopyOptions) 
 		ForceManifestMIMEType:            manifestType,
 		ImageListSelection:               imageListSelection,
 		InstancePlatforms:                instancePlatforms,
-		Instances:                        instanceDigests,
 		PreserveDigests:                  opts.PreserveDigests,
 		MaxParallelDownloads:             opts.ParallelLayerImages,
 	}
 
 	if opts.Global.LogLevel == "debug" {
 		co.ReportWriter = opts.Stdout
+	}
+
+	if opts.RemoveOciArtifacts != "" {
+		srcRef, err = artifactfilter.PrepareCopy(ctx, srcRef, co)
+		if err != nil {
+			return err
+		}
 	}
 
 	//nolint:wrapcheck // context will be added by the calling function

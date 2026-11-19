@@ -71,6 +71,7 @@ type CopyOptions struct {
 	RetryOpts                *retry.Options
 	AdditionalTags           []string  // For docker-archive: destinations, in addition to the name:tag specified as destination, also add these
 	RemoveSignatures         bool      // Do not copy signatures from the source image
+	RemoveOciArtifacts       string    // Empty disables removal; "all" excludes supported artifact children before copying
 	SignByFingerprint        string    // Sign the image using a GPG key with the specified fingerprint
 	SignBySigstorePrivateKey string    // Sign the image using a sigstore private key
 	SignPassphraseFile       string    // Path pointing to a passphrase file when signing (for either signature format, but only one of them)

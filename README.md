@@ -252,12 +252,23 @@ oc-mirror --v2 list operators --catalog=registry.redhat.io/redhat/redhat-operato
       --ignore-release-signature       Ignore release signature
       --image-timeout duration         Timeout for mirroring an image (default 10m0s)
       --max-nested-paths int           Number of nested paths, for destination registries that limit nested paths
+      --remove-oci-artifacts[="all"]    Do not copy OCI artifacts attached to images (e.g. attestations, etc...) (copy all OCI artifacts by default)
       --remove-signatures              Do not copy image signatures
       --rootless-storage-path string   Override the default container rootless storage path
       --secure-policy                  Enable signature verification (secure policy for signature verification)
       --since string                   Include all new content since specified date (format yyyy-MM-dd)
       --strict-archive                 Generate archives strictly less than archiveSize (set in the ImageSetConfiguration)
 ```
+
+`--remove-oci-artifacts` is equivalent to `--remove-oci-artifacts=all`. When enabled,
+supported artifact children are excluded before copying and archive gathering,
+even when available. Without the flag, copying follows the existing platform
+selection without additional artifact inspection.
+The original index bytes and digest are preserved, so use a sparse-capable
+destination and pass the flag during both M2D and D2M for archives with omitted artifacts.
+Currently, only index children annotated as `attestation-manifest` are excluded;
+OCI referrer discovery and arbitrary OCI artifacts are not supported. Omitted
+attestations may contain provenance or SBOM data required by verification policies.
 
 ### Delete subcommand flags
 

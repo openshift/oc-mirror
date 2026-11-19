@@ -7,10 +7,12 @@ import (
 	"slices"
 
 	digest "github.com/opencontainers/go-digest"
+	specv1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"go.podman.io/image/v5/manifest"
 	"go.podman.io/image/v5/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 
+	"github.com/openshift/oc-mirror/v2/internal/pkg/artifactfilter"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/image"
 	clog "github.com/openshift/oc-mirror/v2/internal/pkg/log"
 	ocmirrormanifest "github.com/openshift/oc-mirror/v2/internal/pkg/manifest"
@@ -25,13 +27,14 @@ type ImageBlobGatherer struct {
 }
 
 type internalImageBlobGatherer struct {
-	imgRef           string
-	sourceCtx        *types.SystemContext
-	manifestBytes    []byte
-	mimeType         string
-	digest           digest.Digest
-	copySignatures   bool
-	allowedPlatforms []string // non-empty = only these os/arch pairs were mirrored (sparse)
+	imgRef             string
+	sourceCtx          *types.SystemContext
+	manifestBytes      []byte
+	mimeType           string
+	digest             digest.Digest
+	copySignatures     bool
+	removeOciArtifacts bool
+	allowedPlatforms   []string // non-empty = only these os/arch pairs were mirrored (sparse)
 }
 
 func NewImageBlobGatherer(opts *mirror.CopyOptions, log clog.PluggableLoggerInterface) *ImageBlobGatherer {
@@ -62,7 +65,7 @@ func (o *ImageBlobGatherer) GatherBlobs(ctx context.Context, imgRef string, allo
 		return nil, fmt.Errorf("error to get the digest of the image manifest %w", err)
 	}
 
-	inImageBlogGather := internalImageBlobGatherer{imgRef: imgRef, sourceCtx: sourceCtx, manifestBytes: manifestBytes, mimeType: mime, digest: digest, copySignatures: !o.opts.RemoveSignatures, allowedPlatforms: allowedPlatforms}
+	inImageBlogGather := internalImageBlobGatherer{imgRef: imgRef, sourceCtx: sourceCtx, manifestBytes: manifestBytes, mimeType: mime, digest: digest, copySignatures: !o.opts.RemoveSignatures, removeOciArtifacts: o.opts.RemoveOciArtifacts != "", allowedPlatforms: allowedPlatforms}
 
 	if manifest.MIMETypeIsMultiImage(mime) {
 		return o.multiArchBlobs(ctx, inImageBlogGather)
@@ -77,7 +80,13 @@ func (o *ImageBlobGatherer) multiArchBlobs(ctx context.Context, in internalImage
 
 	blobs := sets.New(in.digest.String())
 
-	manifestList, err := manifest.ListFromBlob(in.manifestBytes, in.mimeType)
+	var manifestList manifest.List
+	var err error
+	if in.mimeType == specv1.MediaTypeImageIndex {
+		manifestList, err = manifest.OCI1IndexFromManifest(in.manifestBytes)
+	} else {
+		manifestList, err = manifest.ListFromBlob(in.manifestBytes, in.mimeType)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("error to get the manifest list %w", err)
 	}
@@ -94,8 +103,19 @@ func (o *ImageBlobGatherer) multiArchBlobs(ctx context.Context, in internalImage
 		}
 	}
 
+	var artifactsToSkip map[digest.Digest]bool
+	if in.removeOciArtifacts {
+		artifactsToSkip, err = artifactfilter.ArtifactsToSkip(manifestList)
+		if err != nil {
+			return nil, err
+		}
+	}
 	digests := manifestList.Instances()
 	for _, digest := range digests {
+		if artifactsToSkip[digest] {
+			o.log.Info("Skipping artifact manifest %s of %s (--remove-oci-artifacts)", digest.String(), in.imgRef)
+			continue
+		}
 		if platform := platformForDigest(manifestList, digest); len(in.allowedPlatforms) > 0 && platform != "" && !slices.Contains(in.allowedPlatforms, platform) {
 			// Platform was intentionally not mirrored (sparse manifest filtering).
 			// Do not add its digest to blobs — the blob file does not exist locally.
