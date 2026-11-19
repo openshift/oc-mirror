@@ -30,7 +30,7 @@ require (
 	github.com/spf13/cobra v1.8.0
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.10.0
-	golang.org/x/crypto v0.31.0 // indirect
+	golang.org/x/crypto v0.33.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0
 	helm.sh/helm/v3 v3.13.3
 	k8s.io/apimachinery v0.30.2
@@ -43,7 +43,7 @@ require (
 	sigs.k8s.io/yaml v1.4.0
 )
 
-require golang.org/x/sys v0.28.0 // indirect
+require golang.org/x/sys v0.30.0 // indirect
 
 require (
 	github.com/distribution/distribution/v3 v3.0.0-beta.1
@@ -51,7 +51,7 @@ require (
 	github.com/openshift/oc-mirror/v2 v2.0.0-20230802085830-e81c913cc044
 	github.com/otiai10/copy v1.14.0
 	golang.org/x/exp v0.0.0-20240719175910-8a7402abbf56
-	golang.org/x/sync v0.10.0
+	golang.org/x/sync v0.11.0
 	k8s.io/api v0.30.2
 )
 
@@ -251,8 +251,8 @@ require (
 	golang.org/x/mod v0.19.0 // indirect
 	golang.org/x/net v0.33.0 // indirect
 	golang.org/x/oauth2 v0.18.0 // indirect
-	golang.org/x/term v0.27.0 // indirect
-	golang.org/x/text v0.21.0 // indirect
+	golang.org/x/term v0.29.0 // indirect
+	golang.org/x/text v0.22.0 // indirect
 	golang.org/x/time v0.3.0 // indirect
 	golang.org/x/tools v0.23.0 // indirect
 	google.golang.org/appengine v1.6.8 // indirect
@@ -289,3 +289,5 @@ replace github.com/openshift/oc => github.com/aguidirh/oc v0.0.0-20240911114505-
 replace github.com/openshift/library-go => github.com/aguidirh/library-go v0.0.0-20240911111857-f8fdb642dea5
 
 replace github.com/distribution/distribution/v3 => github.com/aguidirh/distribution/v3 v3.0.0-beta.1.ocmirror1
+
+replace golang.org/x/net => github.com/openshift-sustaining/net v0.35.0-sec.4
