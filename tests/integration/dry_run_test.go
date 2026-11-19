@@ -3,10 +3,14 @@ package integration_test
 import (
 	"os"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+
+	"github.com/openshift/oc-mirror/tests/integration/pkg/ocmirror"
 )
 
 // dockerTransportPrefix is the "docker://" transport prefix used in mapping.txt entries.
@@ -37,6 +41,12 @@ var _ = Describe("dry-run", func() {
 			By("verifying mapping.txt contains valid mappings for all expected repositories")
 			expectValidMappingFile(workDir, filepath.Join(iscDir, iscHappyPath))
 
+			By("verifying dry-run size estimate is present and non-zero")
+			m2mSize := expectDryRunMetricBytes(result, "Total Download Size")
+			Expect(m2mSize).To(BeNumerically(">", 0), "m2m dry-run size should be > 0, got %d", m2mSize)
+			Expect(expectDryRunMetricBytes(result, "Local Storage Size")).To(BeNumerically(">", 0))
+			Expect(expectDryRunMetricBytes(result, "Tarball Size")).To(BeZero())
+
 			By("verifying no images were mirrored to the registry")
 			expectNoRepositoriesInRegistry(*testRegistry)
 		})
@@ -56,6 +66,8 @@ var _ = Describe("dry-run", func() {
 
 			By("verifying no tar archive was created")
 			expectNoTarArchive(workDir)
+			Expect(expectDryRunMetricBytes(result, "Local Storage Size")).To(BeNumerically(">", 0))
+			Expect(expectDryRunMetricBytes(result, "Tarball Size")).To(BeNumerically(">", 0))
 
 			By("running mirrorToDisk without --dry-run to prepare the archive")
 			result, err = runner.MirrorToDisk(ctx, filepath.Join(iscDir, iscHappyPath), workDir,
@@ -70,6 +82,9 @@ var _ = Describe("dry-run", func() {
 			By("verifying mapping.txt contains valid mappings for all expected repositories")
 			expectValidMappingFile(workDir, filepath.Join(iscDir, iscHappyPath))
 
+			By("verifying d2m size reporting is deferred")
+			Expect(result.Stdout + result.Stderr).NotTo(ContainSubstring("Dry-run size estimate"))
+
 			By("verifying no images were mirrored to the registry")
 			expectNoRepositoriesInRegistry(*testRegistry)
 		})
@@ -79,38 +94,104 @@ var _ = Describe("dry-run", func() {
 		initialImage := "docker://quay.io/oc-mirror/oc-mirror-dev:foo-bundle-v0.1.0=docker://" + localCacheHost + "/oc-mirror/oc-mirror-dev:foo-bundle-v0.1.0"
 		addedImage := "docker://quay.io/oc-mirror/oc-mirror-dev:foo-bundle-v0.2.0=docker://" + localCacheHost + "/oc-mirror/oc-mirror-dev:foo-bundle-v0.2.0"
 
-		It("should list in missing.txt only the images that are not in the local cache", func() {
+		It("should report missing images and incremental sizes as the cache fills", func() {
 			iscInitial := filepath.Join(iscDir, "dry_run", "isc-missing-images-initial.yaml")
 			iscFull := filepath.Join(iscDir, "dry_run", "isc-missing-images-full.yaml")
 
 			By("running a dry-run with an empty cache")
-			result, err := runner.MirrorToDisk(ctx, iscFull, workDir, "--dry-run")
+			result, err := runner.MirrorToDisk(ctx, iscFull, workDir, "--remove-signatures=true", "--dry-run")
 			expectOcMirrorCommandSuccess(result, err)
 			expectDryRunFile(workDir, mappingFileName, []string{initialImage, addedImage})
 			expectDryRunFile(workDir, missingFileName, []string{initialImage, addedImage})
+			coldDownload := expectDryRunMetricBytes(result, "Total Download Size")
+			coldStorage := expectDryRunMetricBytes(result, "Local Storage Size")
+			Expect(coldDownload).To(BeNumerically(">", 0))
+			Expect(coldStorage).To(BeNumerically(">=", coldDownload))
+			Expect(expectDryRunMetricBytes(result, "Tarball Size")).To(BeNumerically(">", coldDownload))
+			expectNoTarArchive(workDir)
 
 			By("mirroring only the first image to the cache")
-			result, err = runner.MirrorToDisk(ctx, iscInitial, workDir)
+			result, err = runner.MirrorToDisk(ctx, iscInitial, workDir, "--remove-signatures=true")
 			expectOcMirrorCommandSuccess(result, err)
 
 			By("running a dry-run with a partially populated cache")
-			result, err = runner.MirrorToDisk(ctx, iscFull, workDir, "--dry-run")
+			result, err = runner.MirrorToDisk(ctx, iscFull, workDir, "--remove-signatures=true", "--dry-run")
 			expectOcMirrorCommandSuccess(result, err)
 			expectDryRunFile(workDir, mappingFileName, []string{initialImage, addedImage})
 			expectDryRunFile(workDir, missingFileName, []string{addedImage})
+			Expect(result.Stdout + result.Stderr).NotTo(ContainSubstring("You may proceed"))
+			Expect(expectDryRunMetricBytes(result, "Total Download Size")).To(And(BeNumerically(">", 0), BeNumerically("<", coldDownload)))
+			Expect(expectDryRunMetricBytes(result, "Local Storage Size")).To(And(BeNumerically(">", 0), BeNumerically("<", coldStorage)))
 
 			By("mirroring all images to the cache")
-			result, err = runner.MirrorToDisk(ctx, iscFull, workDir)
+			result, err = runner.MirrorToDisk(ctx, iscFull, workDir, "--remove-signatures=true")
 			expectOcMirrorCommandSuccess(result, err)
 
 			By("running a dry-run with a fully populated cache")
-			result, err = runner.MirrorToDisk(ctx, iscFull, workDir, "--dry-run")
+			result, err = runner.MirrorToDisk(ctx, iscFull, workDir, "--remove-signatures=true", "--dry-run")
 			expectOcMirrorCommandSuccess(result, err)
 			expectDryRunFile(workDir, mappingFileName, []string{initialImage, addedImage})
 			_, err = os.Stat(filepath.Join(workDir, dirWorkingDir, "dry-run", missingFileName))
 			Expect(os.IsNotExist(err)).To(BeTrue(), "missing.txt should not exist when every image is in the cache")
 			Expect(result.Stdout + result.Stderr).To(ContainSubstring("all 2 images required for mirroring are available in local cache"))
+			Expect(expectDryRunMetricBytes(result, "Total Download Size")).To(BeZero())
+			Expect(expectDryRunMetricBytes(result, "Local Storage Size")).To(BeZero())
+			warmTar := expectDryRunMetricBytes(result, "Tarball Size")
+			Expect(warmTar).To(BeNumerically(">", 0))
+
+			By("selecting an archive baseline before any history while reusing the full cache")
+			result, err = runner.MirrorToDisk(ctx, iscFull, workDir, "--remove-signatures=true", "--dry-run", "--since=2000-01-01")
+			expectOcMirrorCommandSuccess(result, err)
+			Expect(expectDryRunMetricBytes(result, "Total Download Size")).To(BeZero())
+			Expect(expectDryRunMetricBytes(result, "Local Storage Size")).To(BeZero())
+			fullTar := expectDryRunMetricBytes(result, "Tarball Size")
+			Expect(fullTar).To(BeNumerically(">=", warmTar+coldDownload), "cached blobs absent from history must still be archived")
+
+			By("including operator-catalog files only in the tarball estimate")
+			catalogDir := filepath.Join(workDir, dirWorkingDir, "operator-catalogs")
+			Expect(os.MkdirAll(catalogDir, 0o755)).To(Succeed())
+			catalog := make([]byte, 1024*1024)
+			Expect(os.WriteFile(filepath.Join(catalogDir, "catalog.json"), catalog, 0o600)).To(Succeed())
+			result, err = runner.MirrorToDisk(ctx, iscFull, workDir, "--remove-signatures=true", "--dry-run", "--since=2000-01-01")
+			expectOcMirrorCommandSuccess(result, err)
+			Expect(expectDryRunMetricBytes(result, "Total Download Size")).To(BeZero())
+			Expect(expectDryRunMetricBytes(result, "Local Storage Size")).To(BeZero())
+			Expect(expectDryRunMetricBytes(result, "Tarball Size")).To(BeNumerically(">=", fullTar+int64(len(catalog))))
 		})
+	})
+
+	It("should reduce m2m downloads as the destination fills, with zero cache and tarball sizes", func() {
+		iscInitial := filepath.Join(iscDir, "dry_run", "isc-missing-images-initial.yaml")
+		iscFull := filepath.Join(iscDir, "dry_run", "isc-missing-images-full.yaml")
+		var previousDownload int64
+		for step, config := range []string{"", iscInitial, iscFull} {
+			if config != "" {
+				By("mirroring " + config + " to populate the destination")
+				result, err := runner.MirrorToMirror(ctx, config, workDir, testRegistry.Endpoint(),
+					"--remove-signatures=true", "--dest-tls-verify=false")
+				expectOcMirrorCommandSuccess(result, err)
+			}
+
+			By("estimating only the remaining destination content")
+			result, err := runner.MirrorToMirror(ctx, iscFull, workDir, testRegistry.Endpoint(),
+				"--remove-signatures=true", "--dest-tls-verify=false", "--dry-run")
+			expectOcMirrorCommandSuccess(result, err)
+			download := expectDryRunMetricBytes(result, "Total Download Size")
+			if step > 0 {
+				Expect(download).To(BeNumerically("<", previousDownload))
+			} else {
+				expectNoRepositoriesInRegistry(*testRegistry)
+			}
+			if step == 2 {
+				Expect(download).To(BeZero())
+			} else {
+				Expect(download).To(BeNumerically(">", 0))
+			}
+			Expect(expectDryRunMetricBytes(result, "Local Storage Size")).To(BeZero())
+			Expect(expectDryRunMetricBytes(result, "Tarball Size")).To(BeZero())
+			expectNoTarArchive(workDir)
+			previousDownload = download
+		}
 	})
 
 	Describe("dry-run with a manifest list image", func() {
@@ -146,6 +227,33 @@ var _ = Describe("dry-run", func() {
 		})
 	})
 })
+
+// stripLoggerPrefix returns the log message after microlib's " : " separator
+// (timestamp / level / ANSI codes), or the trimmed line if no separator is present.
+func stripLoggerPrefix(line string) string {
+	const sep = " : "
+	if i := strings.Index(line, sep); i >= 0 {
+		return line[i+len(sep):]
+	}
+	return strings.TrimSpace(line)
+}
+
+// expectDryRunMetricBytes requires a complete, independently labeled estimate.
+func expectDryRunMetricBytes(result *ocmirror.Result, label string) int64 {
+	GinkgoHelper()
+	pattern := regexp.MustCompile(`^` + regexp.QuoteMeta(label) + `: .+ \((\d+) bytes\)$`)
+	out := result.Stdout + result.Stderr
+	Expect(out).To(ContainSubstring("Dry-run size estimate:"))
+	for _, line := range strings.Split(out, "\n") {
+		if match := pattern.FindStringSubmatch(stripLoggerPrefix(strings.TrimRight(line, "\r"))); match != nil {
+			n, err := strconv.ParseInt(match[1], 10, 64)
+			Expect(err).NotTo(HaveOccurred())
+			return n
+		}
+	}
+	Fail("missing complete " + label + " in output:\n" + out)
+	return 0
+}
 
 // expectMappingContainsManifestListSubDigests verifies that mapping.txt contains one extra
 // line per manifest list sub-digest, each re-pinned to the top-level destination's repository.

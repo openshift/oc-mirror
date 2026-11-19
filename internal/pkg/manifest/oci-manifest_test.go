@@ -1,8 +1,14 @@
 package manifest
 
 import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/google/go-containerregistry/pkg/crane"
@@ -12,6 +18,9 @@ import (
 	"github.com/opencontainers/image-spec/specs-go"
 	specv1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"go.podman.io/image/v5/manifest"
+	"go.podman.io/image/v5/types"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
@@ -207,4 +216,109 @@ func TestExtractOCILayers(t *testing.T) {
 			assert.Regexp(t, "extract directory: .*", err)
 		})
 	})
+}
+
+func TestManifestInstanceExclusions(t *testing.T) {
+	attestation := manifest.ListUpdate{}
+	attestation.ReadOnly.Annotations = map[string]string{"vnd.docker.reference.type": "attestation-manifest"}
+	assert.False(t, shouldSizeManifestInstance(attestation, nil, nil))
+	assert.False(t, shouldSizeManifestInstance(manifest.ListUpdate{}, nil, map[string]bool{"linux/amd64": true}))
+}
+
+func TestParseBlobSizes(t *testing.T) {
+	fixture := filepath.Join(consts.TestFolder, "image-manifest.json")
+
+	_, _, err := parseBlobSizes([]byte("not json"), specv1.MediaTypeImageManifest)
+	assert.Error(t, err)
+
+	m, err := (&Manifest{}).GetOCIImageManifest(fixture)
+	require.NoError(t, err)
+	require.GreaterOrEqual(t, len(m.Layers), 3)
+	m.Config.Size = 0
+	m.Layers = m.Layers[:3]
+	m.Layers[0].Size, m.Layers[1].Size, m.Layers[2].Size = 10000, -1, 0
+	manifestBytes, err := json.Marshal(m)
+	require.NoError(t, err)
+	blobs, unknown, err := parseBlobSizes(manifestBytes, specv1.MediaTypeImageManifest)
+	require.NoError(t, err)
+	assert.Equal(t, 3, unknown)
+	assert.Equal(t, []types.BlobInfo{manifest.BlobInfoFromOCI1Descriptor(m.Layers[0])}, blobs)
+	_, err = (&Manifest{}).singleManifestBlobSizes(manifestBytes, specv1.MediaTypeImageManifest)
+	assert.ErrorContains(t, err, "3 blobs have unknown sizes")
+}
+
+// TestInspectImage verifies a single top-level fetch supplies both results,
+// even when a selected sub-manifest is unavailable.
+func TestInspectImage(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join(consts.TestFolder, "image-manifest.json"))
+	require.NoError(t, err)
+	d := digest.FromBytes(data)
+	missing := digest.FromString("missing sub-manifest")
+	index := specv1.Index{Versioned: specs.Versioned{SchemaVersion: 2}, MediaType: specv1.MediaTypeImageIndex,
+		Manifests: []specv1.Descriptor{
+			{MediaType: specv1.MediaTypeImageManifest, Digest: d, Size: int64(len(data)), Platform: &specv1.Platform{OS: "linux", Architecture: "amd64"}},
+			{MediaType: specv1.MediaTypeImageManifest, Digest: missing, Size: 1, Platform: &specv1.Platform{OS: "linux", Architecture: "arm64"}},
+		}}
+	indexData, err := json.Marshal(index)
+	require.NoError(t, err)
+	amd64 := []v2alpha1.InstancePlatformFilter{{OS: "linux", Architecture: "amd64"}}
+	manifestSize := int64(len(indexData))
+	completeSize := int64(144979560+len(data)) + manifestSize
+	for _, tc := range []struct {
+		name        string
+		size, fail  bool
+		wantBlobs   int
+		wantError   bool
+		wantSubGets int32
+		platforms   []v2alpha1.InstancePlatformFilter
+		wantBytes   int64
+	}{
+		{"digests only", false, true, 0, false, 0, amd64, 0},
+		{"digests and sizes", true, false, 9, false, 1, amd64, completeSize},
+		{"sizing failure", true, true, 1, true, 1, amd64, manifestSize},
+		{"partial sizing", true, false, 9, true, 2, nil, completeSize},
+		{"no platform match", true, false, 1, true, 0, []v2alpha1.InstancePlatformFilter{{OS: "linux", Architecture: "s390x"}}, manifestSize},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var topGets, subGets atomic.Int32
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+				switch req.URL.Path {
+				case "/v2/":
+					w.WriteHeader(http.StatusOK)
+				case "/v2/test/manifests/latest":
+					topGets.Add(1)
+					w.Header().Set("Content-Type", specv1.MediaTypeImageIndex)
+					_, _ = w.Write(indexData)
+				case "/v2/test/manifests/" + d.String(), "/v2/test/manifests/" + missing.String():
+					subGets.Add(1)
+					if tc.fail || req.URL.Path == "/v2/test/manifests/"+missing.String() {
+						w.WriteHeader(http.StatusNotFound)
+						return
+					}
+					w.Header().Set("Content-Type", specv1.MediaTypeImageManifest)
+					_, _ = w.Write(data)
+				default:
+					w.WriteHeader(http.StatusNotFound)
+				}
+			}))
+			defer server.Close()
+			ref := "docker://" + strings.TrimPrefix(server.URL, "http://") + "/test:latest"
+			digests, blobs, err := (&Manifest{}).InspectImage(context.Background(), &types.SystemContext{DockerInsecureSkipTLSVerify: types.OptionalBoolTrue}, ref,
+				tc.platforms, tc.size)
+			assert.Equal(t, []string{d.String(), missing.String()}, digests)
+			assert.Equal(t, int32(1), topGets.Load())
+			assert.Equal(t, tc.wantError, err != nil, "unexpected inspection error: %v", err)
+			assert.Len(t, blobs, tc.wantBlobs)
+			var total int64
+			for _, blob := range blobs {
+				total += blob.Size
+			}
+			assert.Equal(t, tc.wantBytes, total, "include layers, config, and manifests")
+			if tc.size {
+				require.NotEmpty(t, blobs)
+				assert.Equal(t, digest.FromBytes(indexData), blobs[len(blobs)-1].Digest, "top-level manifest must remain last")
+			}
+			assert.Equal(t, tc.wantSubGets, subGets.Load(), "inspection-only must not fetch sub-manifests")
+		})
+	}
 }

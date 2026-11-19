@@ -9,4 +9,6 @@ const (
 	OciProtocolTrimmed string = "oci:"
 
 	TestFolder string = "../../../tests/unit/testdata/"
+	// SignatureFor identifies the signed manifest in a dry-run blob inventory.
+	SignatureFor = "io.openshift.oc-mirror.signature-for"
 )
