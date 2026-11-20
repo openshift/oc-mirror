@@ -1,0 +1,9 @@
+kind: ImageSetConfiguration
+apiVersion: mirror.openshift.io/v2alpha1
+mirror:
+  helm:
+    local:
+      - name: required-values-chart
+        path: __CHART_PATH__
+        valuesFiles:
+          - __VALUES_FILE__
