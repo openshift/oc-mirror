@@ -94,7 +94,8 @@ func TestUnArchiver_WorkingDirError(t *testing.T) {
 		t.Fatal(err)
 	}
 	err = o.Unarchive()
-	assert.Equal(t, "unable to create working dir \"/dst\": mkdir /dst: permission denied", err.Error())
+	// macOS root volume is read-only, so the errno differs from Linux
+	assert.Regexp(t, `^unable to create working dir "/dst": mkdir /dst: (permission denied|read-only file system)$`, err.Error())
 }
 
 func TestUnArchiver_CacheDirError(t *testing.T) {
@@ -114,7 +115,8 @@ func TestUnArchiver_CacheDirError(t *testing.T) {
 		t.Fatal(err)
 	}
 	err = o.Unarchive()
-	assert.Equal(t, "unable to create cache dir \"/dst\": mkdir /dst: permission denied", err.Error())
+	// macOS root volume is read-only, so the errno differs from Linux
+	assert.Regexp(t, `^unable to create cache dir "/dst": mkdir /dst: (permission denied|read-only file system)$`, err.Error())
 }
 
 func prepareFakeTarWorkingDir(tarFile *os.File) error {
