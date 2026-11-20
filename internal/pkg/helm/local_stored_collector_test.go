@@ -1452,8 +1452,8 @@ func TestPrepareChartValuesFiles(t *testing.T) {
 func TestHelmReleaseOptionsDoNotRewriteImages(t *testing.T) {
 	dir := t.TempDir()
 	assert.NoError(t, os.Mkdir(filepath.Join(dir, "templates"), 0o755))
-	assert.NoError(t, os.WriteFile(filepath.Join(dir, "Chart.yaml"), []byte("apiVersion: v2\nname: release-name-chart\nversion: 0.1.0\n"), 0o644))
-	assert.NoError(t, os.WriteFile(filepath.Join(dir, "values.yaml"), []byte("{}\n"), 0o644))
+	assert.NoError(t, os.WriteFile(filepath.Join(dir, "Chart.yaml"), []byte("apiVersion: v2\nname: release-name-chart\nversion: 0.1.0\n"), 0o600))
+	assert.NoError(t, os.WriteFile(filepath.Join(dir, "values.yaml"), []byte("{}\n"), 0o600))
 	assert.NoError(t, os.WriteFile(filepath.Join(dir, "templates", "deploy.yaml"), []byte(""+
 		"apiVersion: v1\n"+
 		"kind: Pod\n"+
@@ -1462,7 +1462,7 @@ func TestHelmReleaseOptionsDoNotRewriteImages(t *testing.T) {
 		"spec:\n"+
 		"  containers:\n"+
 		"    - name: app\n"+
-		"      image: \"quay.io/example/app:{{ .Release.Name }}\"\n"), 0o644))
+		"      image: \"quay.io/example/app:{{ .Release.Name }}\"\n"), 0o600))
 
 	ch, err := loader.Load(dir)
 	assert.NoError(t, err)
