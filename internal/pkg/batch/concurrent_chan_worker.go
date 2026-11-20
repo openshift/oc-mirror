@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -243,6 +244,8 @@ collect:
 
 	p.Wait()
 
+	sortByInputOrder(copiedImages.AllImages, collectorSchema.AllImages)
+
 	logResults(o.Log, opts.Function, &copiedImages, &collectorSchema, skippedCount)
 
 	if len(errArray) > 0 {
@@ -453,4 +456,20 @@ func shouldSkipImage(img v2alpha1.CopyImageSchema, opts mirror.CopyOptions, errA
 	}
 
 	return false, nil
+}
+
+// sortByInputOrder restores the order of the input images: copies complete in
+// goroutine scheduling order, which would otherwise leak into the generated resources.
+func sortByInputOrder(copied, input []v2alpha1.CopyImageSchema) {
+	type key struct{ source, destination, origin string }
+	position := make(map[key]int, len(input))
+	for i, img := range input {
+		k := key{img.Source, img.Destination, img.Origin}
+		if _, found := position[k]; !found {
+			position[k] = i
+		}
+	}
+	slices.SortStableFunc(copied, func(a, b v2alpha1.CopyImageSchema) int {
+		return position[key{a.Source, a.Destination, a.Origin}] - position[key{b.Source, b.Destination, b.Origin}]
+	})
 }
