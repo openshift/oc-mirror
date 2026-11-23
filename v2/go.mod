@@ -159,6 +159,7 @@ require (
 	github.com/oklog/ulid v1.3.1 // indirect
 	github.com/opencontainers/runtime-spec v1.2.1 // indirect
 	github.com/opencontainers/selinux v1.12.0 // indirect
+	github.com/openshift/build-machinery-go v0.0.0-20250414185254-3ce8e800ceda // indirect
 	github.com/operator-framework/api v0.27.0 // indirect
 	github.com/ostreedev/ostree-go v0.0.0-20210805093236-719684c64e4f // indirect
 	github.com/peterbourgon/diskv v2.0.1+incompatible // indirect
