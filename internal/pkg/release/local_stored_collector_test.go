@@ -3,6 +3,7 @@ package release
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -1180,4 +1181,74 @@ func TestBuildReleasePlatformFilters(t *testing.T) {
 	// Graph images must always be excluded — they are not platform-filtered.
 	_, graphPresent := filters["docker://registry/graph:latest"]
 	assert.False(t, graphPresent, "TypeCincinnatiGraph images must not appear in platform filters")
+}
+
+// OCPBUGS-77670: an interrupted run leaves release-images/<release>/ with blobs
+// and no index.json. The next run must copy the release again, not reuse the dir.
+func TestEnsureReleaseInOCIFormat(t *testing.T) {
+	release := v2alpha1.CopyImageSchema{Source: "quay.io/openshift-release-dev/ocp-release:4.20.13-x86_64"}
+	collector := func(failCopy bool) *LocalStorageCollector {
+		return &LocalStorageCollector{Log: clog.New("trace"), Mirror: &MockMirror{Fail: failCopy}}
+	}
+
+	t.Run("absent directory is copied", func(t *testing.T) {
+		dir := filepath.Join(t.TempDir(), "4.20.13-x86_64")
+		err := collector(true).ensureReleaseInOCIFormat(context.Background(), release, dir)
+		assert.ErrorContains(t, err, "forced mirror run fail")
+		assert.DirExists(t, dir)
+	})
+
+	t.Run("directory with blobs and no index.json is copied again", func(t *testing.T) {
+		dir := filepath.Join(t.TempDir(), "4.20.13-x86_64")
+		stale := filepath.Join(dir, "blobs", "sha256", "stale")
+		assert.NoError(t, os.MkdirAll(filepath.Dir(stale), 0o755))
+		assert.NoError(t, os.WriteFile(stale, []byte("x"), 0o600))
+		// the forced copy failure proves that the copy was attempted
+		err := collector(true).ensureReleaseInOCIFormat(context.Background(), release, dir)
+		assert.ErrorContains(t, err, "forced mirror run fail")
+		assert.NoFileExists(t, stale)
+	})
+
+	t.Run("directory with a truncated index.json is copied again", func(t *testing.T) {
+		dir := t.TempDir()
+		assert.NoError(t, os.WriteFile(filepath.Join(dir, "index.json"), []byte(`{"schemaVersion":2,"manifests":[`), 0o600))
+		err := collector(true).ensureReleaseInOCIFormat(context.Background(), release, dir)
+		assert.ErrorContains(t, err, "forced mirror run fail")
+	})
+
+	t.Run("directory with an index.json without manifests is copied again", func(t *testing.T) {
+		dir := t.TempDir()
+		assert.NoError(t, os.WriteFile(filepath.Join(dir, "index.json"), []byte(`{"schemaVersion":2,"manifests":[]}`), 0o600))
+		err := collector(true).ensureReleaseInOCIFormat(context.Background(), release, dir)
+		assert.ErrorContains(t, err, "forced mirror run fail")
+	})
+
+	t.Run("directory with an index.json whose manifest is not a descriptor is copied again", func(t *testing.T) {
+		dir := t.TempDir()
+		assert.NoError(t, os.WriteFile(filepath.Join(dir, "index.json"), []byte(`{"schemaVersion":2,"manifests":[1]}`), 0o600))
+		err := collector(true).ensureReleaseInOCIFormat(context.Background(), release, dir)
+		assert.ErrorContains(t, err, "forced mirror run fail")
+	})
+
+	t.Run("directory with an index.json whose descriptor has no image media type is copied again", func(t *testing.T) {
+		dir := t.TempDir()
+		assert.NoError(t, os.WriteFile(filepath.Join(dir, "index.json"), []byte(`{"schemaVersion":2,"manifests":[{}]}`), 0o600))
+		err := collector(true).ensureReleaseInOCIFormat(context.Background(), release, dir)
+		assert.ErrorContains(t, err, "forced mirror run fail")
+	})
+
+	t.Run("directory with a complete index.json is kept", func(t *testing.T) {
+		dir := t.TempDir()
+		index := `{"schemaVersion":2,"manifests":[{"mediaType":"application/vnd.oci.image.manifest.v1+json","digest":"sha256:0000000000000000000000000000000000000000000000000000000000000000","size":1}]}`
+		assert.NoError(t, os.WriteFile(filepath.Join(dir, "index.json"), []byte(index), 0o600))
+		assert.NoError(t, collector(true).ensureReleaseInOCIFormat(context.Background(), release, dir))
+	})
+
+	t.Run("directory whose index.json cannot be read is an error, not a copy", func(t *testing.T) {
+		// a regular file as parent makes the read fail with ENOTDIR, for every user
+		parent := filepath.Join(t.TempDir(), "release-images")
+		assert.NoError(t, os.WriteFile(parent, []byte("x"), 0o600))
+		err := collector(true).ensureReleaseInOCIFormat(context.Background(), release, filepath.Join(parent, "4.20.13-x86_64"))
+		assert.ErrorContains(t, err, "read oci index")
+	})
 }
