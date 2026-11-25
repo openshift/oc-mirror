@@ -79,6 +79,12 @@ func (o *strictAdder) addFile(pathToFile string, pathInTar string) error {
 		return err
 	}
 
+	return o.addFileInfo(fi, pathToFile, pathInTar)
+}
+
+func (o *strictAdder) addFileInfo(fi os.FileInfo, pathToFile, pathInTar string) error {
+	var err error
+
 	// when a file is already bigger than the maxArchiveSize, it will not fit any chunk
 	// therefore we should stop
 	if fi.Size() > o.maxArchiveSize {
@@ -107,42 +113,7 @@ func (o *strictAdder) addFile(pathToFile string, pathInTar string) error {
 // addAllFolder stops the archiving and returns an error if the size of any file within the folder is
 // greater than maxArchiveSize.
 func (o *strictAdder) addAllFolder(folderToAdd string, relativeTo string) error {
-	return filepath.Walk(folderToAdd, func(path string, info os.FileInfo, incomingError error) error {
-		if incomingError != nil {
-			return incomingError
-		}
-		if info.IsDir() { // skip directories
-			return nil
-		}
-		// when a file is already bigger than the maxArchiveSize, it will not fit any chunk
-		// therefore we should stop
-		if info.Size() > o.maxArchiveSize {
-			return fmt.Errorf("maxArchiveSize %dG is too small compared to sizes of files that need to be included in the archive.\n%s: %dG\n Aborting archive generation", o.maxArchiveSize/segMultiplier, info.Name(), info.Size()/segMultiplier)
-		}
-		// check if we should add this file to the archive without exceeding the maxArchiveSize
-		if info.Size()+o.sizeOfCurrentChunk > o.maxArchiveSize {
-			err := o.nextChunk()
-			if err != nil {
-				return err
-			}
-		}
-		// Use full path as name (FileInfoHeader only takes the basename)
-		// If we don't do this the directory strucuture would
-		// not be preserved
-		// https://golang.org/src/archive/tar/common.go?#L626
-		pathInTar, err := filepath.Rel(relativeTo, path)
-		if err != nil {
-			return err
-		}
-
-		err = addFileToWriter(info, path, pathInTar, o.tarWriter)
-		if err != nil {
-			return err
-		}
-
-		o.sizeOfCurrentChunk += info.Size()
-		return nil
-	})
+	return walkArchiveFiles(folderToAdd, relativeTo, o.addFileInfo)
 }
 
 // nextChunk is called in order to close the current chunk archive

@@ -98,6 +98,12 @@ func (o *permissiveAdder) addFile(pathToFile string, pathInTar string) error {
 		return err
 	}
 
+	return o.addFileInfo(fi, pathToFile, pathInTar)
+}
+
+func (o *permissiveAdder) addFileInfo(fi os.FileInfo, pathToFile, pathInTar string) error {
+	var err error
+
 	// when a file is already bigger than the maxArchiveSize, it will not fit any chunk.
 	// It is put on its own in an exceptionChunk and flagged as oversized. The method returns.
 	if fi.Size() > o.maxArchiveSize {
@@ -129,50 +135,7 @@ func (o *permissiveAdder) addFile(pathToFile string, pathInTar string) error {
 // When encountering a file whose size is greater than maxArchiveSize,
 // this file will be placed in an exceptionChunk and marked oversized.
 func (o *permissiveAdder) addAllFolder(folderToAdd string, relativeTo string) error {
-	return filepath.Walk(folderToAdd, func(path string, info os.FileInfo, incomingError error) error {
-		if incomingError != nil {
-			return incomingError
-		}
-		if info.IsDir() { // skip directories
-			return nil
-		}
-		// when a file is already bigger than the maxArchiveSize, it will not fit any chunk.
-		// It is put on its own in an exceptionChunk and flagged as oversized. The method returns.
-		if info.Size() > o.maxArchiveSize {
-			o.logger.Warn("maxArchiveSize %dG is too small compared to sizes of files that need to be included in the archive.\n%s: %dG", o.maxArchiveSize/segMultiplier, info.Name(), info.Size()/segMultiplier)
-			o.oversizedFiles[path] = info.Size()
-			fileNameInArchive, err := filepath.Rel(relativeTo, path)
-			if err != nil {
-				return err
-			}
-			return o.exceptionChunk(info, path, fileNameInArchive)
-
-		}
-		// check if we should add this file to the archive without exceeding the maxArchiveSize
-		if info.Size()+o.sizeOfCurrentChunk > o.maxArchiveSize {
-			err := o.nextChunk()
-			if err != nil {
-				return err
-			}
-		}
-
-		// Use full path as name (FileInfoHeader only takes the basename)
-		// If we don't do this the directory strucuture would
-		// not be preserved
-		// https://golang.org/src/archive/tar/common.go?#L626
-		pathInTar, err := filepath.Rel(relativeTo, path)
-		if err != nil {
-			return err
-		}
-
-		err = addFileToWriter(info, path, pathInTar, o.tarWriter)
-		if err != nil {
-			return err
-		}
-
-		o.sizeOfCurrentChunk += info.Size()
-		return nil
-	})
+	return walkArchiveFiles(folderToAdd, relativeTo, o.addFileInfo)
 }
 
 // nextChunk is called in order to close the current chunk archive
@@ -231,12 +194,10 @@ func (o *permissiveAdder) exceptionChunk(oversizedFileInfo fs.FileInfo, oversize
 	}()
 
 	// create the header for the file
-	header, err := tar.FileInfoHeader(oversizedFileInfo, oversizedFileInfo.Name())
+	header, err := archiveFileHeader(oversizedFileInfo, pathInTar)
 	if err != nil {
 		return err
 	}
-	header.Name = pathInTar
-
 	if err := exceptionTarWriter.WriteHeader(header); err != nil {
 		return err
 	}

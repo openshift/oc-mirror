@@ -1058,8 +1058,8 @@ func (o MockManifest) ImageManifest(ctx context.Context, srcCtx *types.SystemCon
 	return nil, "", errors.New("not implemented")
 }
 
-func (o MockManifest) GetManifestListDigests(ctx context.Context, sourceCtx *types.SystemContext, source string) ([]string, error) {
-	return nil, nil
+func (o MockManifest) InspectImage(ctx context.Context, sourceCtx *types.SystemContext, imgRef string, platformFilters []v2alpha1.InstancePlatformFilter, includeSizes bool) ([]string, []types.BlobInfo, error) {
+	return nil, nil, nil
 }
 
 func (o MockHandler) getRelatedImagesFromCatalog(dc *declcfg.DeclarativeConfig, copyImageSchemaMap *v2alpha1.CopyImageSchemaMap) (map[string][]v2alpha1.RelatedImage, error) {

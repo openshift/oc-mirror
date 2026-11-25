@@ -45,6 +45,7 @@ type ImageBuilder struct {
 	SrcTlsVerify  bool
 	DestTlsVerify bool
 	Mode          string
+	skipPush      bool
 }
 
 // ErrInvalidReference is returned the target reference is a digest.
@@ -268,7 +269,10 @@ func (b *ImageBuilder) BuildAndPush(ctx context.Context, targetRef string, layou
 	}
 
 	// push to the remote
-	pushErr := remote.WriteIndex(tag, imageIndexToPush, b.RemoteOpts...)
+	var pushErr error
+	if !b.skipPush {
+		pushErr = remote.WriteIndex(tag, imageIndexToPush, b.RemoteOpts...)
+	}
 	d, err := imageIndexToPush.Digest()
 	if err != nil {
 		return "", err

@@ -10,11 +10,15 @@ import (
 	"strings"
 
 	"github.com/distribution/reference"
+	"github.com/docker/distribution/registry/api/errcode"
+	v2 "github.com/docker/distribution/registry/api/v2"
+	gcrtypes "github.com/google/go-containerregistry/pkg/v1/types"
 	"github.com/opencontainers/go-digest"
 	"go.podman.io/common/pkg/retry"
 	"go.podman.io/image/v5/copy"
 	"go.podman.io/image/v5/docker"
 	"go.podman.io/image/v5/manifest"
+	"go.podman.io/image/v5/pkg/blobinfocache/none"
 	"go.podman.io/image/v5/pkg/cli"
 	"go.podman.io/image/v5/signature"
 	"go.podman.io/image/v5/transports/alltransports"
@@ -412,4 +416,77 @@ func parseMultiArch(multiArch string) (copy.ImageListSelection, []copy.InstanceP
 	default:
 		return copy.CopySystemImage, nil, fmt.Errorf("unknown multi-arch option %q. Choose one of the supported options: 'system', 'all', 'index-only', or a comma-separated platform list like 'linux/amd64,linux/arm64'", multiArch)
 	}
+}
+
+// NewBlobChecker reuses the normal copy transport, including its auth and TLS
+// settings. NoCache supplies no cross-repository candidates, preventing mounts.
+// The returned cleanup closes the destinations opened during estimation.
+func NewBlobChecker(opts *CopyOptions) (func(context.Context, string, types.BlobInfo) (bool, error), func()) {
+	destinations := make(map[string]types.ImageDestination)
+	check := func(ctx context.Context, destination string, blob types.BlobInfo) (bool, error) {
+		sys, err := opts.DestImage.NewSystemContext()
+		if err != nil {
+			return false, err
+		}
+		ref, err := alltransports.ParseImageName(destination)
+		if err != nil {
+			return false, fmt.Errorf("parse destination: %w", err)
+		}
+		if ref.Transport().Name() != "docker" {
+			return false, fmt.Errorf("destination is not a registry: %s", destination)
+		}
+		repository := ref.DockerReference().Name()
+		if IsManifest(blob.MediaType) {
+			return manifestExists(ctx, sys, repository, blob.Digest)
+		}
+		target := destinations[repository]
+		if target == nil {
+			target, err = ref.NewImageDestination(ctx, sys)
+			if err != nil {
+				return false, fmt.Errorf("open destination: %w", err)
+			}
+			destinations[repository] = target
+		}
+		present, _, err := target.TryReusingBlob(ctx, blob, none.NoCache, false)
+		if err != nil {
+			return false, fmt.Errorf("check destination blob: %w", err)
+		}
+		return present, nil
+	}
+	return check, func() {
+		for _, destination := range destinations {
+			_ = destination.Close()
+		}
+	}
+}
+
+// IsManifest classifies descriptors using the existing media type helpers.
+func IsManifest(mediaType string) bool {
+	media := gcrtypes.MediaType(mediaType)
+	return media.IsImage() || media.IsIndex() || media.IsSchema1()
+}
+
+func manifestExists(ctx context.Context, sys *types.SystemContext, repository string, d digest.Digest) (bool, error) {
+	ref, err := docker.ParseReference("//" + repository + "@" + d.String())
+	if err != nil {
+		return false, fmt.Errorf("parse manifest digest: %w", err)
+	}
+	_, err = docker.GetDigest(ctx, sys, ref)
+	if IsManifestUnknown(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("check destination manifest: %w", err)
+	}
+	return true, nil
+}
+
+// IsManifestUnknown also recognizes HEAD responses without a distribution body.
+func IsManifestUnknown(err error) bool {
+	if err == nil {
+		return false
+	}
+	var code errcode.ErrorCoder
+	return errors.As(err, &code) && (code.ErrorCode() == v2.ErrorCodeManifestUnknown || code.ErrorCode() == v2.ErrorCodeNameUnknown) ||
+		strings.Contains(err.Error(), "HTTP 404") || strings.Contains(err.Error(), "StatusCode: 404,")
 }
