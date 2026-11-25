@@ -15,7 +15,7 @@ import (
 )
 
 // releaseVersion is shared by all version output until release versioning is redesigned.
-const releaseVersion = "v2.0.1"
+const releaseVersion = "v2.1.0"
 
 var (
 	// commitFromGit is a constant representing the source version that

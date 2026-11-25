@@ -18,7 +18,7 @@ func TestNewVersionCommand(t *testing.T) {
 }
 
 func TestReleaseVersion(t *testing.T) {
-	require.Equal(t, "v2.0.1", Get().GitVersion)
+	require.Equal(t, "v2.1.0", Get().GitVersion)
 }
 
 func TestVersionValidate(t *testing.T) {
