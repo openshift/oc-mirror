@@ -33,9 +33,7 @@ import (
 )
 
 const (
-	// releasePublicKeyFile is the GPG public key filename in the keys directory.
-	releasePublicKeyFile = "release-pk.asc"
-	platformReleaseRepo  = "openshift/release"
+	platformReleaseRepo = "openshift/release"
 
 	dirWorkingDir = "working-dir"
 
@@ -429,7 +427,7 @@ func collectExpectedRepos(cfg ImageSetConfiguration) []string {
 // extractRepositoryName parses an image reference and extracts the repository part.
 // It removes the registry prefix and any tag/digest suffix.
 // Examples:
-//   - "quay.io/oc-mirror/oc-mirror-dev:test-catalog-20261103-2e526488d" -> "oc-mirror/oc-mirror-dev"
+//   - "127.0.0.1:5001/oc-mirror/oc-mirror-dev:test-catalog" -> "oc-mirror/oc-mirror-dev"
 //   - "quay.io/openshifttest/hello-openshift@sha256:..." -> "openshifttest/hello-openshift"
 func extractRepositoryName(imageRef string) string {
 	ref, err := reference.ParseNormalizedNamed(imageRef)
@@ -440,7 +438,7 @@ func extractRepositoryName(imageRef string) string {
 // extractImageName parses an image reference and extracts just the image name (final component).
 // It removes the registry prefix, organization/namespace, and any tag/digest suffix.
 // Examples:
-//   - "quay.io/oc-mirror/oc-mirror-dev:test-catalog-20261103-2e526488d" -> "oc-mirror-dev"
+//   - "127.0.0.1:5001/oc-mirror/oc-mirror-dev:test-catalog" -> "oc-mirror-dev"
 //   - "registry.redhat.io/redhat/redhat-operator-index:v4.17" -> "redhat-operator-index"
 func extractImageName(imageRef string) string {
 	ref, err := reference.ParseNormalizedNamed(imageRef)
@@ -515,30 +513,23 @@ func copyFile(src, dst string) error {
 	return os.WriteFile(dst, data, info.Mode().Perm())
 }
 
-// setupWorkDir creates a temporary working directory and copies signature files.
+// setupWorkDir creates a temporary working directory and copies the signatures of the
+// test releases into it, so oc-mirror finds them instead of downloading them.
 // Returns the working directory path.
 func setupWorkDir() string {
 	workDir := GinkgoT().TempDir()
 
-	// Copy release signature files to working directory
 	sigDir := filepath.Join(workDir, dirWorkingDir, "signatures")
 	err := os.MkdirAll(sigDir, 0o755)
 	Expect(err).NotTo(HaveOccurred())
 
-	// Copy all release signature files from keys/ (any file that isn't the public key or cosign key)
-	entries, err := os.ReadDir(keysDir)
+	releaseSignaturesDir := originRegistry.ReleaseSignaturesDir()
+	entries, err := os.ReadDir(releaseSignaturesDir)
 	Expect(err).NotTo(HaveOccurred())
+	Expect(entries).NotTo(BeEmpty(), "no release signatures found in %s", releaseSignaturesDir)
 
-	var sigFiles []string
 	for _, entry := range entries {
-		if !entry.IsDir() && entry.Name() != releasePublicKeyFile && !strings.HasPrefix(entry.Name(), "cosign") {
-			sigFiles = append(sigFiles, entry.Name())
-		}
-	}
-	Expect(sigFiles).NotTo(BeEmpty(), "no signature files found in keys/")
-
-	for _, sigFile := range sigFiles {
-		err = copyFile(filepath.Join(keysDir, sigFile), filepath.Join(sigDir, sigFile))
+		err = copyFile(filepath.Join(releaseSignaturesDir, entry.Name()), filepath.Join(sigDir, entry.Name()))
 		Expect(err).NotTo(HaveOccurred())
 	}
 
@@ -780,7 +771,7 @@ func expectCatalogBundlesMatchISC(ctx context.Context, reg registry.Registry, is
 	cfg := parseImageSetConfig(iscPath)
 
 	for _, op := range cfg.Mirror.Operators {
-		configsDir := extractCatalogConfigs(ctx, reg, op.Catalog)
+		configsDir := extractCatalogConfigs(ctx, reg, op)
 
 		for _, pkg := range op.Packages {
 			bundles := loadCatalogBundles(ctx, configsDir, pkg.Name)
@@ -839,11 +830,36 @@ func expectRebuiltTagMatchesDigest(ctx context.Context, reg registry.Registry, i
 	}
 }
 
-// extractCatalogConfigs pulls a catalog image from the registry and extracts
+// extractCatalogConfigs pulls a mirrored catalog image from the registry and extracts
 // the FBC config files to a temporary directory cleaned up by Ginkgo.
-func extractCatalogConfigs(ctx context.Context, reg registry.Registry, catalogRef string) string {
-	repo := extractRepositoryName(catalogRef)
-	tag := extractTag(catalogRef)
+func extractCatalogConfigs(ctx context.Context, reg registry.Registry, op OperatorConfig) string {
+	GinkgoHelper()
+	repo := op.TargetCatalog
+	if repo == "" {
+		if ociPath, ok := strings.CutPrefix(op.Catalog, "oci://"); ok {
+			repo = filepath.Base(ociPath)
+		} else {
+			repo = extractRepositoryName(op.Catalog)
+		}
+	}
+
+	tag := op.TargetTag
+	if tag == "" {
+		if strings.HasPrefix(op.Catalog, "oci://") {
+			tag = "latest"
+		} else {
+			parsed, err := reference.ParseNormalizedNamed(op.Catalog)
+			Expect(err).NotTo(HaveOccurred(), "failed to parse catalog ref: %s", op.Catalog)
+			if tagged, ok := parsed.(reference.Tagged); ok {
+				tag = tagged.Tag()
+			} else if digested, ok := parsed.(reference.Canonical); ok {
+				return extractCatalogImageConfigs(mirroredDigestCatalogImage(ctx, reg, repo, digested.Digest().String()))
+			} else {
+				Fail(fmt.Sprintf("catalog ref %s has neither tag nor digest", op.Catalog))
+			}
+		}
+	}
+
 	ref, err := name.NewTag(reg.Endpoint()+"/"+repo+":"+tag, name.Insecure)
 	Expect(err).NotTo(HaveOccurred())
 
@@ -851,6 +867,43 @@ func extractCatalogConfigs(ctx context.Context, reg registry.Registry, catalogRe
 	Expect(err).NotTo(HaveOccurred())
 
 	return extractCatalogImageConfigs(img)
+}
+
+// mirroredDigestCatalogImage fetches a digest-pinned catalog from reg. If it was mirrored
+// unchanged it exists at repo@digest; if it was rebuilt it is stored under a sha256-<hex> tag.
+func mirroredDigestCatalogImage(ctx context.Context, reg registry.Registry, repo, digest string) v1.Image {
+	GinkgoHelper()
+	exists, err := reg.ManifestExistsByDigest(ctx, repo, digest)
+	Expect(err).NotTo(HaveOccurred(), "failed to check mirrored catalog %s@%s", repo, digest)
+	if exists {
+		ref, err := name.NewDigest(reg.Endpoint()+"/"+repo+"@"+digest, name.Insecure)
+		Expect(err).NotTo(HaveOccurred())
+		img, err := remote.Image(ref, remote.WithAuth(authn.Anonymous), remote.WithContext(ctx))
+		Expect(err).NotTo(HaveOccurred())
+		return img
+	}
+
+	tags, err := reg.ListTags(ctx, repo)
+	Expect(err).NotTo(HaveOccurred(), "failed to list tags for %q", repo)
+	digestTagPattern := regexp.MustCompile(`^sha256-[a-f0-9]{64}$`)
+	var matches []v1.Image
+	for _, tag := range tags {
+		if !digestTagPattern.MatchString(tag) {
+			continue
+		}
+		isCatalog, err := reg.IsCatalog(ctx, repo, tag)
+		Expect(err).NotTo(HaveOccurred(), "failed to inspect %s:%s", repo, tag)
+		if !isCatalog {
+			continue
+		}
+		ref, err := name.NewTag(reg.Endpoint()+"/"+repo+":"+tag, name.Insecure)
+		Expect(err).NotTo(HaveOccurred())
+		img, err := remote.Image(ref, remote.WithAuth(authn.Anonymous), remote.WithContext(ctx))
+		Expect(err).NotTo(HaveOccurred())
+		matches = append(matches, img)
+	}
+	Expect(matches).To(HaveLen(1), "expected exactly one rebuilt catalog with a digest tag in %q, got tags %v", repo, tags)
+	return matches[0]
 }
 
 // extractCatalogImageConfigs extracts the final FBC filesystem from either a
@@ -943,8 +996,8 @@ func cleanupWorkDir(workDir string) {
 // expectCorrectIDMS reads the IDMS file generated by oc-mirror and verifies that:
 // 1. Every YAML document has kind ImageDigestMirrorSet
 // 2. No document contains any empty fields (empty strings, empty maps, empty slices, or nil values)
-// 3. The IDMS sources cover all expected repositories from the ISC
-func expectCorrectIDMS(workDir, iscPath string) {
+// 3. The IDMS sources cover all expected repositories from the ISC, mirrored to reg
+func expectCorrectIDMS(workDir, iscPath string, reg registry.Registry) {
 	idmsPath := filepath.Join(workDir, dirWorkingDir, dirClusterResources, idmsFileName)
 
 	data, err := os.ReadFile(idmsPath)
@@ -976,7 +1029,7 @@ func expectCorrectIDMS(workDir, iscPath string) {
 		}
 	}
 
-	expectIDMSContainsExpectedContent(iscPath, allSources)
+	expectIDMSContainsExpectedContent(iscPath, allSources, reg)
 }
 
 // expectNoEmptyFields recursively walks a parsed YAML map and fails if any field
@@ -1008,7 +1061,7 @@ func expectNoEmptyFields(obj map[string]any, path string) {
 
 // expectIDMSContainsExpectedContent verifies that all expected repositories from the ISC
 // are present as sources in the IDMS.
-func expectIDMSContainsExpectedContent(iscPath string, idmsSources []string) {
+func expectIDMSContainsExpectedContent(iscPath string, idmsSources []string, reg registry.Registry) {
 	cfg := parseImageSetConfig(iscPath)
 
 	if cfg.Mirror.Platform.Release != "" {
@@ -1017,10 +1070,26 @@ func expectIDMSContainsExpectedContent(iscPath string, idmsSources []string) {
 			"no IDMS source is a prefix of platform release %q; sources: %v", ref, idmsSources)
 	}
 
+	// Catalogs are referenced by CatalogSources instead of the IDMS, which covers the
+	// related images of the mirrored catalogs that are referenced by digest.
 	for _, op := range cfg.Mirror.Operators {
-		ref := referenceWithoutTagOrDigest(op.Catalog)
-		Expect(idmsSourceCoversRef(idmsSources, ref)).To(BeTrue(),
-			"no IDMS source is a prefix of operator catalog %q; sources: %v", ref, idmsSources)
+		configsDir := extractCatalogConfigs(ctx, reg, op)
+		dc, err := declcfg.LoadFS(ctx, os.DirFS(configsDir))
+		Expect(err).NotTo(HaveOccurred(), "failed to load the mirrored catalog %s", op.Catalog)
+		var images []string
+		for _, bundle := range dc.Bundles {
+			for _, related := range bundle.RelatedImages {
+				if strings.Contains(related.Image, "@") {
+					images = append(images, related.Image)
+				}
+			}
+		}
+		Expect(images).NotTo(BeEmpty(), "mirrored catalog %s has no related images referenced by digest", op.Catalog)
+		for _, image := range images {
+			ref := referenceWithoutTagOrDigest(image)
+			Expect(idmsSourceCoversRef(idmsSources, ref)).To(BeTrue(),
+				"no IDMS source is a prefix of %q, from operator catalog %q; sources: %v", ref, op.Catalog, idmsSources)
+		}
 	}
 
 	for _, img := range cfg.Mirror.AdditionalImages {

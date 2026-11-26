@@ -16,7 +16,7 @@ var _ = Describe("operator CatalogSource templates", func() {
 	DescribeTable("preserves custom fields while replacing template placeholders", func(specCtx SpecContext, viaDisk bool) {
 		op := operatorFilter("isc-package-heads.yaml")
 		var err error
-		op.TargetCatalogSourceTemplate, err = filepath.Abs(filepath.Join(filepath.Dir(iscDir), "catalog-source-templates", "custom.yaml"))
+		op.TargetCatalogSourceTemplate, err = filepath.Abs(filepath.Join(testdataDir, "catalog-source-templates", "custom.yaml"))
 		Expect(err).NotTo(HaveOccurred())
 		op.TargetCatalog = "custom/catalog"
 		op.TargetTag = "selected"

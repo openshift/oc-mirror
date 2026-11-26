@@ -53,7 +53,7 @@ var _ = Describe("mirroring through an HTTP(S) proxy", func() {
 		By("verifying the proxy observed connections to the expected external hosts")
 		GinkgoWriter.Printf("hosts seen by proxy: %v\n", fwdProxy.Hosts())
 		Expect(fwdProxy.SawHost("quay.io")).To(BeTrue(),
-			"expected the proxy to observe a connection to quay.io (release/catalog/additional images); hosts seen: %v", fwdProxy.Hosts())
+			"expected the proxy to observe a connection to quay.io (additional images); hosts seen: %v", fwdProxy.Hosts())
 		Expect(fwdProxy.SawHost("stefanprodan.github.io")).To(BeTrue(),
 			"expected the proxy to observe a connection to stefanprodan.github.io (helm repository index/chart); hosts seen: %v", fwdProxy.Hosts())
 		Expect(fwdProxy.SawHost("ghcr.io")).To(BeTrue(),
@@ -73,7 +73,7 @@ var _ = Describe("mirroring through an HTTP(S) proxy", func() {
 		sourceDigestTransport = transport
 		DeferCleanup(func() { sourceDigestTransport = originalTransport })
 
-		expectLocalCacheContainsExactly(cacheDir, happyPathCachedImages, testCatalogRepo)
+		expectLocalCacheContainsExactly(cacheDir, happyPathCachedImages(), testCatalogRepo)
 		Expect(digestProxyRequests.Load()).To(BeNumerically(">", 0),
 			"expected source-digest lookups to use the test proxy")
 

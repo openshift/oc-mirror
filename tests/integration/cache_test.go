@@ -16,10 +16,6 @@ import (
 	"github.com/openshift/oc-mirror/tests/integration/pkg/ocmirror"
 )
 
-// fooOperandDigest is the foo operand, a related image of the foo.v0.3.1 bundle
-// in happyPathCatalog. It has no stable tag, so its digest is pinned here.
-const fooOperandDigest = "sha256:1ce8c0187c8fe6b4be327dc848b8baf062ce1baa5096b4f5d955893d126d5b58"
-
 var _ = Describe("cache and workspace configuration", func() {
 	var workDir, operatorISC, port string
 
@@ -57,12 +53,12 @@ var _ = Describe("cache and workspace configuration", func() {
 		command, cacheArgs := cacheRunner(base, false)
 		workspace := filepath.Join(workDir, "workspace")
 		const repo = "oc-mirror/oc-mirror-dev"
-		ref, err := name.NewTag("quay.io/" + repo + ":foo-bundle-v0.3.1")
+		ref, err := name.NewTag(bundleImage("foo-bundle-v0.3.1"))
 		Expect(err).NotTo(HaveOccurred())
 		bundle, err := remote.Head(ref, remote.WithAuth(authn.Anonymous), remote.WithContext(specCtx))
 		Expect(err).NotTo(HaveOccurred())
 
-		By("mirroring our published catalog using the short config and port flags")
+		By("mirroring the test catalog using the short config and port flags")
 		args := []string{"--v2", "-c", operatorISC, "--workspace", "file://" + workspace,
 			"docker://" + testRegistry.Endpoint(), "--dest-tls-verify=false"}
 		result, err := command.Run(specCtx, append(args, cacheArgs...)...)
@@ -75,7 +71,7 @@ var _ = Describe("cache and workspace configuration", func() {
 		expectCatalogBundlesMatchISC(specCtx, *testRegistry, operatorISC, map[string][]string{"foo": {"foo.v0.3.1"}})
 		expectCatalogContainsOnlyExpectedPackages(specCtx, *testRegistry, operatorISC)
 		expectImageReadableByDigest(specCtx, *testRegistry, repo, bundle.Digest.String())
-		expectImageReadableByDigest(specCtx, *testRegistry, repo, fooOperandDigest)
+		expectImageReadableByDigest(specCtx, *testRegistry, repo, digestOf(operandImage))
 
 		By("verifying the requested workspace was used and the default cache was not changed")
 		Expect(filepath.Join(workspace, "working-dir", "cluster-resources")).To(BeADirectory())
@@ -98,7 +94,7 @@ var _ = Describe("cache and workspace configuration", func() {
 		effectiveCache := filepath.Join(base, ".oc-mirror", ".cache")
 		command, cacheArgs := cacheRunner(base, true)
 		const repo = "oc-mirror/oc-mirror-dev"
-		ref, err := name.NewTag("quay.io/" + repo + ":foo-bundle-v0.3.1")
+		ref, err := name.NewTag(bundleImage("foo-bundle-v0.3.1"))
 		Expect(err).NotTo(HaveOccurred())
 		bundle, err := remote.Head(ref, remote.WithAuth(authn.Anonymous), remote.WithContext(specCtx))
 		Expect(err).NotTo(HaveOccurred())
@@ -109,9 +105,9 @@ var _ = Describe("cache and workspace configuration", func() {
 		logOcMirrorResult("custom cache m2d", result)
 		expectOcMirrorCommandSuccess(result, err)
 		cachedImages := map[string]string{
-			testCatalogRepo + ":" + testCatalogTag:                                                            happyPathCatalog,
-			"oc-mirror/oc-mirror-dev:foo-bundle-v0.3.1":                                                       "quay.io/oc-mirror/oc-mirror-dev:foo-bundle-v0.3.1",
-			"oc-mirror/oc-mirror-dev:sha256-1ce8c0187c8fe6b4be327dc848b8baf062ce1baa5096b4f5d955893d126d5b58": operandImage,
+			testCatalogRepo + ":" + testCatalogTag:          happyPathCatalog,
+			testCatalogRepo + ":foo-bundle-v0.3.1":          bundleImage("foo-bundle-v0.3.1"),
+			testCatalogRepo + ":" + digestTag(operandImage): operandImage,
 		}
 		expectLocalCacheContainsExactly(effectiveCache, cachedImages, testCatalogRepo)
 		expectNoRepositoriesInRegistry(*testRegistry)
@@ -130,7 +126,9 @@ var _ = Describe("cache and workspace configuration", func() {
 			"HTTP_PROXY=http://127.0.0.1:1", "HTTPS_PROXY=http://127.0.0.1:1",
 			"NO_PROXY=localhost,127.0.0.1")
 		restoreArgs = append(restoreArgs, "--dest-tls-verify=false", "--retry-times=1")
-		result, err = restoreCommand.DiskToMirror(specCtx, operatorISC, workspace, testRegistry.Endpoint(), restoreArgs...)
+		withOriginRegistryOffline(func() {
+			result, err = restoreCommand.DiskToMirror(specCtx, operatorISC, workspace, testRegistry.Endpoint(), restoreArgs...)
+		})
 		logOcMirrorResult("custom cache d2m", result)
 		expectOcMirrorCommandSuccess(result, err)
 		expectImageInLocalCache(filepath.Join(restoreBase, ".oc-mirror", ".cache"), ref.Context().Digest(bundle.Digest.String()))
@@ -139,7 +137,7 @@ var _ = Describe("cache and workspace configuration", func() {
 		expectCatalogBundlesMatchISC(specCtx, *testRegistry, operatorISC, map[string][]string{"foo": {"foo.v0.3.1"}})
 		expectCatalogContainsOnlyExpectedPackages(specCtx, *testRegistry, operatorISC)
 		expectImageReadableByDigest(specCtx, *testRegistry, repo, bundle.Digest.String())
-		expectImageReadableByDigest(specCtx, *testRegistry, repo, fooOperandDigest)
+		expectImageReadableByDigest(specCtx, *testRegistry, repo, digestOf(operandImage))
 
 		By("verifying the requested workspace was used and the default cache was not changed")
 		Expect(filepath.Join(workspace, "working-dir", "cluster-resources")).To(BeADirectory())

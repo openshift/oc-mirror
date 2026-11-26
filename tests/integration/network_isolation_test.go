@@ -16,8 +16,9 @@ import (
 // contacts source registries. As an extra safety net, HTTP_PROXY/HTTPS_PROXY are pointed at an
 // unreachable address so any accidental outbound call fails immediately. This works because Go's
 // net/http stack (used by both oc-mirror and containers/image) universally honours proxy env vars
-// via http.ProxyFromEnvironment. Retries are capped at 1 (--retry-times=1) to avoid exponential
-// backoff delays in case a call does hit the blocked proxy.
+// via http.ProxyFromEnvironment. Loopback addresses are never proxied, so the origin registry
+// serving the catalog and release images is stopped instead. Retries are capped at 1
+// (--retry-times=1) to avoid exponential backoff delays in case a call does hit the blocked proxy.
 var _ = Describe("diskToMirror without network access", func() {
 	var workDir string
 
@@ -46,8 +47,10 @@ var _ = Describe("diskToMirror without network access", func() {
 				"HTTPS_PROXY=http://127.0.0.1:1",
 				"NO_PROXY=localhost,127.0.0.1",
 			})
-		result, err = offlineRunner.DiskToMirror(ctx, iscPath, workDir, testRegistry.Endpoint(),
-			"--dest-tls-verify=false", "--retry-times=1")
+		withOriginRegistryOffline(func() {
+			result, err = offlineRunner.DiskToMirror(ctx, iscPath, workDir, testRegistry.Endpoint(),
+				"--dest-tls-verify=false", "--retry-times=1")
+		})
 		expectOcMirrorCommandSuccess(result, err)
 
 		By("verifying images were mirrored to the destination registry")
@@ -90,8 +93,10 @@ var _ = Describe("diskToMirror without network access", func() {
 				"HTTPS_PROXY=http://127.0.0.1:1",
 				"NO_PROXY=localhost,127.0.0.1",
 			})
-		result, err = offlineRunner.DiskToMirror(ctx, iscPath, workDir, testRegistry.Endpoint(),
-			"--dest-tls-verify=false", "--retry-times=1")
+		withOriginRegistryOffline(func() {
+			result, err = offlineRunner.DiskToMirror(ctx, iscPath, workDir, testRegistry.Endpoint(),
+				"--dest-tls-verify=false", "--retry-times=1")
+		})
 		expectOcMirrorCommandSuccess(result, err)
 
 		By("verifying diskToMirror rebuilt the working-dir from the mirror archive")

@@ -2,7 +2,7 @@ FROM registry.ci.openshift.org/ocp/builder:rhel-9-golang-1.26-openshift-5.0 AS b
 WORKDIR /go/src/github.com/openshift/oc-mirror
 COPY . .
 RUN CGO_ENABLED=0 make build
-RUN cd tests/integration && CGO_ENABLED=0 go test -mod=mod -c -o /tmp/integration.test .
+RUN cd tests/integration && CGO_ENABLED=0 go test -tags containers_image_openpgp -mod=mod -c -o /tmp/integration.test .
 
 FROM registry.ci.openshift.org/ocp/5.0:base-rhel9
 WORKDIR /artifacts

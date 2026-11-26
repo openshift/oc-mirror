@@ -10,11 +10,18 @@ Convert a manual test case description into a Ginkgo v2 integration test for the
 
 ## Test Images
 
-The suite uses minimal fixture images to keep tests fast and predictable. Reuse the complete, pinned image references
-in `tests/integration/testdata/imagesetconfigs/` and the matching test constants. Do not use abbreviated digests or
-substitute mutable `latest` tags.
+The suite uses minimal fixture images to keep tests fast and predictable. Reuse the references in
+`tests/integration/testdata/imagesetconfigs/` and the matching Go helpers:
 
-See `tests/integration/image-builders/README.md` before publishing a new fixture version.
+- Catalog: `${ORIGIN_REGISTRY}/oc-mirror/oc-mirror-dev:test-catalog` in ISCs, `happyPathCatalog` in Go
+- Release: `${ORIGIN_REGISTRY}/oc-mirror/release/test-release-index:v0.0.1` in ISCs, `testReleaseImage` in Go
+
+Catalogs, bundles, operands, release payloads, and release components are built from `tests/integration/testdata/`
+at suite startup. Edit their sources instead of publishing new images. Use `${ORIGIN_REGISTRY}` and
+`${DIGEST:<repository>:<tag>}` to reference the generated images in configs.
+
+For prebuilt additional images, reuse complete, pinned references. Do not use abbreviated digests or substitute
+mutable `latest` tags. See `tests/integration/image-builders/README.md` before publishing a new version.
 
 ## Step-by-step process
 
@@ -78,7 +85,7 @@ The suite is a separate Go module, so run focused tests from `tests/integration/
 ```bash
 make build
 cd tests/integration
-go test -v -count=1 -timeout 30m . -ginkgo.focus '<test description or regex>'
+CGO_ENABLED=0 go test -tags containers_image_openpgp -v -count=1 -timeout 30m . -ginkgo.focus '<test description or regex>'
 ```
 
 These commands start at the repository root. The suite starts an in-process registry; no registry executable or

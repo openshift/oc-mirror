@@ -38,12 +38,13 @@ var _ = Describe("max-nested-paths", func() {
 		releaseRepo := "nested/path-levels-openshift-release"
 		operatorRepo := "nested/path-levels-oc-mirror-oc-mirror-dev"
 		expectRegistryContainsExactly(*testRegistry, map[string]string{
-			releaseImagesRepo + ":v0.0.1":       "quay.io/oc-mirror/release/test-release-index:v0.0.1",
-			releaseRepo + ":v0.0.1-alpine":      "quay.io/oc-mirror/release/test-image:v0.0.1",
+			releaseImagesRepo + ":v0.0.1":       testReleaseImage,
+			releaseRepo + ":v0.0.1-alpine":      releaseComponentImage,
 			operatorRepo + ":" + testCatalogTag: "",
-			operatorRepo + ":baz-bundle-v1.1.0": "quay.io/oc-mirror/oc-mirror-dev:baz-bundle-v1.1.0",
-			operatorRepo + ":foo-bundle-v0.2.0": "quay.io/oc-mirror/oc-mirror-dev:foo-bundle-v0.2.0",
-			operatorRepo + ":sha256-1ce8c0187c8fe6b4be327dc848b8baf062ce1baa5096b4f5d955893d126d5b58": operandImage,
+			operatorRepo + ":baz-bundle-v1.1.0": bundleImage("baz-bundle-v1.1.0"),
+			// An additional image, published on Quay.
+			operatorRepo + ":foo-bundle-v0.2.0":          "quay.io/oc-mirror/oc-mirror-dev:foo-bundle-v0.2.0",
+			operatorRepo + ":" + digestTag(operandImage): operandImage,
 		})
 		repos, err := testRegistry.ListRepositories(ctx)
 		Expect(err).NotTo(HaveOccurred())
@@ -52,15 +53,20 @@ var _ = Describe("max-nested-paths", func() {
 		}
 
 		By("verifying IDMS and ITMS map each source repository to its flattened repository")
+		releaseIndex := referenceWithoutTagOrDigest(testReleaseImage)
+		releaseComponent := referenceWithoutTagOrDigest(releaseComponentImage)
+		operatorImages := originRegistry.Endpoint() + "/" + testCatalogRepo
 		expectMirrorSets(workDir, endpoint,
 			map[string]string{
-				"quay.io/oc-mirror/release/test-release-index": releaseImagesRepo,
-				"quay.io/oc-mirror/oc-mirror-dev":              operatorRepo,
+				releaseIndex:   releaseImagesRepo,
+				operatorImages: operatorRepo,
 			},
 			map[string]string{
-				"quay.io/oc-mirror/release/test-release-index": releaseImagesRepo,
-				"quay.io/oc-mirror/release/test-image":         releaseRepo,
-				"quay.io/oc-mirror/oc-mirror-dev":              operatorRepo,
+				releaseIndex:     releaseImagesRepo,
+				releaseComponent: releaseRepo,
+				operatorImages:   operatorRepo,
+				// The additional image is published on Quay, and referenced by tag.
+				"quay.io/oc-mirror/oc-mirror-dev": operatorRepo,
 			})
 
 		By("verifying CatalogSource and ClusterCatalog reference the flattened catalog repository")

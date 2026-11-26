@@ -1,0 +1,9 @@
+---
+schema: olm.bundle
+image: ${ORIGIN_REGISTRY}/oc-mirror/oc-mirror-dev:baz-bundle-v1.0.0
+---
+schema: olm.bundle
+image: ${ORIGIN_REGISTRY}/oc-mirror/oc-mirror-dev:baz-bundle-v1.0.1
+---
+schema: olm.bundle
+image: ${ORIGIN_REGISTRY}/oc-mirror/oc-mirror-dev:baz-bundle-v1.1.0

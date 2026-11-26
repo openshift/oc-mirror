@@ -1,0 +1,4 @@
+# gcr.io/distroless/static:debug, which provides the /busybox/sh shell of run.sh.
+base: gcr.io/distroless/static@sha256:ef577529a4e1591d0e56ad7d03e0a7341d6da92f2da72ed2a1ea6f1440887ed4
+config:
+  Entrypoint: [/run.sh]

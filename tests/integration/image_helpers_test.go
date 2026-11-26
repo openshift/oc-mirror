@@ -20,24 +20,28 @@ import (
 )
 
 const (
-	testCatalogRepo  = "oc-mirror/oc-mirror-dev"
-	testCatalogTag   = "test-catalog-20261103-2e526488d"
-	multiCatalogTag  = "test-catalog-multi-20261103-2e526488d"
-	multilayersTag   = "multilayers-20261103-2e526488d"
-	happyPathCatalog = "quay.io/" + testCatalogRepo + ":" + testCatalogTag
-	operandImage     = "quay.io/" + testCatalogRepo + "@sha256:1ce8c0187c8fe6b4be327dc848b8baf062ce1baa5096b4f5d955893d126d5b58"
+	// testCatalogRepo holds the catalogs built from testdata/catalogs, tagged with their directory
+	// name, as well as the bundles and operands built from testdata/bundles and testdata/operands.
+	testCatalogRepo = "oc-mirror/oc-mirror-dev"
+	testCatalogTag  = "test-catalog"
+	multiCatalogTag = "test-catalog-multi"
+	multilayersTag  = "multilayers-20261103-2e526488d"
 )
 
-var happyPathCachedImages = map[string]string{
-	"openshift/release-images:v0.0.1":           "quay.io/oc-mirror/release/test-release-index:v0.0.1",
-	"openshift/release:v0.0.1-alpine":           "quay.io/oc-mirror/release/test-image:v0.0.1",
-	testCatalogRepo + ":" + testCatalogTag:      happyPathCatalog,
-	"oc-mirror/oc-mirror-dev:foo-bundle-v0.3.1": "quay.io/oc-mirror/oc-mirror-dev:foo-bundle-v0.3.1",
-	"oc-mirror/oc-mirror-dev:bar-bundle-v1.0.0": "quay.io/oc-mirror/oc-mirror-dev:bar-bundle-v1.0.0",
-	"oc-mirror/oc-mirror-dev:baz-bundle-v1.1.0": "quay.io/oc-mirror/oc-mirror-dev:baz-bundle-v1.1.0",
-	"oc-mirror/oc-mirror-dev:sha256-1ce8c0187c8fe6b4be327dc848b8baf062ce1baa5096b4f5d955893d126d5b58":       operandImage,
-	"openshifttest/hello-openshift:sha256-61b8f5e1a3b5dbd9e2c35fd448dc5106337d7a299873dd3a6f0cd8d4891ecc27": "quay.io/openshifttest/hello-openshift@sha256:61b8f5e1a3b5dbd9e2c35fd448dc5106337d7a299873dd3a6f0cd8d4891ecc27",
-	"stefanprodan/podinfo:5.0.0": "ghcr.io/stefanprodan/podinfo:5.0.0",
+// happyPathCachedImages returns the images mirrored for isc-happy-path.yaml, by destination
+// repository:tag, with their source.
+func happyPathCachedImages() map[string]string {
+	return map[string]string{
+		"openshift/release-images:v0.0.1":               testReleaseImage,
+		"openshift/release:v0.0.1-alpine":               releaseComponentImage,
+		testCatalogRepo + ":" + testCatalogTag:          happyPathCatalog,
+		testCatalogRepo + ":foo-bundle-v0.3.1":          bundleImage("foo-bundle-v0.3.1"),
+		testCatalogRepo + ":bar-bundle-v1.0.0":          bundleImage("bar-bundle-v1.0.0"),
+		testCatalogRepo + ":baz-bundle-v1.1.0":          bundleImage("baz-bundle-v1.1.0"),
+		testCatalogRepo + ":" + digestTag(operandImage): operandImage,
+		"openshifttest/hello-openshift:sha256-61b8f5e1a3b5dbd9e2c35fd448dc5106337d7a299873dd3a6f0cd8d4891ecc27": "quay.io/openshifttest/hello-openshift@sha256:61b8f5e1a3b5dbd9e2c35fd448dc5106337d7a299873dd3a6f0cd8d4891ecc27",
+		"stefanprodan/podinfo:5.0.0": "ghcr.io/stefanprodan/podinfo:5.0.0",
+	}
 }
 
 var tagLinkPattern = regexp.MustCompile(`^(.+)/_manifests/tags/([^/]+)/current/link$`)

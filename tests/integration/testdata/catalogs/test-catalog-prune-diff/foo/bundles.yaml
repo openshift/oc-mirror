@@ -1,0 +1,3 @@
+---
+schema: olm.bundle
+image: ${ORIGIN_REGISTRY}/oc-mirror/oc-mirror-dev:foo-bundle-v0.2.0

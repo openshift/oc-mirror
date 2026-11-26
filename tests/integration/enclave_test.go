@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -31,7 +32,7 @@ var _ = Describe("enclave", func() {
 
 		// Workflow:
 		//  1. Mirror operators from the remote catalog into an intermediate registry.
-		//  2. Configure registries.conf to redirect quay.io pulls to the intermediate registry.
+		//  2. Configure registries.conf to redirect catalog and bundle pulls to the intermediate registry.
 		//  3. Mirror from the intermediate registry into a separate enclave registry.
 		//  4. Assert that the enclave catalog contains the correctly filtered bundles.
 		It("should forward operators from intermediate to enclave registry via registries.conf", func() {
@@ -85,17 +86,20 @@ var _ = Describe("enclave", func() {
 	})
 })
 
-// writeRegistriesConf generates a containers registries.conf file that
-// redirects all quay.io pulls to the given mirror endpoint over plain HTTP.
+// writeRegistriesConf generates a containers registries.conf file that redirects all
+// quay.io and origin registry pulls to the given mirror endpoint over plain HTTP.
 func writeRegistriesConf(dir, mirrorEndpoint string) string {
-	content := fmt.Sprintf(`[[registry]]
-  location = "quay.io"
+	var content strings.Builder
+	for _, location := range []string{"quay.io", originRegistry.Endpoint()} {
+		fmt.Fprintf(&content, `[[registry]]
+  location = %q
   [[registry.mirror]]
-    location = "%s"
+    location = %q
     insecure = true
-`, mirrorEndpoint)
+`, location, mirrorEndpoint)
+	}
 
 	p := filepath.Join(dir, "registries.conf")
-	Expect(os.WriteFile(p, []byte(content), 0o644)).To(Succeed())
+	Expect(os.WriteFile(p, []byte(content.String()), 0o644)).To(Succeed())
 	return p
 }

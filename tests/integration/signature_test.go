@@ -146,8 +146,8 @@ var _ = Describe("signatures", func() {
 func expectFullOperatorCatalog(workDir string, reg registry.Registry) {
 	GinkgoHelper()
 	extra := map[string]string{
-		"openshift/release-images:v0.0.1": "quay.io/oc-mirror/release/test-release-index:v0.0.1",
-		"openshift/release:v0.0.1-alpine": "quay.io/oc-mirror/release/test-image:v0.0.1",
+		"openshift/release-images:v0.0.1": testReleaseImage,
+		"openshift/release:v0.0.1-alpine": releaseComponentImage,
 	}
 	expectOperatorCatalogs(workDir, reg, extra, catalogExpectation{
 		Destination: testCatalogRepo + ":" + testCatalogTag, Source: happyPathCatalog,

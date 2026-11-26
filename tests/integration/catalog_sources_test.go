@@ -78,7 +78,7 @@ var _ = Describe("operator catalog sources", func() {
 				op := operatorFilter("isc-package-range.yaml")
 				op.Catalog = "oci://" + dir
 				expected := []catalogExpectation{{Destination: "alternate-catalog:latest",
-					Source: "quay.io/" + testCatalogRepo + "@" + digest.String(),
+					Source: referenceWithoutTagOrDigest(happyPathCatalog) + "@" + digest.String(),
 					Packages: map[string]catalogPackageExpectation{
 						"baz": {"stable", map[string][]string{"stable": {"baz.v1.0.0", "baz.v1.0.1"}}},
 					}}}

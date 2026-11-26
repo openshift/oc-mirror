@@ -1,0 +1,15 @@
+---
+schema: olm.bundle
+image: ${ORIGIN_REGISTRY}/oc-mirror/oc-mirror-dev:foo-bundle-v0.1.0
+---
+schema: olm.bundle
+image: ${ORIGIN_REGISTRY}/oc-mirror/oc-mirror-dev:foo-bundle-v0.2.0
+---
+schema: olm.bundle
+image: ${ORIGIN_REGISTRY}/oc-mirror/oc-mirror-dev:foo-bundle-v0.3.0
+---
+schema: olm.bundle
+image: ${ORIGIN_REGISTRY}/oc-mirror/oc-mirror-dev:foo-bundle-v0.3.1
+---
+schema: olm.bundle
+image: ${ORIGIN_REGISTRY}/oc-mirror/oc-mirror-dev:foo-bundle-v0.3.2

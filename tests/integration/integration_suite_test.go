@@ -17,6 +17,7 @@ import (
 var (
 	testRegistry   *registry.Registry
 	runner         *ocmirror.Runner
+	testdataDir    string
 	registryConfig string
 	iscDir         string
 	keysDir        string
@@ -54,18 +55,19 @@ var _ = BeforeSuite(func() {
 	Expect(os.Unsetenv("REGISTRY_AUTH_FILE")).To(Succeed())
 	Expect(os.MkdirAll(filepath.Join(home, "run"), 0o700)).To(Succeed())
 
-	artifactsDir := os.Getenv("ARTIFACTS_DIR")
-	if artifactsDir == "" {
-		artifactsDir = "testdata"
+	testdataDir = os.Getenv("ARTIFACTS_DIR")
+	if testdataDir == "" {
+		testdataDir = "testdata"
 	}
 
-	registryConfig = filepath.Join(artifactsDir, "registry-config.yaml")
-	iscDir = filepath.Join(artifactsDir, "imagesetconfigs")
-	graphDataDir = filepath.Join(artifactsDir, "graphdatas")
-	keysDir = filepath.Join(artifactsDir, "keys")
-	policiesDir = filepath.Join(artifactsDir, "policies")
+	registryConfig = filepath.Join(testdataDir, "registry-config.yaml")
+	graphDataDir = filepath.Join(testdataDir, "graphdatas")
+	keysDir = filepath.Join(testdataDir, "keys")
+	policiesDir = filepath.Join(testdataDir, "policies")
 
-	os.Setenv("OCP_SIGNATURE_VERIFICATION_PK", filepath.Join(keysDir, "release-pk.asc"))
+	By("building the catalog and release images from testdata into the origin registry")
+	startOriginRegistry(home)
+	iscDir = renderImageSetConfigs(filepath.Join(testdataDir, "imagesetconfigs"))
 
 	runner = ocmirror.NewRunner(os.Getenv("OC_MIRROR_BINARY"))
 })

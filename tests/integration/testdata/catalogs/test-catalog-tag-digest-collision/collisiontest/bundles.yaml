@@ -1,0 +1,30 @@
+---
+image: ${ORIGIN_REGISTRY}/oc-mirror/oc-mirror-dev:foo-bundle-v0.3.0
+name: collisiontest.v1.0.0
+package: collisiontest
+properties:
+- type: olm.package
+  value:
+    packageName: collisiontest
+    version: 1.0.0
+relatedImages:
+- image: ${ORIGIN_REGISTRY}/oc-mirror/oc-mirror-dev:foo-bundle-v0.3.0
+  name: ""
+- image: ${ORIGIN_REGISTRY}/oc-mirror/oc-mirror-dev:shared-operand@${DIGEST:oc-mirror/oc-mirror-dev:operand}
+  name: operator
+schema: olm.bundle
+---
+image: ${ORIGIN_REGISTRY}/oc-mirror/oc-mirror-dev:foo-bundle-v0.3.1
+name: collisiontest.v2.0.0
+package: collisiontest
+properties:
+- type: olm.package
+  value:
+    packageName: collisiontest
+    version: 2.0.0
+relatedImages:
+- image: ${ORIGIN_REGISTRY}/oc-mirror/oc-mirror-dev:foo-bundle-v0.3.1
+  name: ""
+- image: ${ORIGIN_REGISTRY}/oc-mirror/oc-mirror-dev:shared-operand@${DIGEST:oc-mirror/oc-mirror-dev:foo-bundle-v0.2.0}
+  name: operator
+schema: olm.bundle

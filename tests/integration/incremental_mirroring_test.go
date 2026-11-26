@@ -177,7 +177,7 @@ var _ = Describe("incremental mirroring", func() {
 			iscUpdatePath := filepath.Join(iscDir, iscUpdate)
 
 			By("resolving the newly selected bar bundle independently of the mirror")
-			barBundleRef, err := name.NewTag("quay.io/oc-mirror/oc-mirror-dev:bar-bundle-v1.0.0")
+			barBundleRef, err := name.NewTag(bundleImage("bar-bundle-v1.0.0"))
 			Expect(err).NotTo(HaveOccurred())
 			barBundle, err := remote.Head(barBundleRef, remote.WithAuth(authn.Anonymous), remote.WithContext(ctx))
 			Expect(err).NotTo(HaveOccurred())
@@ -195,9 +195,9 @@ var _ = Describe("incremental mirroring", func() {
 			By("verifying the initial tar contains expected content")
 			expectCorrectTarArchiveContents(iscInitialPath, workDir)
 			expectArchiveContainsExactly(workDir, map[string]string{
-				testCatalogRepo + ":" + testCatalogTag:                                                            happyPathCatalog,
-				"oc-mirror/oc-mirror-dev:foo-bundle-v0.2.0":                                                       "quay.io/oc-mirror/oc-mirror-dev:foo-bundle-v0.2.0",
-				"oc-mirror/oc-mirror-dev:sha256-1ce8c0187c8fe6b4be327dc848b8baf062ce1baa5096b4f5d955893d126d5b58": operandImage,
+				testCatalogRepo + ":" + testCatalogTag:          happyPathCatalog,
+				testCatalogRepo + ":foo-bundle-v0.2.0":          bundleImage("foo-bundle-v0.2.0"),
+				testCatalogRepo + ":" + digestTag(operandImage): operandImage,
 			}, testCatalogRepo)
 
 			By("moving the initial tar outside the working directory to preserve it")
@@ -257,12 +257,12 @@ var _ = Describe("incremental mirroring", func() {
 			expectCorrectTarArchiveContents(iscUpdatePath, workDir)
 			// The cache and archive retain the catalogs rebuilt by both runs.
 			expectArchiveContainsExactly(workDir, map[string]string{
-				testCatalogRepo + ":" + testCatalogTag:                                                            happyPathCatalog,
-				"oc-mirror/oc-mirror-dev:foo-bundle-v0.2.0":                                                       "quay.io/oc-mirror/oc-mirror-dev:foo-bundle-v0.2.0",
-				"oc-mirror/oc-mirror-dev:foo-bundle-v0.3.0":                                                       "quay.io/oc-mirror/oc-mirror-dev:foo-bundle-v0.3.0",
-				"oc-mirror/oc-mirror-dev:foo-bundle-v0.3.1":                                                       "quay.io/oc-mirror/oc-mirror-dev:foo-bundle-v0.3.1",
-				"oc-mirror/oc-mirror-dev:bar-bundle-v1.0.0":                                                       "quay.io/oc-mirror/oc-mirror-dev:bar-bundle-v1.0.0",
-				"oc-mirror/oc-mirror-dev:sha256-1ce8c0187c8fe6b4be327dc848b8baf062ce1baa5096b4f5d955893d126d5b58": operandImage,
+				testCatalogRepo + ":" + testCatalogTag:          happyPathCatalog,
+				testCatalogRepo + ":foo-bundle-v0.2.0":          bundleImage("foo-bundle-v0.2.0"),
+				testCatalogRepo + ":foo-bundle-v0.3.0":          bundleImage("foo-bundle-v0.3.0"),
+				testCatalogRepo + ":foo-bundle-v0.3.1":          bundleImage("foo-bundle-v0.3.1"),
+				testCatalogRepo + ":bar-bundle-v1.0.0":          bundleImage("bar-bundle-v1.0.0"),
+				testCatalogRepo + ":" + digestTag(operandImage): operandImage,
 			}, testCatalogRepo, testCatalogRepo)
 		})
 	})

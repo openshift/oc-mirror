@@ -28,8 +28,8 @@ const (
 	collisionRepo = "oc-mirror/oc-mirror-dev"
 
 	// collisionDigestA and collisionDigestB are two distinct, real manifests that already
-	// exist in quay.io/oc-mirror/oc-mirror-dev. Both are referenced under the same
-	// "shared-operand" tag, so they collide on a single cache tag.
+	// exist in quay.io/oc-mirror/oc-mirror-dev. The additional images and the helm chart
+	// reference both under the same "shared-operand" tag, so they collide on a single cache tag.
 	collisionDigestA = "sha256:1ce8c0187c8fe6b4be327dc848b8baf062ce1baa5096b4f5d955893d126d5b58"
 	collisionDigestB = "sha256:1b8392488dabcf78c82c72866d34edf6ef3d5bfb6ec00c81a377486a90d3d9ad"
 )
@@ -45,18 +45,22 @@ var _ = Describe("tag and digest collision", func() {
 		cleanupWorkDir(workDir)
 	})
 
-	// Requires the pinned catalog image to be published -
-	// see tests/integration/image-builders/README.md.
+	// Uses the catalog built from testdata/catalogs/test-catalog-tag-digest-collision, whose
+	// related images reference the operand and the foo-bundle-v0.2.0 bundle of the origin
+	// registry under the same "shared-operand" tag.
 	Describe("operator related images sharing a repo:tag with different digests", func() {
 		iscFile := filepath.Join("tag_digest_collision", "isc-operator-tag-digest-collision.yaml")
 
 		It("preserves both related-image digests through mirrorToDisk and diskToMirror", func() {
+			operandDigest := digestOf(operandImage)
+			bundleDigest := digestOf(fixtureByDigest(bundleImage("foo-bundle-v0.2.0")))
+
 			By("running mirrorToDisk")
 			result, err := runner.MirrorToDisk(ctx, filepath.Join(iscDir, iscFile), workDir, "--remove-signatures=true")
 			expectOcMirrorCommandSuccess(result, err)
 
 			By("verifying the tar archive contains blob data for BOTH colliding related-image digests")
-			expectTarContainsBlobForDigests(workDir, collisionDigestA, collisionDigestB)
+			expectTarContainsBlobForDigests(workDir, operandDigest, bundleDigest)
 
 			By("running diskToMirror")
 			result, err = runner.DiskToMirror(ctx, filepath.Join(iscDir, iscFile), workDir, testRegistry.Endpoint(),
@@ -64,11 +68,11 @@ var _ = Describe("tag and digest collision", func() {
 			expectOcMirrorCommandSuccess(result, err)
 
 			By("verifying BOTH related-image digests are resolvable by digest in the destination registry")
-			expectManifestExistsByDigest(*testRegistry, collisionRepo, collisionDigestA)
-			expectManifestExistsByDigest(*testRegistry, collisionRepo, collisionDigestB)
+			expectManifestExistsByDigest(*testRegistry, collisionRepo, operandDigest)
+			expectManifestExistsByDigest(*testRegistry, collisionRepo, bundleDigest)
 
 			By("verifying the shared tag resolves to one of the two colliding related-image digests")
-			expectTagResolvesToOneOfDigests(*testRegistry, collisionRepo, "shared-operand", collisionDigestA, collisionDigestB)
+			expectTagResolvesToOneOfDigests(*testRegistry, collisionRepo, "shared-operand", operandDigest, bundleDigest)
 		})
 	})
 
@@ -183,12 +187,13 @@ var _ = Describe("tag and digest collision", func() {
 // CWD (not the ISC file's location), which isn't guaranteed to match the test
 // binary's CWD in every environment - e.g. in this repo's Prow CI job the test
 // binary's CWD is an unrelated artifacts directory, not the checkout. So the
-// absolute path is derived from iscDir (already correctly rooted via
+// absolute path is derived from testdataDir (already correctly rooted via
 // ARTIFACTS_DIR, see integration_suite_test.go) rather than the process's CWD.
 func resolveHelmISC(workDir string) string {
 	const relChartPath = "testdata/helm-charts/tag-digest-collision"
 
-	absChartPath := filepath.Join(filepath.Dir(iscDir), "helm-charts", "tag-digest-collision")
+	absChartPath, err := filepath.Abs(filepath.Join(testdataDir, "helm-charts", "tag-digest-collision"))
+	Expect(err).NotTo(HaveOccurred())
 
 	srcISC := filepath.Join(iscDir, "tag_digest_collision", "isc-helm-tag-digest-collision.yaml")
 	data, err := os.ReadFile(srcISC)
