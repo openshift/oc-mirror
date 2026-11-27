@@ -135,6 +135,13 @@ func (o Manifest) ExtractOCILayers(img gcrv1.Image, toPath, label string) error 
 	// Remove any separators in label
 	label = strings.Trim(label, "/")
 
+	// Older filtered catalogs delete /configs with "/.wh.configs".
+	// mutate.Extract does not apply that absolute whiteout to relative paths.
+	img, err = normalizeAbsoluteTarPaths(img)
+	if err != nil {
+		return fmt.Errorf("normalize OCI paths: %w", err)
+	}
+
 	stream := mutate.Extract(img)
 	defer stream.Close()
 
