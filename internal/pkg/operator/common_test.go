@@ -4,6 +4,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/operator-framework/operator-registry/alpha/declcfg"
+
 	"github.com/openshift/oc-mirror/v2/internal/pkg/api/v2alpha1"
 	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
 
@@ -639,4 +641,87 @@ func TestOperatorCollector(t *testing.T) {
 			assert.Empty(t, ref)
 		})
 	})
+}
+
+// OCPBUGS-132865: the bundle image must be copied exactly once in every workflow, whether or
+// not the catalog repeats it in the bundle's relatedImages.
+func TestPrepareCopyBatchBundleImage(t *testing.T) {
+	const (
+		bundleImage = testBarBundleImage
+		operand     = testOperandImage
+	)
+	log := clog.New("error")
+
+	testCases := []struct {
+		caseName      string
+		relatedImages []declcfg.RelatedImage
+	}{
+		{
+			caseName:      "bundle image missing from related images",
+			relatedImages: []declcfg.RelatedImage{{Name: "operator", Image: operand}},
+		},
+		{
+			caseName:      "bundle image listed in related images",
+			relatedImages: []declcfg.RelatedImage{{Image: bundleImage}, {Name: "operator", Image: operand}},
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.caseName, func(t *testing.T) {
+			dc := &declcfg.DeclarativeConfig{Bundles: []declcfg.Bundle{{
+				Name: "bar.v0.1.0", Package: "bar", Image: bundleImage, RelatedImages: testCase.relatedImages,
+			}}}
+			copyImageSchemaMap := &v2alpha1.CopyImageSchemaMap{OperatorsByImage: make(map[string]map[string]struct{}), BundlesByImage: make(map[string]map[string]string)}
+			relatedImages, err := CatalogHandler{Log: log}.getRelatedImagesFromCatalog(dc, copyImageSchemaMap)
+			assert.NoError(t, err)
+
+			m2d := setupFilterCollector_MirrorToDisk(t.TempDir(), log, &MockManifest{})
+			m2m := setupFilterCollector_MirrorToDisk(t.TempDir(), log, &MockManifest{})
+			m2m.Opts.Mode = mirror.MirrorToMirror
+			m2m.Opts.Destination = "docker://localhost:5000/test"
+			d2m := setupFilterCollector_DiskToMirror(t.TempDir(), log)
+
+			batches := map[string]func(map[string][]v2alpha1.RelatedImage) ([]v2alpha1.CopyImageSchema, error){
+				"mirrorToDisk":   m2d.prepareM2DCopyBatch,
+				"mirrorToMirror": m2m.dispatchImagesForM2M,
+				"diskToMirror":   d2m.prepareD2MCopyBatch,
+			}
+			for mode, prepare := range batches {
+				copies, err := prepare(relatedImages)
+				assert.NoError(t, err, mode)
+
+				copiesByOrigin := map[string][]v2alpha1.ImageType{}
+				for _, c := range copies {
+					copiesByOrigin[c.Origin] = append(copiesByOrigin[c.Origin], c.Type)
+				}
+				assert.Equal(t, map[string][]v2alpha1.ImageType{
+					consts.DockerProtocol + bundleImage: {v2alpha1.TypeOperatorBundle},
+					consts.DockerProtocol + operand:     {v2alpha1.TypeOperatorRelatedImage},
+				}, copiesByOrigin, mode)
+			}
+		})
+	}
+}
+
+func TestCopyTypeForRepeatedImage(t *testing.T) {
+	testCases := []struct {
+		caseName  string
+		selected  v2alpha1.ImageType
+		requested v2alpha1.ImageType
+		expected  v2alpha1.ImageType
+	}{
+		{"bundle image then related image keeps the related image type", v2alpha1.TypeOperatorBundle, v2alpha1.TypeOperatorRelatedImage, v2alpha1.TypeOperatorRelatedImage},
+		{"related image then bundle image keeps the related image type", v2alpha1.TypeOperatorRelatedImage, v2alpha1.TypeOperatorBundle, v2alpha1.TypeOperatorRelatedImage},
+		{"bundle image requested twice stays a bundle image", v2alpha1.TypeOperatorBundle, v2alpha1.TypeOperatorBundle, v2alpha1.TypeOperatorBundle},
+		{"related image requested twice stays a related image", v2alpha1.TypeOperatorRelatedImage, v2alpha1.TypeOperatorRelatedImage, v2alpha1.TypeOperatorRelatedImage},
+		{"catalog image keeps its type when requested as a related image", v2alpha1.TypeOperatorCatalog, v2alpha1.TypeOperatorRelatedImage, v2alpha1.TypeOperatorCatalog},
+		{"catalog image keeps its type when requested as a bundle image", v2alpha1.TypeOperatorCatalog, v2alpha1.TypeOperatorBundle, v2alpha1.TypeOperatorCatalog},
+		{"bundle image keeps its type when requested as a catalog image", v2alpha1.TypeOperatorBundle, v2alpha1.TypeOperatorCatalog, v2alpha1.TypeOperatorBundle},
+		{"other image types are not changed", v2alpha1.TypeGeneric, v2alpha1.TypeOperatorRelatedImage, v2alpha1.TypeGeneric},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.caseName, func(t *testing.T) {
+			assert.Equal(t, testCase.expected, copyTypeForRepeatedImage(testCase.selected, testCase.requested))
+		})
+	}
 }

@@ -53,6 +53,247 @@ func TestRelatedImagesFromCatalog(t *testing.T) {
 	}
 }
 
+// Images referenced by the bundle image tests.
+const (
+	testBarBundleImage = "quay.io/oc-mirror/oc-mirror-dev:bar-bundle-v0.1.0"
+	testOperandImage   = "quay.io/oc-mirror/oc-mirror-dev@sha256:1ce8c0187c8fe6b4be327dc848b8baf062ce1baa5096b4f5d955893d126d5b58"
+)
+
+// OCPBUGS-132865: the bundle image (olm.bundle.image) must be collected even when it is not
+// repeated in the bundle's relatedImages.
+func TestRelatedImagesFromCatalogBundleImage(t *testing.T) {
+	const (
+		barBundle   = testBarBundleImage
+		bazBundle   = "quay.io/oc-mirror/oc-mirror-dev:baz-bundle-v1.0.0"
+		operand     = testOperandImage
+		barName     = "bar.v0.1.0"
+		bazName     = "baz.v1.0.0"
+		missingTag  = "quay.io/oc-mirror/oc-mirror-dev/bundle"
+		ociBundle   = "oci:///tmp/bundle"
+		badDigest   = "quay.io/oc-mirror/oc-mirror-dev@sha256:bad"
+		dockerProto = consts.DockerProtocol
+	)
+
+	type testCase struct {
+		caseName          string
+		bundles           []declcfg.Bundle
+		expectedImages    map[string][]v2alpha1.RelatedImage
+		expectedOperators map[string]map[string]struct{}
+		expectedBundles   map[string]map[string]string
+		expectedError     string
+	}
+
+	// validBaz lists its bundle image in relatedImages, as opm renders it, so it is
+	// collected the same way with or without the explicit bundle image handling.
+	validBaz := declcfg.Bundle{Name: bazName, Package: "baz", Image: bazBundle, RelatedImages: []declcfg.RelatedImage{{Image: bazBundle}}}
+	validBazImages := []v2alpha1.RelatedImage{{Image: bazBundle, Type: v2alpha1.TypeOperatorBundle}}
+
+	testCases := []testCase{
+		{
+			caseName: "bundle image missing from related images is collected as the bundle",
+			bundles: []declcfg.Bundle{{
+				Name: barName, Package: "bar", Image: barBundle,
+				RelatedImages: []declcfg.RelatedImage{{Name: "operator", Image: operand}},
+			}},
+			expectedImages: map[string][]v2alpha1.RelatedImage{barName: {
+				{Image: barBundle, Type: v2alpha1.TypeOperatorBundle},
+				{Name: "operator", Image: operand, Type: v2alpha1.TypeOperatorRelatedImage},
+			}},
+			expectedOperators: map[string]map[string]struct{}{
+				dockerProto + barBundle: {"bar": {}},
+				dockerProto + operand:   {"bar": {}},
+			},
+			expectedBundles: map[string]map[string]string{
+				dockerProto + barBundle: {barBundle: barName},
+				dockerProto + operand:   {barBundle: barName},
+			},
+		},
+		{
+			caseName: "bundle image is collected when related images are empty",
+			bundles:  []declcfg.Bundle{{Name: bazName, Package: "baz", Image: bazBundle, RelatedImages: []declcfg.RelatedImage{}}},
+			expectedImages: map[string][]v2alpha1.RelatedImage{bazName: {
+				{Image: bazBundle, Type: v2alpha1.TypeOperatorBundle},
+			}},
+			expectedOperators: map[string]map[string]struct{}{dockerProto + bazBundle: {"baz": {}}},
+			expectedBundles:   map[string]map[string]string{dockerProto + bazBundle: {bazBundle: bazName}},
+		},
+		{
+			caseName:          "bundle image is collected when related images are omitted",
+			bundles:           []declcfg.Bundle{{Name: bazName, Package: "baz", Image: bazBundle}},
+			expectedImages:    map[string][]v2alpha1.RelatedImage{bazName: validBazImages},
+			expectedOperators: map[string]map[string]struct{}{dockerProto + bazBundle: {"baz": {}}},
+			expectedBundles:   map[string]map[string]string{dockerProto + bazBundle: {bazBundle: bazName}},
+		},
+		{
+			caseName: "bundle image listed in related images keeps that entry",
+			bundles: []declcfg.Bundle{{
+				Name: barName, Package: "bar", Image: barBundle,
+				RelatedImages: []declcfg.RelatedImage{{Name: "bundle", Image: barBundle}, {Name: "operator", Image: operand}},
+			}},
+			expectedImages: map[string][]v2alpha1.RelatedImage{barName: {
+				{Name: "bundle", Image: barBundle, Type: v2alpha1.TypeOperatorBundle},
+				{Name: "operator", Image: operand, Type: v2alpha1.TypeOperatorRelatedImage},
+			}},
+			expectedOperators: map[string]map[string]struct{}{
+				dockerProto + barBundle: {"bar": {}},
+				dockerProto + operand:   {"bar": {}},
+			},
+			expectedBundles: map[string]map[string]string{
+				dockerProto + barBundle: {barBundle: barName},
+				dockerProto + operand:   {barBundle: barName},
+			},
+		},
+		{
+			caseName: "bundle image listed twice in related images is collected once",
+			bundles: []declcfg.Bundle{{
+				Name: barName, Package: "bar", Image: barBundle,
+				RelatedImages: []declcfg.RelatedImage{
+					{Name: "first", Image: barBundle},
+					{Name: "operator", Image: operand},
+					{Name: "second", Image: barBundle},
+				},
+			}},
+			expectedImages: map[string][]v2alpha1.RelatedImage{barName: {
+				{Name: "first", Image: barBundle, Type: v2alpha1.TypeOperatorBundle},
+				{Name: "operator", Image: operand, Type: v2alpha1.TypeOperatorRelatedImage},
+			}},
+			expectedOperators: map[string]map[string]struct{}{
+				dockerProto + barBundle: {"bar": {}},
+				dockerProto + operand:   {"bar": {}},
+			},
+			expectedBundles: map[string]map[string]string{
+				dockerProto + barBundle: {barBundle: barName},
+				dockerProto + operand:   {barBundle: barName},
+			},
+		},
+		{
+			caseName: "without a bundle image, related images are collected as related images",
+			bundles: []declcfg.Bundle{{
+				Name: barName, Package: "bar",
+				RelatedImages: []declcfg.RelatedImage{{Name: "bundle", Image: barBundle}, {Name: "operator", Image: operand}},
+			}},
+			expectedImages: map[string][]v2alpha1.RelatedImage{barName: {
+				{Name: "bundle", Image: barBundle, Type: v2alpha1.TypeOperatorRelatedImage},
+				{Name: "operator", Image: operand, Type: v2alpha1.TypeOperatorRelatedImage},
+			}},
+			expectedOperators: map[string]map[string]struct{}{
+				dockerProto + barBundle: {"bar": {}},
+				dockerProto + operand:   {"bar": {}},
+			},
+			expectedBundles: map[string]map[string]string{
+				dockerProto + barBundle: {"": barName},
+				dockerProto + operand:   {"": barName},
+			},
+		},
+		{
+			caseName:          "without a bundle image or related images, nothing is collected for the bundle",
+			bundles:           []declcfg.Bundle{{Name: barName, Package: "bar"}},
+			expectedImages:    map[string][]v2alpha1.RelatedImage{barName: nil},
+			expectedOperators: map[string]map[string]struct{}{},
+			expectedBundles:   map[string]map[string]string{},
+		},
+		{
+			caseName: "bundles of different packages sharing a related image are all associated with it",
+			bundles: []declcfg.Bundle{
+				{Name: barName, Package: "bar", Image: barBundle, RelatedImages: []declcfg.RelatedImage{{Name: "operator", Image: operand}}},
+				{Name: bazName, Package: "baz", Image: bazBundle, RelatedImages: []declcfg.RelatedImage{{Name: "operator", Image: operand}}},
+			},
+			expectedImages: map[string][]v2alpha1.RelatedImage{
+				barName: {
+					{Image: barBundle, Type: v2alpha1.TypeOperatorBundle},
+					{Name: "operator", Image: operand, Type: v2alpha1.TypeOperatorRelatedImage},
+				},
+				bazName: {
+					{Image: bazBundle, Type: v2alpha1.TypeOperatorBundle},
+					{Name: "operator", Image: operand, Type: v2alpha1.TypeOperatorRelatedImage},
+				},
+			},
+			expectedOperators: map[string]map[string]struct{}{
+				dockerProto + barBundle: {"bar": {}},
+				dockerProto + bazBundle: {"baz": {}},
+				dockerProto + operand:   {"bar": {}, "baz": {}},
+			},
+			expectedBundles: map[string]map[string]string{
+				dockerProto + barBundle: {barBundle: barName},
+				dockerProto + bazBundle: {bazBundle: bazName},
+				dockerProto + operand:   {barBundle: barName, bazBundle: bazName},
+			},
+		},
+		{
+			caseName: "bundle image without tag or digest skips the bundle",
+			bundles: []declcfg.Bundle{
+				{Name: barName, Package: "bar", Image: missingTag, RelatedImages: []declcfg.RelatedImage{{Name: "operator", Image: operand}}},
+				validBaz,
+			},
+			expectedImages:    map[string][]v2alpha1.RelatedImage{bazName: validBazImages},
+			expectedOperators: map[string]map[string]struct{}{dockerProto + bazBundle: {"baz": {}}},
+			expectedBundles:   map[string]map[string]string{dockerProto + bazBundle: {bazBundle: bazName}},
+			expectedError:     "error parsing image " + missingTag + ": " + missingTag + " unable to parse image correctly : tag and digest are empty",
+		},
+		{
+			caseName: "bundle image with the oci transport skips the bundle",
+			bundles: []declcfg.Bundle{
+				{Name: barName, Package: "bar", Image: ociBundle, RelatedImages: []declcfg.RelatedImage{{Name: "operator", Image: operand}}},
+				validBaz,
+			},
+			expectedImages:    map[string][]v2alpha1.RelatedImage{bazName: validBazImages},
+			expectedOperators: map[string]map[string]struct{}{dockerProto + bazBundle: {"baz": {}}},
+			expectedBundles:   map[string]map[string]string{dockerProto + bazBundle: {bazBundle: bazName}},
+			expectedError:     "invalid image: " + ociBundle + " 'oci' is not supported in operator catalogs",
+		},
+		{
+			caseName: "bundle image with an invalid digest skips the bundle",
+			bundles: []declcfg.Bundle{
+				{Name: barName, Package: "bar", Image: badDigest},
+				validBaz,
+			},
+			expectedImages:    map[string][]v2alpha1.RelatedImage{bazName: validBazImages},
+			expectedOperators: map[string]map[string]struct{}{dockerProto + bazBundle: {"baz": {}}},
+			expectedBundles:   map[string]map[string]string{dockerProto + bazBundle: {bazBundle: bazName}},
+			expectedError:     "error parsing image " + badDigest + ": " + badDigest + " unable to parse image correctly : invalid digest",
+		},
+		{
+			caseName: "invalid bundle image also listed in related images skips the bundle",
+			bundles: []declcfg.Bundle{
+				{Name: barName, Package: "bar", Image: missingTag, RelatedImages: []declcfg.RelatedImage{{Image: missingTag}}},
+				validBaz,
+			},
+			expectedImages:    map[string][]v2alpha1.RelatedImage{bazName: validBazImages},
+			expectedOperators: map[string]map[string]struct{}{dockerProto + bazBundle: {"baz": {}}},
+			expectedBundles:   map[string]map[string]string{dockerProto + bazBundle: {bazBundle: bazName}},
+			expectedError:     "error parsing image " + missingTag + ": " + missingTag + " unable to parse image correctly : tag and digest are empty",
+		},
+		{
+			caseName: "invalid bundle image is reported before invalid related images",
+			bundles: []declcfg.Bundle{
+				{Name: barName, Package: "bar", Image: ociBundle, RelatedImages: []declcfg.RelatedImage{{Name: "operator", Image: missingTag}}},
+				validBaz,
+			},
+			expectedImages:    map[string][]v2alpha1.RelatedImage{bazName: validBazImages},
+			expectedOperators: map[string]map[string]struct{}{dockerProto + bazBundle: {"baz": {}}},
+			expectedBundles:   map[string]map[string]string{dockerProto + bazBundle: {bazBundle: bazName}},
+			expectedError:     "invalid image: " + ociBundle + " 'oci' is not supported in operator catalogs",
+		},
+	}
+
+	handler := &CatalogHandler{Log: clog.New("error")}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.caseName, func(t *testing.T) {
+			copyImageSchemaMap := &v2alpha1.CopyImageSchemaMap{OperatorsByImage: make(map[string]map[string]struct{}), BundlesByImage: make(map[string]map[string]string)}
+			res, err := handler.getRelatedImagesFromCatalog(&declcfg.DeclarativeConfig{Bundles: testCase.bundles}, copyImageSchemaMap)
+			if testCase.expectedError != "" {
+				assert.EqualError(t, err, testCase.expectedError)
+			} else {
+				assert.NoError(t, err)
+			}
+			assert.Equal(t, testCase.expectedImages, res)
+			assert.Equal(t, testCase.expectedOperators, copyImageSchemaMap.OperatorsByImage)
+			assert.Equal(t, testCase.expectedBundles, copyImageSchemaMap.BundlesByImage)
+		})
+	}
+}
+
 func TestFilterCatalog(t *testing.T) {
 	type testCase struct {
 		caseName        string
