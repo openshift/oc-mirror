@@ -186,3 +186,48 @@ func TestGetNodeByVersion(t *testing.T) {
 		assert.Equal(t, 1, idx)
 	})
 }
+
+func TestMergeGraphs(t *testing.T) {
+	n := func(version string) node {
+		return node{Version: semver.MustParse(version), Image: "quay.io/openshift-release-dev/ocp-release:" + version}
+	}
+
+	t.Run("should deduplicate releases and keep the edges of every graph", func(t *testing.T) {
+		target := Graph{
+			Nodes: []node{n("4.22.1"), n("4.22.5"), n("5.0.0")},
+			Edges: [][]int{{1, 2}},
+		}
+		source := Graph{
+			Nodes: []node{n("4.22.5"), n("4.22.3"), n("4.22.1")},
+			Edges: [][]int{{2, 1}, {1, 0}, {1, 0}},
+		}
+		merged := MergeGraphs(target, source)
+		assert.Equal(t, []node{n("4.22.1"), n("4.22.5"), n("5.0.0"), n("4.22.3")}, merged.Nodes)
+		// 4.22.5->5.0.0 (target), then 4.22.1->4.22.3 and 4.22.3->4.22.5 (source) once.
+		assert.Equal(t, [][]int{{1, 2}, {0, 3}, {3, 1}}, merged.Edges)
+	})
+
+	t.Run("should not add edges between releases of different graphs", func(t *testing.T) {
+		merged := MergeGraphs(
+			Graph{Nodes: []node{n("4.21.1"), n("4.21.9")}, Edges: [][]int{{0, 1}}},
+			Graph{Nodes: []node{n("4.22.2"), n("5.0.0")}, Edges: [][]int{{0, 1}}},
+		)
+		assert.Equal(t, []node{n("4.21.1"), n("4.21.9"), n("4.22.2"), n("5.0.0")}, merged.Nodes)
+		assert.Equal(t, [][]int{{0, 1}, {2, 3}}, merged.Edges)
+	})
+
+	t.Run("should keep the release of the first graph and ignore invalid edges", func(t *testing.T) {
+		first := node{Version: semver.MustParse("5.0.0"), Image: "first"}
+		second := node{Version: semver.MustParse("5.0.0+build"), Image: "second"}
+		merged := MergeGraphs(
+			Graph{Nodes: []node{first}},
+			Graph{Nodes: []node{second, n("4.22.1")}, Edges: [][]int{{1, 0}, {0, 2}, {-1, 0}, {0}}},
+		)
+		assert.Equal(t, []node{first, n("4.22.1")}, merged.Nodes)
+		assert.Equal(t, [][]int{{1, 0}}, merged.Edges)
+	})
+
+	t.Run("should return an empty graph without graphs", func(t *testing.T) {
+		assert.Equal(t, Graph{}, MergeGraphs())
+	})
+}
