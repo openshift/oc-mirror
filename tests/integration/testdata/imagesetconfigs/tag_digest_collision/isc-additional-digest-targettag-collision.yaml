@@ -1,0 +1,12 @@
+# ImageSetConfig with two digest-only additionalImages sharing the same targetTag.
+#
+# Both digests are mirrored to <destination>/oc-mirror/oc-mirror-dev:shared-target. With
+# mirrorToMirror both are copied by digest, while the tag points at one of them only.
+kind: ImageSetConfiguration
+apiVersion: mirror.openshift.io/v2alpha1
+mirror:
+  additionalImages:
+  - name: quay.io/oc-mirror/oc-mirror-dev@sha256:1ce8c0187c8fe6b4be327dc848b8baf062ce1baa5096b4f5d955893d126d5b58
+    targetTag: shared-target
+  - name: quay.io/oc-mirror/oc-mirror-dev@sha256:1b8392488dabcf78c82c72866d34edf6ef3d5bfb6ec00c81a377486a90d3d9ad
+    targetTag: shared-target

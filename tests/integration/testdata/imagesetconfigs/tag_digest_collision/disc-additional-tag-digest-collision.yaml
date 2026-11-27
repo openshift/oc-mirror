@@ -1,0 +1,11 @@
+# DeleteImageSetConfig matching isc-additional-tag-digest-collision.yaml.
+#
+# Both entries reference the SAME repository and tag (oc-mirror-dev:shared-operand) but pin two
+# DIFFERENT digests. Both digests are mirrored to <destination>/oc-mirror/oc-mirror-dev:shared-operand,
+# a tag that can only point at one of them, so the delete file must address each image by digest.
+kind: DeleteImageSetConfiguration
+apiVersion: mirror.openshift.io/v2alpha1
+delete:
+  additionalImages:
+  - name: quay.io/oc-mirror/oc-mirror-dev:shared-operand@sha256:1ce8c0187c8fe6b4be327dc848b8baf062ce1baa5096b4f5d955893d126d5b58
+  - name: quay.io/oc-mirror/oc-mirror-dev:shared-operand@sha256:1b8392488dabcf78c82c72866d34edf6ef3d5bfb6ec00c81a377486a90d3d9ad
