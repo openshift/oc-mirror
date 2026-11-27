@@ -28,7 +28,7 @@ require (
 	github.com/spf13/cobra v1.7.0
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.8.4
-	golang.org/x/crypto v0.16.0 // indirect
+	golang.org/x/crypto v0.33.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0
 	helm.sh/helm/v3 v3.11.2
 	k8s.io/apimachinery v0.27.2
@@ -41,13 +41,13 @@ require (
 	sigs.k8s.io/yaml v1.3.0
 )
 
-require golang.org/x/sys v0.15.0 // indirect
+require golang.org/x/sys v0.30.0 // indirect
 
 require (
 	github.com/mitchellh/hashstructure/v2 v2.0.2
 	github.com/openshift/oc-mirror/v2 v2.0.0-20230802085830-e81c913cc044
 	github.com/otiai10/copy v1.2.0
-	golang.org/x/sync v0.3.0
+	golang.org/x/sync v0.11.0
 )
 
 require (
@@ -219,13 +219,13 @@ require (
 	go.opentelemetry.io/proto/otlp v0.19.0 // indirect
 	go.starlark.net v0.0.0-20200306205701-8dd3e2ee1dd5 // indirect
 	golang.org/x/exp v0.0.0-20230522175609-2e198f4a06a1 // indirect
-	golang.org/x/mod v0.12.0 // indirect
-	golang.org/x/net v0.19.0 // indirect
+	golang.org/x/mod v0.17.0 // indirect
+	golang.org/x/net v0.25.0 // indirect
 	golang.org/x/oauth2 v0.9.0 // indirect
-	golang.org/x/term v0.15.0 // indirect
-	golang.org/x/text v0.14.0 // indirect
+	golang.org/x/term v0.29.0 // indirect
+	golang.org/x/text v0.22.0 // indirect
 	golang.org/x/time v0.3.0 // indirect
-	golang.org/x/tools v0.13.0 // indirect
+	golang.org/x/tools v0.21.1-0.20240508182429-e35e4ccd0d2d // indirect
 	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/genproto v0.0.0-20230525154841-bd750badd5c6 // indirect
 	google.golang.org/grpc v1.55.0 // indirect
@@ -260,3 +260,5 @@ replace github.com/openshift/oc-mirror/v2 => ./v2
 replace github.com/google/go-containerregistry => github.com/google/go-containerregistry v0.10.0
 
 // replace github.com/vbatts/tar-split =>	github.com/vbatts/tar-split v0.11.2
+
+replace golang.org/x/net => github.com/openshift-sustaining/net v0.35.0-sec.4
