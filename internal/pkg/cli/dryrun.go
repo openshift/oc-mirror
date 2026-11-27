@@ -60,9 +60,7 @@ func (o *ExecutorSchema) DryRun(ctx context.Context, allImages []v2alpha1.CopyIm
 		if err := o.writeMissingImagesFile(outDir, missingImgsBuff.Bytes(), nbMissingImgs, len(allImages)); err != nil {
 			return err
 		}
-	}
-
-	if nbAvailableImgs > 0 {
+	} else if nbAvailableImgs > 0 {
 		o.Log.Info("all %d images required for mirroring are available in local cache. You may proceed with mirroring from disk to disconnected registry", nbAvailableImgs)
 	}
 	o.Log.Info(emoji.PageFacingUp+" list of all images for mirroring in : %s", mappingTxtFilePath)

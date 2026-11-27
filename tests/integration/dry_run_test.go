@@ -98,6 +98,9 @@ var _ = Describe("dry-run", func() {
 			expectOcMirrorCommandSuccess(result, err)
 			expectDryRunFile(workDir, mappingFileName, []string{initialImage, addedImage})
 			expectDryRunFile(workDir, missingFileName, []string{addedImage})
+			output := result.Stdout + result.Stderr
+			Expect(output).To(ContainSubstring("1/2 images necessary for mirroring are not available in the cache"))
+			Expect(output).NotTo(ContainSubstring("You may proceed"))
 
 			By("mirroring all images to the cache")
 			result, err = runner.MirrorToDisk(ctx, iscFull, workDir)
@@ -110,6 +113,7 @@ var _ = Describe("dry-run", func() {
 			_, err = os.Stat(filepath.Join(workDir, dirWorkingDir, "dry-run", missingFileName))
 			Expect(os.IsNotExist(err)).To(BeTrue(), "missing.txt should not exist when every image is in the cache")
 			Expect(result.Stdout + result.Stderr).To(ContainSubstring("all 2 images required for mirroring are available in local cache"))
+			Expect(result.Stdout + result.Stderr).To(ContainSubstring("You may proceed"))
 		})
 	})
 
