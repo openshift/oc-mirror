@@ -231,6 +231,11 @@ func retryOptionsFrom(opts *CopyOptions) *retry.Options {
 	return &ro
 }
 
+// RetryOptionsFrom is the retry policy used for registry copy and delete.
+func RetryOptionsFrom(opts *CopyOptions) *retry.Options {
+	return retryOptionsFrom(opts)
+}
+
 // IsErrorRetryable is a custom implementation that extends
 // `go.podman.io/common/pkg/retry.IsErrorRetryable`. The name intentionally mirrors
 // the imported upstream function that the `default` branch delegates to; the
