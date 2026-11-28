@@ -245,7 +245,10 @@ func (o *DeleteSchema) CompleteDelete(args []string) error {
 	o.Operator = operator.NewWithFilter(o.Log, o.LogsDir, o.Config, *o.Opts, o.Mirror, o.Manifest)
 
 	o.AdditionalImages = additional.New(o.Log, o.Config, *o.Opts, o.Mirror, o.Manifest)
-	o.HelmCollector = helm.New(o.Log, o.Config, *o.Opts, nil, nil, &http.Client{Timeout: time.Duration(5) * time.Second})
+	o.HelmCollector, err = helm.New(o.Log, o.Config, *o.Opts, nil, nil, &http.Client{Timeout: time.Duration(5) * time.Second})
+	if err != nil {
+		return err
+	}
 	if o.V1Tags {
 		o.Operator = operator.WithV1Tags(o.Operator)
 		o.AdditionalImages = additional.WithV1Tags(o.AdditionalImages)
