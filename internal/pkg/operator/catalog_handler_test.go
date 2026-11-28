@@ -537,7 +537,7 @@ func TestFilterCatalog(t *testing.T) {
 			expectedError:   nil,
 		},
 		{
-			caseName: "filtering comes back empty - logs warning - should pass",
+			caseName: "missing pinned version returns an empty default channel error",
 			cfg: v2alpha1.Operator{
 				Catalog: "registry.redhat.io/redhat/redhat-operator-index:v4.16",
 				IncludeConfig: v2alpha1.IncludeConfig{
@@ -554,7 +554,7 @@ func TestFilterCatalog(t *testing.T) {
 			},
 
 			expectedBundles: []string{},
-			expectedError:   errors.New("failed to filter catalog: error finding specific bundle: specific version 77.77.77 not found in bundles"),
+			expectedError:   errors.New("failed to filter catalog: package \"3scale-operator\" channel \"threescale-mas\" has version range \">=77.77.77 <=77.77.77\" that results in an empty channel"),
 		},
 	}
 
