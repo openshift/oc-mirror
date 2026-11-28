@@ -3,6 +3,8 @@ package release
 import (
 	"cmp"
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -10,6 +12,7 @@ import (
 	"slices"
 	"strings"
 
+	gcrv1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/vbauerster/mpb/v8"
 
 	"github.com/openshift/oc-mirror/v2/internal/pkg/consts"
@@ -220,10 +223,32 @@ func (o *LocalStorageCollector) collectReleaseImages(ctx context.Context, releas
 }
 
 func (o *LocalStorageCollector) ensureReleaseInOCIFormat(ctx context.Context, release v2alpha1.CopyImageSchema, dir string) error {
-	_, err := os.Stat(dir)
+	// The OCI copy writes index.json last, when it commits. A directory whose index.json is
+	// missing or lists no image or index descriptor is the leftover of an interrupted run and
+	// must be copied again (OCPBUGS-77670). The check mirrors what GetOCIImageFromIndex needs
+	// to find an image; it does not verify the blobs.
+	index, err := os.ReadFile(filepath.Join(dir, "index.json"))
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("read oci index: %w", err)
+	}
 	if err == nil {
-		o.Log.Debug(collectorPrefix+"release-images index directory alredy exists %s", dir)
-		return nil
+		var idx gcrv1.IndexManifest
+		usable := func(d gcrv1.Descriptor) bool { return d.MediaType.IsImage() || d.MediaType.IsIndex() }
+		switch err := json.Unmarshal(index, &idx); {
+		case err != nil:
+			o.Log.Debug(collectorPrefix+"index.json in %s does not parse: %v", dir, err)
+		case slices.ContainsFunc(idx.Manifests, usable):
+			o.Log.Debug(collectorPrefix+"release-images index directory already exists %s", dir)
+			return nil
+		}
+	}
+	if _, err := os.Stat(dir); err == nil {
+		o.Log.Warn(collectorPrefix+"release image directory %s has no usable index.json, copying it again", dir)
+		if err := os.RemoveAll(dir); err != nil {
+			return fmt.Errorf("remove incomplete oci dir: %w", err)
+		}
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("inspect oci dir: %w", err)
 	}
 	o.Log.Debug(collectorPrefix+"copying  release image %s ", release.Source)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
