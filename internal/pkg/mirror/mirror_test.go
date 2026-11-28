@@ -2,7 +2,10 @@ package mirror
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -406,6 +409,11 @@ func TestIsErrorRetryable(t *testing.T) {
 			err:       errcode.Error{Code: errcodev2.ErrorCodeManifestUnknown},
 			retryable: false,
 		},
+		{
+			name:      "io.ErrUnexpectedEOF is retryable",
+			err:       fmt.Errorf("reading blob: %w", io.ErrUnexpectedEOF),
+			retryable: true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -413,6 +421,25 @@ func TestIsErrorRetryable(t *testing.T) {
 			assert.Equal(t, tt.retryable, IsErrorRetryable(tt.err))
 		})
 	}
+
+	t.Run("a TLS alert is retryable", func(t *testing.T) {
+		// crypto/tls reports a TLS alert on a plain (non-QUIC) connection as a
+		// *net.OpError{Op: "remote error"/"local error"} wrapping the
+		// unexported tls.alert type, not as an exported tls.AlertError.
+		err := fmt.Errorf("read: %w", &net.OpError{Op: "remote error", Err: errors.New("tls: internal error")})
+
+		assert.True(t, IsErrorRetryable(err))
+	})
+
+	t.Run("a nested TLS alert (outer proxyconnect wrapping inner remote error) is retryable", func(t *testing.T) {
+		// Proxy connections may wrap the TLS alert in another net.OpError with
+		// a different Op (e.g., "proxyconnect"). We must inspect the chain.
+		inner := &net.OpError{Op: "remote error", Err: errors.New("tls: internal error")}
+		outer := &net.OpError{Op: "proxyconnect", Err: inner}
+		err := fmt.Errorf("proxy: %w", outer)
+
+		assert.True(t, IsErrorRetryable(err))
+	})
 }
 
 func TestRetryOptionsFrom(t *testing.T) {
