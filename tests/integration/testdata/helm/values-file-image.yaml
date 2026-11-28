@@ -1,0 +1,2 @@
+secretName: from-file
+image: docker.io/library/nginx:1.16.0
